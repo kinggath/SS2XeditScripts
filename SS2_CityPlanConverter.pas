@@ -4,7 +4,6 @@
 unit CityPlanConverter;
 
     uses 'SS2\SS2Lib';
-    uses 'SS2\XeditSimpleMath';
     uses 'SS2\CobbLibrary';
 
     const
