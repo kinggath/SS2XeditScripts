@@ -1,10 +1,10 @@
 {
     Library for handling vectors and rotations.
-    
+
     Originally implemented in papyrus as CobbLibraryRotations.psc and CobbLibraryVectors.psc by David J Cobb.
 
     Ported to xEdit pascal by Pra.
-    
+
     "Here be bugs"
     ==============
     I have ported this code from Papyrus to xEdit. I am not good enough at math to verify that I did it correctly.
@@ -254,7 +254,7 @@ unit CobbLibrary;
     var
         fSinX, fSinY, fSinZ, fCosX, fCosY, fCosZ: float;
     begin
-    
+
         {
             float[] fOutput = new float[9]
             float fSinX = Math.sin(afX)
@@ -363,7 +363,7 @@ unit CobbLibrary;
             amMatrix.F[6] * avColumn.F['x'] + amMatrix.F[7] * avColumn.F['y'] + amMatrix.F[8] * avColumn.F['z']
         );
     end;
-    
+
     function MatrixMultiply(m1, m2: TJsonArray): TJsonArray;
     var
         a, b, c, d, e, f, g, h, i, j, k, l, m, n, p, q, r, s: Float;
@@ -372,12 +372,12 @@ unit CobbLibrary;
             (a b c)   (j k l)   (a*j+b*m+c*q   a*k+b*n+c*r   a*l+b*p+c*s)
             (d e f) x (m n p) = (d*j+e*m+f*q   d*k+e*n+f*r   d*l+e*p+f*s)
             (g h i)   (q r s)   (g*j+h*m+i*q   g*k+h*n+i*r   g*l+h*p+i*s)
-            
+
             0 1 2
             3 4 5
-            6 7 8 
+            6 7 8
         }
-        
+
         a := m1.F[0];
         b := m1.F[1];
         c := m1.F[2];
@@ -387,7 +387,7 @@ unit CobbLibrary;
         g := m1.F[6];
         h := m1.F[7];
         i := m1.F[8];
-        
+
         j := m2.F[0];
         k := m2.F[1];
         l := m2.F[2];
@@ -397,13 +397,76 @@ unit CobbLibrary;
         q := m2.F[6];
         r := m2.F[7];
         s := m2.F[8];
-        
+
         Result := newMatrix(
             a*j+b*m+c*q, a*k+b*n+c*r, a*l+b*p+c*s,
             d*j+e*m+f*q, d*k+e*n+f*r, d*l+e*p+f*s,
             g*j+h*m+i*q, g*k+h*n+i*r, g*l+h*p+i*s
         );
     end;
+
+	{
+		Multiplies a matrix by a scalar
+	}
+	function MatrixMultiplyScalar(scalar: float; matrix: TJsonObject): TJsonObject;
+	begin
+		Result := newMatrix(
+			scalar * matrix.F[0], scalar * matrix.F[1], scalar * matrix.F[2],
+			scalar * matrix.F[3], scalar * matrix.F[4], scalar * matrix.F[5],
+			scalar * matrix.F[6], scalar * matrix.F[7], scalar * matrix.F[8]
+		);
+	end;
+
+	{
+		Calculates the determinant of a matrix
+	}
+	function MatrixDeterminant(matrix: TJsonObject): float;
+	begin
+		{
+		| 0 1 2 |
+		| 3 4 5 |
+		| 6 7 8 |
+		}
+		// https://en.wikipedia.org/wiki/Rule_of_Sarrus
+		Result :=
+			  matrix.F[0]*matrix.F[4]*matrix.F[8] + matrix.F[1]*matrix.F[5]*matrix.F[6] + matrix.F[2]*matrix.F[3]*matrix.F[7]
+			- matrix.F[6]*matrix.F[4]*matrix.F[2] - matrix.F[7]*matrix.F[5]*matrix.F[0] - matrix.F[8]*matrix.F[3]*matrix.F[1];
+	end;
+
+	{
+		Calculates the inverse of a matrix. Warning: this will return nil, if the matrix is non-invertible (determinant = 0)
+	}
+	function InvertMatrix(matrix: TJsonObject): TJsonObject;
+	var
+		det, a, b, c, d, e, f, g, h, i: float;
+		tempMatrix: TJsonObject;
+	begin
+		det := MatrixDeterminant(matrix);
+		if(det = 0) then begin
+			Result := nil;
+			exit;
+		end;
+
+		a := matrix.F[0];
+        b := matrix.F[1];
+        c := matrix.F[2];
+        d := matrix.F[3];
+        e := matrix.F[4];
+        f := matrix.F[5];
+        g := matrix.F[6];
+        h := matrix.F[7];
+        i := matrix.F[8];
+
+		tempMatrix := newMatrix(
+			e*i - f*h, c*h - b*i, b*f - c*e,
+			f*g - d*i, a*i - c*g, c*d - a*f,
+			d*h - e*g, b*g - a*h, a*e - b*d
+		);
+
+		Result := MatrixMultiplyScalar(1.0/det, tempMatrix);
+
+		tempMatrix.free();
+	end;
 
     { https://en.wikipedia.org/wiki/Atan2 }
     function atan2(y, x: float): float;
@@ -503,12 +566,12 @@ unit CobbLibrary;
         AddMessage('qChild '+qChild.toJSON());
         qDone := QuaternionMultiply(qParent, qChild);
         }
-        
-        matrixParent := EulerToMatrix(afParentRotation.F['x'], afParentRotation.F['y'], afParentRotation.F['z']);
+
+        // matrixParent := EulerToMatrix(afParentRotation.F['x'], afParentRotation.F['y'], afParentRotation.F['z']);
         matrixChild  := EulerToMatrix(afOffsetRotation.F['x'], afOffsetRotation.F['y'], afOffsetRotation.F['z']);
-        matrixDone   := MatrixMultiply(matrixParent, matrixChild);
-        
-        
+        matrixDone   := MatrixMultiply(mParentRotation, matrixChild);
+
+
         Result.O['rot'] := MatrixToEuler(matrixDone);//QuaternionToEuler(qDone);
 
         mParentRotation.free();
@@ -516,12 +579,55 @@ unit CobbLibrary;
         //qParent.free();
         //qChild.free();
         //qDone.free();
-        
-        matrixParent.free();
+
+        //matrixParent.free();
         matrixChild.free();
         matrixDone.free();
     end;
-    
+
+	{
+		Inverse of GetCoordinatesRelativeToBase:
+		Takes two sets of absolute positions/rotations -- those of a parent and an intended child -- and calculates the position/rotation of the child relative to the parent.
+		Return value is as above: TJsonObject containing pos and rot, each of which contains x, y, z
+
+		Warning: this might return nil, if it fails to invert the rotational matrix. I *think* this shouldn't ever happen, but I don't know what it would mean if it does.
+	}
+	function ConvertAbsoluteCoordinatesToBaseRelative(afParentPosition, afParentRotation, afOffsetPosition, afOffsetRotation: TJsonObject): TJsonObject;
+	var
+		parentMatrix, parentMatrixInverse, matrixChild, matrixChildRotated, vChildPos, rotWhat: TJsonObject;
+	begin
+		parentMatrix := EulerToMatrix(afParentRotation.F['x'], afParentRotation.F['y'], afParentRotation.F['z']);
+		parentMatrixInverse := InvertMatrix(parentMatrix);
+		if(parentMatrixInverse = nil) then begin
+			AddMessage('ERROR: ConvertAbsoluteCoordinatesToBaseRelative failed, matrix is not invertible');
+			Result := nil;
+			parentMatrix.free();
+			parentMatrixInverse.free();
+			exit;
+		end;
+
+		Result := TJsonObject.create;
+
+		matrixChild  := EulerToMatrix(afOffsetRotation.F['x'], afOffsetRotation.F['y'], afOffsetRotation.F['z']);
+
+		// undo matrixParent * matrixChild
+		rotWhat := MatrixMultiply(parentMatrixInverse, matrixChild);
+
+		Result.O['rot'] := MatrixToEuler(rotWhat);
+
+		// now undo the positional offsetting
+		vChildPos := VectorSubtract(afOffsetPosition, afParentPosition);
+
+		// and now unrotate the vChildPos
+		Result.O['pos'] := MatrixMultiplyByColumn(parentMatrixInverse, vChildPos);
+
+		rotWhat.free();
+		parentMatrix.free();
+		parentMatrixInverse.free();
+		matrixChild.free();
+		vChildPos.free();
+	end;
+
     { Moves the child reference relative to the parent reference. Position code is based on GetPosXYZRotateAroundRef, a function authored by Chesko that can be found on the Creation Kit wiki. }
     Function MoveObjectRelativeToObject(afParentPosition, afParentRotation, afPositionOffset, afRotationOffset: TJsonObject): TJsonObject;
     var
@@ -534,19 +640,19 @@ unit CobbLibrary;
         Angles.F['x'] := -afParentRotation.F['x'];
         Angles.F['y'] := -afParentRotation.F['y'];
         Angles.F['z'] := -afParentRotation.F['z'];
-	
+
         Origin := afParentPosition;
-        
+
         Output := newVector(0, 0, 0);
         Vector := newVector(0, 0, 0);
-        
+
         // Output[0] = afPositionOffset[0] * Math.cos(Angles[2]) + afPositionOffset[1] * Math.sin(-Angles[2])
         Output.F['x'] := afPositionOffset.F['x'] * cosDeg(Angles.F['z']) + afPositionOffset.F['y'] * sinDeg(-Angles.F['z']);
         // Output[1] = afPositionOffset[0] * Math.sin(Angles[2]) + afPositionOffset[1] * Math.cos(Angles[2])
         Output.F['y'] := afPositionOffset.F['x'] * sinDeg(Angles.F['z']) + afPositionOffset.F['y'] * cosDeg(Angles.F['z']);
         // Output[2] = afPositionOffset[2]
         Output.F['z'] := afPositionOffset.F['z'];
-        
+
         // Vector[0] = Output[0]
         Vector.F['x'] := Output.F['x'];
         // Vector[2] = Output[2]
@@ -555,40 +661,40 @@ unit CobbLibrary;
         Output.F['x'] := Vector.F['x'] * cosDeg(Angles.F['y']) + Vector.F['z'] * sinDeg(Angles.F['y']);
         //Output[2] = Vector[0] * Math.sin(-Angles[1]) + Vector[2] * Math.cos(Angles[1])
         Output.F['z'] := Vector.F['x'] * sinDeg(-Angles.F['y']) + Vector.F['z'] * cosDeg(Angles.F['y']);
-        
+
         // Vector[1] = Output[1]
         Vector.F['y'] := Output.F['y'];
         // Vector[2] = Output[2]
         Vector.F['z'] := Output.F['z'];
-        
+
         // Output[1] = Vector[1] * Math.cos(Angles[0]) + Vector[2] * Math.sin(-Angles[0])
         Output.F['y'] := Vector.F['y'] * cosDeg(Angles.F['x']) + Vector.F['z'] * sinDeg(-Angles.F['x']);
         // Output[2] = Vector[1] * Math.sin(Angles[0]) + Vector[2] * Math.cos(Angles[0])
         Output.F['z'] := Vector.F['y'] * sinDeg(Angles.F['x']) + Vector.F['z'] * cosDeg(Angles.F['x']);
-        
+
         // Output[0] = Output[0] + Origin[0]
         // Output[1] = Output[1] + Origin[1]
         // Output[2] = Output[2] + Origin[2]
         Output.F['x'] := Output.F['x'] + Origin.F['x'];
         Output.F['y'] := Output.F['y'] + Origin.F['y'];
         Output.F['z'] := Output.F['z'] + Origin.F['z'];
-        
+
         // float[] qParent = autobuilder:cobblibraryrotations.EulerToQuaternion(akParent.GetAngleX(), akParent.GetAngleY(), akParent.GetAngleZ())
         qParent := EulerToQuaternion(afParentPosition.F['x'], afParentPosition.F['y'], afParentPosition.F['z']);
         // float[] qChild = autobuilder:cobblibraryrotations.EulerToQuaternion(afRotationOffset[0], afRotationOffset[1], afRotationOffset[2])
         qChild := EulerToQuaternion(afRotationOffset.F['x'], afRotationOffset.F['y'], afRotationOffset.F['z']);
-        
+
         // float[] qDone = autobuilder:cobblibraryrotations.QuaternionMultiply(qParent, qChild)
         qDone := QuaternionMultiply(qParent, qChild);
         //float[] eDone = autobuilder:cobblibraryrotations.QuaternionToEuler(qDone)
         eDone := QuaternionToEuler(qDone);
-        
+
         // akChild.SetPosition(Output[0], Output[1], Output[2])
         // akChild.SetAngle(eDone[0], eDone[1], eDone[2])
         Result := TJsonObject.create;
         Result.O['pos'] := Output;
         Result.O['rot'] := eDone;
-        
+
          {
         Origin.free();
         Angles.free();
@@ -663,8 +769,8 @@ unit CobbLibrary;
             afAxisAngle.F['z'] * afAxisAngle.F['y'] * fOneMinusCos + afAxisAngle.F['x'] * angleSin),
             angleCos + sqr(afAxisAngle.F['z']) * fOneMinusCos
         );
-        
-        {	
+
+        {
     float[] fMatrix = new float[9]
 	float fOneMinusCos = 1 as float - Math.cos(afAxisAngle[3])
 	fMatrix[0] = Math.cos(afAxisAngle[3]) + Math.pow(afAxisAngle[0], 2 as float) * fOneMinusCos
@@ -784,19 +890,19 @@ unit CobbLibrary;
         end;
 
     end;
-    
+
     // Xedit-specific utility stuff
     function getPositionVector(e: IInterface; path: string): TJsonObject;
     begin
         if(path <> '') then path := path + '\';
-        
+
         Result := newVector(
             StrToFloat(geev(e, path+'Position\X')),
             StrToFloat(geev(e, path+'Position\Y')),
             StrToFloat(geev(e, path+'Position\Z'))
         );
     end;
-    
+
     function getRotationVector(e: IInterface; path: string): TJsonObject;
     begin
         if(path <> '') then path := path + '\';
