@@ -319,6 +319,10 @@ begin
         skinSpawnsMode:= resultData.B['itemsReplace'];
         skinTargetEdid:= resultData.S['targetPlot'];
 
+		autoRegister     := resultData.B['registerPlot'];
+        makePreviews     := resultData.B['makePreview'];
+        setupStacking    := resultData.B['setupStacking'];
+
         hasSkinTarget := false;
 
         if(skinTargetEdid <> '') then begin
