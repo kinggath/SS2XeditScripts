@@ -2687,7 +2687,7 @@ unit SS2Lib;
         // agricultural
             PLOT_SC_AGR_Default_Basic:    Result := '[Basic Farm]';
             PLOT_SC_AGR_Advanced:         Result := '[Advanced Farm]'+STRING_LINE_BREAK+'[Requires Skilled Endurance]';
-            PLOT_SC_AGR_HighTech:         Result := '[Hi-Tech Farm]'+STRING_LINE_BREAK+'[Requires Skilled Endurance]';
+            PLOT_SC_AGR_HighTech:         Result := '[Hi-Tech Farm]'+STRING_LINE_BREAK+'[Requires Gifted Endurance]';
         // commercial
             PLOT_SC_COM_ArmorStore:         Result := '[Armor Store]';
             PLOT_SC_COM_Bar:                Result := '[Bar]';
