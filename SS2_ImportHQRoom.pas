@@ -1,6 +1,5 @@
 {
-    New script template, only shows processed records
-    Assigning any nonzero value to Result will terminate script
+    Run on Room Config to update. Run on anything else to generate a new
 }
 unit ImportHqRoom;
 	uses 'SS2\SS2Lib'; // uses praUtil
@@ -322,8 +321,8 @@ unit ImportHqRoom;
 	function createHqRoomConfig(existingElem: IInterface; forHq: IInterface; roomName: string; roomShapeKw: IInterface; roomShapeKwEdid: string; actionGroup: IInterface; primaryDepartment: IInterface; UpgradeSlots: TStringList): IInterface;
 	var
 		configMisc, configMiscScript, roomConfigKw, roomUpgradeSlots, curSlotMisc: IInterface;
-		kwBase, curSlotName, configMiscEdid, roomNameSpaceless: string;
-		oldRoomShapeKw, oldUpgradeMisc: IInterface;
+		kwBase, curSlotName, configMiscEdid, roomNameSpaceless, roomConfigKeywordEdid: string;
+		oldRoomShapeKw, oldUpgradeMisc, roomConfigKeyword: IInterface;
 		i: integer;
 	begin
 
@@ -345,6 +344,9 @@ unit ImportHqRoom;
 			configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
 			configMisc := getCopyOfTemplate(targetFile, SS2_HQGNN_Action_AssignRoomConfig_Template, configMiscEdid);
 			addKeywordByPath(configMisc, roomShapeKw, 'KWDA');
+			
+			roomConfigKeywordEdid := 'SS2_Tag_RoomConfig_'+kwBase+'_'+roomNameSpaceless;//<RoomShapeKeywordName>_<Name Entered Above>
+			roomConfigKeyword := getCopyOfTemplate(targetFile, keywordTemplate, roomConfigKeywordEdid);			
 		end else begin
 			configMisc := existingElem;
 			// try to remove the current room shape KW
@@ -362,8 +364,12 @@ unit ImportHqRoom;
 		setScriptProp(configMiscScript, 'PrimaryDepartment', primaryDepartment);
 
 		roomConfigKw := getCopyOfTemplate(targetFile, keywordTemplate, 'SS2_Tag_RoomConfig_'+kwBase+'_'+roomNameSpaceless);//SS2_Tag_RoomConfig_<RoomShapeKeywordName>_<Name Entered Above>
-		//setScriptProp(configMiscScript, 'RoomConfigKeyword', primaryDepartment); // generate
+
 		setScriptProp(configMiscScript, 'RoomShapeKeyword', roomShapeKw);
+		
+		if(assigned(roomConfigKeyword)) then begin
+			setScriptProp(configMiscScript, 'RoomConfigKeyword', roomConfigKeyword);
+		end;
 
 		roomUpgradeSlots := getOrCreateScriptProp(configMiscScript, 'RoomUpgradeSlots', 'Array of Object');
 		clearProperty(roomUpgradeSlots);
