@@ -1,44 +1,13 @@
 {
     Script to convert SimSettlements 1 blueprints to the new SimSettlements 2 format
-
-    TODO:
-    [x] When creating EDIDs for StageItems, if sSpawnName field is not set, use the EDID of the item being spawned as that portion of the StageItem editor ID
-    [x] When forced to trim the editor ID, just shave it down to 93 chars and then append the hex, as opposed to just replacing with hex (making it impossible to find items for editing)
-    [NOPE] Offsets for skins?
-    [x] Add Building Class selection drop down during conversion.
-            This should offer the list of SS2_PlotTypeSubClass_ * keywords for that particular plot class (example: SS2_PlotTypeSubClass_Agricultural_Advanced, SS2_PlotTypeSubClass_Agricultural_Default_Basic, SS2_PlotTypeSubClass_Agricultural_HighTech)
-
-            The selected keyword should be set as the ClassKeyword property on the BuildingPlan weapon form, and also added to that form as an actual keyword.
-    [x] Setup a default template on the Building Plan weapon forms with the BPDescription mod already added.
-    [x] When checking for items already in SS2, if no EDID match in SS2, try looking up object type in SS1, then check for identical hex id in SS2 of the same object type. Since SS2 started with a copy of SS1 99% of SS1's item hex IDs are in tact, but some have been renamed.
-        - If object match still can't be found, and the item is just a static - go ahead and copy it into their plugin.
-            - This will allow me to start renaming some of the forms in SS2 so I can get better organized.
-
-    [x] Sometimes matswaps aren't transferred?
-
-    [NOPE] E-Waste burner isn't converted
-    [x] Referenced cells are bad
-    [?] could not translate SCOL part, this part will be removed
-    [x] default subtype (return of the show dialog for each plot checkbox)
-    [x] Furniture
-    [x] Reuse spawns
-    [x] Finish skins
-    [x] Plot keywords should REPLACE if updating
-    [x] Themes
-    [x] Flags!
-    [x] Foundations!
-    [x] Desks
-    [x] Leaders
-    [x] Improve subtype guessing
-    [x] Agri Lvl4 (skip one)
-    [ ] Plot Resources?
-    [x] Required Plugins
 }
 unit PlotConverter;
 
     uses 'SS2\SS2Lib';
     const
-        configFile = ProgramPath + 'Edit Scripts\SS2_PlotConverter.cfg';
+        configFile = ProgramPath + 'Edit Scripts\SS2\SS2_PlotConverter.cfg';
+        plotMappingFile = ProgramPath + 'Edit Scripts\SS2\PlotMapping.csv';
+
     var
         newModName: string;
         oldFormPrefix: string;
@@ -74,6 +43,9 @@ unit PlotConverter;
 
         commercialExteriorQuestProperties: TStringList; // there are so many of them..
         commercialInteriorQuestProperties: TStringList;
+
+        plotMapping: TStringList;
+
 
 
         SS2_FLID_BuildingSkins: IInterface;
@@ -769,6 +741,64 @@ unit PlotConverter;
 		}
     end;
 
+	procedure loadPlotMapping();
+	var
+		csvLines, csvCols: TStringList;
+		i: integer;
+		curLine, search, replace: string;
+		replacePlot, plotScript: IInterface;
+	begin
+		if(not FileExists(plotMappingFile)) then begin
+			exit;
+		end;
+		
+		plotMapping := TStringList.create;
+		plotMapping.CaseSensitive := false;
+		plotMapping.Duplicates := dupIgnore;
+
+		AddMessage('Loading plot mapping from '+plotMappingFile);
+
+		csvLines := TStringList.create;
+		csvLines.LoadFromFile(plotMappingFile);
+		for i:=0 to csvLines.count-1 do begin
+			curLine := trim(csvLines.Strings[i]);
+			if(curLine = '') then begin
+				continue;
+			end;
+
+			csvCols := TStringList.create;
+
+			csvCols.Delimiter := ',';
+			csvCols.StrictDelimiter := TRUE;
+			csvCols.DelimitedText := curLine;
+
+			if (csvCols.count >= 2) then begin
+				search  := trim(csvCols.Strings[0]);
+				replace := trim(csvCols.Strings[1]);
+
+				if(search <> '') and (replace <>'') then begin
+					replacePlot := GetFormByEdid(replace);
+
+					if(assigned(replacePlot)) then begin
+						plotScript := getScript(replacePlot, 'SimSettlementsV2:Weapons:BuildingPlan');
+						if(assigned(plotScript)) then begin
+							plotMapping.addObject(search, replacePlot);
+						end else begin
+							AddMessage('Cannot use '+search+' => '+replace+' for plot mapping: not a building plan.');
+						end;
+					end else begin
+						AddMessage('Cannot use '+search+' => '+replace+' for plot mapping: building plan not found.');
+					end;
+				end;
+			end;
+
+			csvCols.free();
+        end;
+
+		csvLines.free();
+	end;
+
+
     procedure loadConfig();
     var
         i, j, breakPos: integer;
@@ -786,6 +816,8 @@ unit PlotConverter;
         autoRegister := true;
         makePreviews := true;
         setupStacking := true;
+
+		loadPlotMapping();
 
         if(not FileExists(configFile)) then begin
             exit;
@@ -2014,9 +2046,17 @@ unit PlotConverter;
     function getNewVersionOfPlot(oldPlot: IInterface): IInterface;
     var
         oldEdid, newSig, newEdid: string;
-
+		mappingIndex: integer;
     begin
         oldEdid := EditorID(oldPlot);
+		// there might be mapping specified
+		AddMessage('Checking '+oldEdid);
+		mappingIndex := plotMapping.indexOf(oldEdid);
+		if(mappingIndex >= 0) then begin
+			Result := ObjectToElement(plotMapping.Objects[mappingIndex]);
+			exit;
+		end;
+
         // it might exist in the cache
         Result := getPlotFromCache(oldEdid);
         if(assigned(Result)) then exit;
@@ -3976,6 +4016,7 @@ unit PlotConverter;
 
 		Result := 0;
 
+		plotMapping.free();
         typeFormlistCache.free();
         skinBacklog.free();
         formMappingCache.free();
