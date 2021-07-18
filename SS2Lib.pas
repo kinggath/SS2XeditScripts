@@ -553,7 +553,6 @@ unit SS2Lib;
 
         for i:=1 to length(tmp) do begin
             curChar := tmp[i];
-            // AddMessage('BLA '+curChar);
             if (curChar >= '0') and (curChar <= '9') then begin
                 curPart := curPart + curChar;
             end;

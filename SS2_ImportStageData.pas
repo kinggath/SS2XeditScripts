@@ -10,7 +10,7 @@ const
     MODE_BP_LEVEL   = 2;
     MODE_SKIN_ROOT  = 4;
     MODE_SKIN_LEVEL = 5;
-    configFile = ProgramPath + 'Edit Scripts\SS2_ImportStageData.cfg';
+    configFile = ProgramPath + 'Edit Scripts\SS2\SS2_ImportStageData.cfg';
 
 var
     targetElem, targetFile: IInterface;

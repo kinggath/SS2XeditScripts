@@ -2179,6 +2179,21 @@ unit PraUtil;
         Result.Width := Length(text) * 10;
     end;
 
+	function CreateRadioGroup(frm: TForm; left, top, width, height: Integer; caption: String; items: TStringList): TRadioGroup;
+	begin
+		Result := TRadioGroup.Create(frm);
+        Result.Parent := frm;
+        Result.Left := left;
+        Result.Top := top;
+        Result.Width := width;
+        Result.Height := height;
+        Result.Caption := caption;
+
+        if(items <> nil) then begin
+            Result.items := items;
+        end;
+	end;
+
     function CreateInput(frm: TForm; left, top: Integer; text: String): TEdit;
     begin
         Result := TEdit.Create(frm);
@@ -2213,6 +2228,20 @@ unit PraUtil;
             Result.items := items;
         end;
     end;
+	
+	function CreateListBox(frm: TForm; left: Integer; top: Integer; width: Integer; height: Integer; items: TStringList): TListBox;
+	begin
+		Result := TListBox.Create(frm);
+        Result.Parent := frm;
+        Result.Left := left;
+        Result.Top := top;
+        Result.Width := width;
+        Result.Height := height;
+
+        if(items <> nil) then begin
+            Result.items := items;
+        end;
+	end;
 
     {
         Shows a dialog with input fields for x, y and z.
