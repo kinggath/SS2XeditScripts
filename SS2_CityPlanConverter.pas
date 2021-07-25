@@ -207,44 +207,6 @@ unit CityPlanConverter;
         writeFormData(prop, rec, id, pluginName, 'BaseForm', 'iFormID', 'sPluginName');
     end;
 
-    function isResourceObject_elem(elem: IInterface): boolean;
-    var
-        script: IInterface;
-        sig: string;
-        resourceVal: float;
-    begin
-        Result := false;
-
-        sig := Signature(elem);
-
-        if(sig = 'SCOL') then begin
-            exit;
-        end;
-
-        resourceVal := getAvByPath(elem, 'PRPS', 'WorkshopResourceObject');
-        if(resourceVal > 0) then begin
-            Result := true;
-            exit;
-        end;
-
-        //script := getScript(elem, 'workshopobjectscript');
-        script := getScript(elem, 'SimSettlementsV2:ObjectReferences:SimPlot');
-        Result := assigned(script);
-    end;
-
-    function isResourceObject_id(formFileName: string; id: cardinal): boolean;
-    var
-        elem: IInterface;
-    begin
-        Result := false;
-        elem := getFormByFilenameAndFormID(formFileName, id);
-        if(not assigned(elem)) then begin
-            exit;
-        end;
-
-        Result := isResourceObject_elem(elem);
-    end;
-
     function getNewPowerData(oldIndex: integer; level: integer): TJsonObject;
     var
         oldStrIndex: string;
