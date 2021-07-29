@@ -10,6 +10,9 @@ unit ImportHqRoom;
 		cacheFileLists = ProgramPath + 'Edit Scripts\SS2\HqLists.cache';
 		progressBarChar = '|';
 		progressBarLength = 70;
+		RESOURCE_COMPLEXITY_FULL = 3;
+		RESOURCE_COMPLEXITY_CATEGORY = 2;
+		RESOURCE_COMPLEXITY_MINIMAL = 1;
 	var
 		targetFile: IInterface;
 		targetElem: IInterface;
@@ -24,6 +27,8 @@ unit ImportHqRoom;
 		listHqManagers: TStringList;
 		listModels: TStringList;
 		listRoomResources: TStringList;
+		resourceLookupTable: TJsonObject;
+		edidLookupCache: TStringList;
 		// general stuff needed from master
 		SS2_HQ_FauxWorkshop: IInterface;
 		SS2_FLID_HQActions: IInterface;
@@ -32,16 +37,27 @@ unit ImportHqRoom;
 		SS2_TF_HologramGNNWorkshopTiny: IInterface;
 		SS2_HQ_Action_RoomUpgrade_Template: IInterface;
 		SS2_HQRoomLayout_Template: IInterface;
+		SS2_co_HQBuildableAction_GNN_RoomUpgrade_Template: IInterface;
+		SS2_VirtualResourceCategory_Scrap: IInterface;
+		SS2_VirtualResourceCategory_RareMaterials: IInterface;
+		SS2_VirtualResourceCategory_OrganicMaterials: IInterface;
+		SS2_VirtualResourceCategory_MachineParts: IInterface;
+		SS2_VirtualResourceCategory_BuildingMaterials: IInterface;
 		// templates
 		SS2_HQGNN_Action_AssignRoomConfig_Template: IInterface;
 		SS2_HQ_RoomSlot_Template_GNN: IInterface;
 		SS2_HQ_RoomSlot_Template: IInterface;
+		SS2_HQBuildableAction_Template: IInterface;
 
+		// progress bar stuff
 		progressBarWindow: TForm;
 		progressBarStack: TJsonArray;
 
-
-
+		// other stuff
+		hasFindObjectError: boolean;
+		hasRelativeCoordinateLayout: boolean;
+		hasNonRelativeCoordinateLayout: boolean;
+		
 	function StringRepeat(str: string; len: integer): string;
 	var
 		i: integer;
@@ -249,6 +265,114 @@ unit ImportHqRoom;
 
 	end;
 
+	function getFirstCVPA(misc: IInterface): IInterface;
+	var
+		cvpa, firstElem: IInterface;
+	begin
+		Result := nil;
+		cvpa := ElementByPath(misc, 'CVPA');
+		if(not assigned(cvpa)) then exit;
+
+		firstElem := ElementByIndex(cvpa, 0);
+		if(not assigned(firstElem)) then exit;
+
+		Result := pathLinksTo(firstElem, 'Component');
+	end;
+
+	function findObjectByEdidCached(edid: string): IInterface;
+	var
+		i: integer;
+	begin
+		i := edidLookupCache.indexOf(edid);
+		if(i >= 0) then begin
+			Result := ObjectToElement(edidLookupCache.Objects[i]);
+			exit;
+		end;
+
+		Result := FindObjectByEdid(edid);
+		edidLookupCache.addObject(edid, Result);
+	end;
+
+	procedure registerResource(vrEdid, realEdid, groupEdid, scrapEdid: string);
+	var
+		vrElem, realElem, groupElem, scrapElem: IInterface;
+		vrFormStr: string;
+		curEntry: TJsonObject;
+	begin
+		vrElem := findObjectByEdidCached(vrEdid);
+		if(not assigned(vrElem)) then begin
+			AddMessage('Failed to register resource '+vrEdid+': not found');
+			exit;
+		end;
+
+		realElem := findObjectByEdidCached(realEdid);
+		groupElem := findObjectByEdidCached(groupEdid);
+		scrapElem := findObjectByEdidCached(scrapEdid);
+
+		if (not assigned(realElem)) or (not assigned(groupElem)) or (not assigned(scrapElem)) then begin
+			AddMessage('Failed to register resource '+vrEdid+': couldn''nt found one of '+realEdid+', '+groupEdid+', '+scrapEdid);
+			exit;
+		end;
+
+		vrFormStr := FormToStr(vrElem);
+		curEntry := resourceLookupTable.O[vrFormStr];
+
+		curEntry.S[RESOURCE_COMPLEXITY_MINIMAL] :=  FormToStr(scrapElem);
+		curEntry.S[RESOURCE_COMPLEXITY_CATEGORY]:= FormToStr(groupElem);
+		curEntry.S[RESOURCE_COMPLEXITY_FULL] 	:= FormToStr(realElem);
+	end;
+
+	procedure registerSimpleResource(vrEdid, realEdid: string);
+	begin
+		registerResource(vrEdid, realEdid, realEdid, realEdid);
+	end;
+
+	procedure registerScrapResource(vrEdid, realEdid, groupEdid: string);
+	begin
+		registerResource(vrEdid, realEdid, groupEdid, 'SS2_c_HQ_SimpleResource_Scrap');
+	end;
+
+	procedure loadResourceGroups();
+	begin
+		registerSimpleResource('SS2_VirtualResource_Caps', 'Caps001');
+
+		registerScrapResource('SS2_VirtualResource_RareMaterials_NuclearMaterial', 'c_NuclearMaterial', 'SS2_c_HQ_CategoryResource_RareMaterials');
+		registerScrapResource('SS2_VirtualResource_RareMaterials_Gold', 'c_Gold', 'SS2_c_HQ_CategoryResource_RareMaterials');
+		registerScrapResource('SS2_VirtualResource_RareMaterials_FiberOptics', 'c_FiberOptics', 'SS2_c_HQ_CategoryResource_RareMaterials');
+		registerScrapResource('SS2_VirtualResource_RareMaterials_Crystal', 'c_Crystal', 'SS2_c_HQ_CategoryResource_RareMaterials');
+		registerScrapResource('SS2_VirtualResource_RareMaterials_BallisticFiber', 'c_AntiBallisticFiber', 'SS2_c_HQ_CategoryResource_RareMaterials');
+		registerScrapResource('SS2_VirtualResource_RareMaterials_Antiseptic', 'c_Antiseptic', 'SS2_c_HQ_CategoryResource_RareMaterials');
+
+		registerScrapResource('SS2_VirtualResource_OrganicMaterials_Oil', 'c_Oil', 'SS2_c_HQ_CategoryResource_OrganicMaterials');
+		registerScrapResource('SS2_VirtualResource_OrganicMaterials_Leather', 'c_Leather', 'SS2_c_HQ_CategoryResource_OrganicMaterials');
+		registerScrapResource('SS2_VirtualResource_OrganicMaterials_Fertilizer', 'c_Fertilizer', 'SS2_c_HQ_CategoryResource_OrganicMaterials');
+		registerScrapResource('SS2_VirtualResource_OrganicMaterials_Cork', 'c_Cork', 'SS2_c_HQ_CategoryResource_OrganicMaterials');
+		registerScrapResource('SS2_VirtualResource_OrganicMaterials_Cloth', 'c_Cloth', 'SS2_c_HQ_CategoryResource_OrganicMaterials');
+		registerScrapResource('SS2_VirtualResource_OrganicMaterials_Ceramic', 'c_Ceramic', 'SS2_c_HQ_CategoryResource_OrganicMaterials');
+		registerScrapResource('SS2_VirtualResource_OrganicMaterials_Bone', 'c_Bone', 'SS2_c_HQ_CategoryResource_OrganicMaterials');
+		registerScrapResource('SS2_VirtualResource_OrganicMaterials_Adhesive', 'c_Adhesive', 'SS2_c_HQ_CategoryResource_OrganicMaterials');
+		registerScrapResource('SS2_VirtualResource_OrganicMaterials_Acid', 'c_Acid', 'SS2_c_HQ_CategoryResource_OrganicMaterials');
+
+		registerScrapResource('SS2_VirtualResource_MachineParts_Springs', 'c_Springs', 'SS2_c_HQ_CategoryResource_MachineParts');
+		registerScrapResource('SS2_VirtualResource_MachineParts_Silver', 'c_Silver', 'SS2_c_HQ_CategoryResource_MachineParts');
+		registerScrapResource('SS2_VirtualResource_MachineParts_Screws', 'c_Screws', 'SS2_c_HQ_CategoryResource_MachineParts');
+		registerScrapResource('SS2_VirtualResource_MachineParts_Rubber', 'c_Rubber', 'SS2_c_HQ_CategoryResource_MachineParts');
+		registerScrapResource('SS2_VirtualResource_MachineParts_Plastic', 'c_Plastic', 'SS2_c_HQ_CategoryResource_MachineParts');
+		registerScrapResource('SS2_VirtualResource_MachineParts_Lead', 'c_Lead', 'SS2_c_HQ_CategoryResource_MachineParts');
+		registerScrapResource('SS2_VirtualResource_MachineParts_Gears', 'c_Gears', 'SS2_c_HQ_CategoryResource_MachineParts');
+		registerScrapResource('SS2_VirtualResource_MachineParts_Copper', 'c_Copper', 'SS2_c_HQ_CategoryResource_MachineParts');
+		registerScrapResource('SS2_VirtualResource_MachineParts_Circuitry', 'c_Circuitry', 'SS2_c_HQ_CategoryResource_MachineParts');
+
+		registerScrapResource('SS2_VirtualResource_BuildingMaterials_Wood', 'c_Wood', 'SS2_c_HQ_CategoryResource_BuildingMaterials');
+		registerScrapResource('SS2_VirtualResource_BuildingMaterials_Steel', 'c_Steel', 'SS2_c_HQ_CategoryResource_BuildingMaterials');
+		registerScrapResource('SS2_VirtualResource_BuildingMaterials_Glass', 'c_Glass', 'SS2_c_HQ_CategoryResource_BuildingMaterials');
+		registerScrapResource('SS2_VirtualResource_BuildingMaterials_Fiberglass', 'c_Fiberglass', 'SS2_c_HQ_CategoryResource_BuildingMaterials');
+		registerScrapResource('SS2_VirtualResource_BuildingMaterials_Concrete', 'c_Concrete', 'SS2_c_HQ_CategoryResource_BuildingMaterials');
+		registerScrapResource('SS2_VirtualResource_BuildingMaterials_Asbestos', 'c_Asbestos', 'SS2_c_HQ_CategoryResource_BuildingMaterials');
+		registerScrapResource('SS2_VirtualResource_BuildingMaterials_Aluminum', 'c_Aluminum', 'SS2_c_HQ_CategoryResource_BuildingMaterials');
+	end;
+
+
 	procedure loadResources();
 	var
 		resName: string;
@@ -271,6 +395,7 @@ unit ImportHqRoom;
 	begin
 		loadResources();
 		loadModels();
+		loadResourceGroups();
 	end;
 
 	function findHqName(hqRef: IInterface): string;
@@ -662,7 +787,7 @@ unit ImportHqRoom;
 						listHqManagers.addObject(EditorID(curObj), curObj);
 					end else if(sectionState = 7) then begin
 						// listRoomResources
-						listRoomResources.addObject(getResourceAvName(curObj), curObj);
+						listRoomResources.addObject(GetElementEditValues(curObj, 'FULL'), curObj);
 					end;
 
 				end;
@@ -706,6 +831,15 @@ unit ImportHqRoom;
 		end;
 	end;
 
+	function FindObjectByEdidWithError(edid: string): IInterface;
+	begin
+		Result := FindObjectByEdid(edid);
+		if(not assigned(Result)) then begin
+			AddMessage('Failed to find form '+edid);
+			hasFindObjectError := true;
+		end;
+	end;
+
 
     // Called before processing
     // You can remove it if script doesn't require initialization code
@@ -718,17 +852,33 @@ unit ImportHqRoom;
 			Result := 1;
 			exit;
 		end;
-
+		hasFindObjectError := false;
 		// records we always need
-		SS2_HQ_FauxWorkshop := FindObjectByEdid('SS2_HQ_FauxWorkshop'); //SS2_HQ_FauxWorkshop "Workshop" [CONT:0400379B]
-		SS2_FLID_HQActions := FindObjectByEdid('SS2_FLID_HQActions');
-		SS2_TF_HologramGNNWorkshopTiny := FindObjectByEdid('SS2C2_TF_HologramGNNWorkshopTiny');
-		SS2_HQ_Action_RoomUpgrade_Template := FindObjectByEdid('SS2_HQ_Action_RoomUpgrade_Template');
-		SS2_HQRoomLayout_Template := FindObjectByEdid('SS2_HQRoomLayout_Template');
-		WorkshopItemKeyword := FindObjectByEdid('WorkshopItemKeyword');
-		SS2_HQGNN_Action_AssignRoomConfig_Template := FindObjectByEdid('SS2C2_HQGNN_Action_AssignRoomConfig_Template');
-		SS2_HQ_RoomSlot_Template := FindObjectByEdid('SS2_HQ_RoomSlot_Template');
-		SS2_HQ_RoomSlot_Template_GNN := FindObjectByEdid('SS2C2_HQ_RoomSlot_Template_GNN');
+		SS2_HQ_FauxWorkshop := FindObjectByEdidWithError('SS2_HQ_FauxWorkshop'); //SS2_HQ_FauxWorkshop "Workshop" [CONT:0400379B]
+		SS2_FLID_HQActions := FindObjectByEdidWithError('SS2_FLID_HQActions');
+		SS2_TF_HologramGNNWorkshopTiny := FindObjectByEdidWithError('SS2C2_TF_HologramGNNWorkshopTiny');
+		SS2_HQ_Action_RoomUpgrade_Template := FindObjectByEdidWithError('SS2_HQ_Action_RoomUpgrade_Template');
+		SS2_HQRoomLayout_Template := FindObjectByEdidWithError('SS2_HQRoomLayout_Template');
+		SS2_co_HQBuildableAction_GNN_RoomUpgrade_Template := FindObjectByEdidWithError('SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template');
+		WorkshopItemKeyword := FindObjectByEdidWithError('WorkshopItemKeyword');
+		SS2_HQGNN_Action_AssignRoomConfig_Template := FindObjectByEdidWithError('SS2C2_HQGNN_Action_AssignRoomConfig_Template');
+		SS2_HQ_RoomSlot_Template := FindObjectByEdidWithError('SS2_HQ_RoomSlot_Template');
+		SS2_HQ_RoomSlot_Template_GNN := FindObjectByEdidWithError('SS2C2_HQ_RoomSlot_Template_GNN');
+		SS2_HQBuildableAction_Template := FindObjectByEdidWithError('SS2_HQBuildableAction_Template');
+
+		SS2_HQ_RoomSlot_Template_GNN := FindObjectByEdidWithError('SS2C2_HQ_RoomSlot_Template_GNN');
+
+		SS2_VirtualResourceCategory_Scrap 			  := FindObjectByEdidWithError('SS2_VirtualResourceCategory_Scrap');
+		SS2_VirtualResourceCategory_RareMaterials 	  := FindObjectByEdidWithError('SS2_VirtualResourceCategory_RareMaterials');
+		SS2_VirtualResourceCategory_OrganicMaterials  := FindObjectByEdidWithError('SS2_VirtualResourceCategory_OrganicMaterials');
+		SS2_VirtualResourceCategory_MachineParts 	  := FindObjectByEdidWithError('SS2_VirtualResourceCategory_MachineParts');
+		SS2_VirtualResourceCategory_BuildingMaterials := FindObjectByEdidWithError('SS2_VirtualResourceCategory_BuildingMaterials');
+
+		if(hasFindObjectError) then begin
+			Result := 1;
+			exit;
+		end;
+
 		if(not assigned(SS2_HQ_FauxWorkshop)) then begin
 			AddMessage('no SS2_HQ_FauxWorkshop');
 			Result := 1;
@@ -746,6 +896,9 @@ unit ImportHqRoom;
 		listModels := TStringList.create;
 		listRoomResources := TStringList.create;
 		listRoomConfigs := TStringList.create;
+
+		resourceLookupTable := TJsonObject.create;
+		edidLookupCache     := TStringList.create;
 
 
 		listRoomResources.Sorted := true;
@@ -1490,6 +1643,7 @@ unit ImportHqRoom;
 		roomSlots: TStringList;
 		selectUpgradeSlot, selectDepartment, selectModel, selectHqManager: TComboBox;
 		assignDepAtEnd, assignDepAtStart, disableClutter, disableGarbarge, defaultConstMarkers, realTimeTimer: TCheckBox;
+		doRegisterCb: TCheckBox;
 		departmentList, modelList: TStringList;
 		inputName, inputDuration: TEdit; ///Duration: Float - default to 24
 
@@ -1505,15 +1659,18 @@ unit ImportHqRoom;
 		layoutsBox: TListBox;
 		layoutsAddBtn, layoutsRemBtn, layoutsEdtBtn: TButton;
 
-		modelStr: string;
+		modelStr, upgradeName: string;
 		targetDepartment: IInterface;
+
+		roomUpgradeMisc, roomUpgradeActi: IInterface;
+		upgradeDuration: float;
 	begin
 		// load the slots for what we have
 		if(assigned(targetRoomConfig)) then begin
 			roomSlots := getRoomUpgradeSlots(targetRoomConfig);
 		end;
 
-		frm := CreateDialog('Generating Room Upgrade', 590, 540);
+		frm := CreateDialog('Generating Room Upgrade', 590, 560);
 		curY := 0;
 		if(not assigned(existingElem)) then begin
 			CreateLabel(frm, 10, 10+curY, 'HQ: '+EditorID(targetHQ)+'.');
@@ -1527,7 +1684,7 @@ unit ImportHqRoom;
 		inputName.width := 200;
 		inputName.onChange := showRoomUpradeDialog2UpdateOk;
 
-		curY := curY + 28;
+		curY := curY + 24;
 		CreateLabel(frm, 10, 10+curY, 'Model:');
 
 		modelList := prependNoneEntry(listModels);
@@ -1536,12 +1693,23 @@ unit ImportHqRoom;
 		selectModel.Name := 'selectModel';
 		selectModel.ItemIndex := 0;
 
-		curY := curY + 28;
+		curY := curY + 24;
 		CreateLabel(frm, 10, 10+curY, 'Upgrade slot: ');
 		selectUpgradeSlot := CreateComboBox(frm, 150, 8+curY, 200, roomSlots);
 		selectUpgradeSlot.Style := csDropDownList;
 		selectUpgradeSlot.Name := 'selectUpgradeSlot';
 		selectUpgradeSlot.onChange := showRoomUpradeDialog2UpdateOk;
+
+		// ADD HERE
+		curY := curY + 24;
+		CreateLabel(frm, 10, 10+curY, 'HQ Manager: ');
+		selectHQManager := CreateComboBox(frm, 150, 8+curY, 200, listHqManagers);
+		selectHQManager.Style := csDropDownList;
+		selectHQManager.Name := 'selectHQManager';
+		// selectHQManager.onChange := showRoomUpradeDialog2UpdateOk;
+		selectHQManager.ItemIndex := 0;
+
+
 		// selectUpgradeSlot.onChange := updateRoomUpgrade1OkBtn;
 		curY := curY + 42;
 		assignDepAtStart := CreateCheckbox(frm, 10, curY, 'Assign department to room at start');
@@ -1646,7 +1814,10 @@ unit ImportHqRoom;
 		//layoutsBox: TListBox;
 		//layoutsAddBtn, layoutsRemBtn, layoutsEdtBtn: TButton;
 
-		curY := curY + 110;
+		curY := curY + 100;
+		doRegisterCb := CreateCheckbox(frm, 10, curY, 'Register Room Upgrade');
+		doRegisterCb.checked := true;
+		curY := curY + 20;
 
 		//curY := curY + 136;
 		btnOk := CreateButton(frm, 220, curY, 'OK');
@@ -1679,10 +1850,13 @@ unit ImportHqRoom;
 				targetDepartment := ObjectToElement(selectDepartment.Items.Objects[selectDepartment.ItemIndex]);
 			end;
 
-			generateRoomUpgrade(
+			upgradeName := trim(inputName.Text);
+			upgradeDuration := tryToParseFloat(inputDuration.Text);
+
+			roomUpgradeMisc := createRoomUpgradeMisc(
 				nil,
 				targetRoomConfig,
-				trim(inputName.Text),
+				upgradeName,
 				modelStr,
 				ObjectToElement(roomSlots.Objects[selectUpgradeSlot.ItemIndex]),
 				assignDepAtStart.Checked,
@@ -1691,12 +1865,23 @@ unit ImportHqRoom;
 				disableClutter.Checked,
 				disableGarbarge.Checked,
 				realTimeTimer.Checked,
-				tryToParseFloat(inputDuration.Text),
+				upgradeDuration,
 				targetDepartment,
 				resourceBox.Items,
 				roomFuncsBox.Items,
 				layoutsBox.Items
 			);
+
+			roomUpgradeActi := createRoomUpgradeActivator(roomUpgradeMisc, targetHQ, ObjectToElement(listHqManagers.Objects[selectHQManager.ItemIndex]), upgradeName, modelStr);
+
+			createRoomUpgradeCOBJs(roomUpgradeActi, targetHQ, getActionAvailableGlobal(roomUpgradeMisc), upgradeName, resourceBox.Items, upgradeDuration);
+
+			if(doRegisterCb.checked) then begin
+				// register
+				AddMessage('Registering Room Upgrade');
+				registerAddonContent(targetFile, roomUpgradeMisc, SS2_FLID_HQActions);
+			end;
+			AddMessage('Room Upgrade generation complete!');
 		end;
 
 
@@ -1846,7 +2031,12 @@ unit ImportHqRoom;
 
 
 		// now everything should be parsed
-		AddMessage(spawnData.toString());
+		// AddMessage(spawnData.toString());
+		if(bRelativePositioning) then begin
+			hasRelativeCoordinateLayout   := true;
+		end else begin
+			hasNonRelativeCoordinateLayout:= true;
+		end;
 
 		setScriptProp(resultScript, 'bUseRelativeCoordinates', bRelativePositioning);
 
@@ -1918,12 +2108,12 @@ unit ImportHqRoom;
 		end;
 
 		newStruct := appendStructToProperty(targetArray);
-		
+
 		loFormId := 0;
 		if(itemData.S['extFormId'] <> '') then begin
 			loFormId := StrToInt('$'+itemData.S['extFormId']);
 		end;
-		
+
 
 		setUniversalFormProperty(newStruct, formElem, loFormId, itemData.S['extFileName'], 'ObjectForm', 'iFormID', 'sPluginName');
 
@@ -1941,7 +2131,147 @@ unit ImportHqRoom;
 		setStructMemberDefault(newStruct, 'fExtraDataFlag', itemData.F['extraData'], 0.0);
 	end;
 
-	procedure generateRoomUpgrade(
+	function getMappedResource(vrResource: IInterface; complexity: integer): IInterface;
+	var
+		vrFormStr, resultStr: string;
+	begin
+		Result := nil;
+		vrFormStr := FormToStr(vrResource);
+		resultStr := resourceLookupTable.O[vrFormStr].S[complexity];
+		if(resultStr = '') then begin
+			exit;
+		end;
+
+		Result := StrToForm(resultStr);
+	end;
+
+	function getResourcesGrouped(resources: TStringList; resourceComplexity: integer): TJsonObject;
+	var
+		i, resIndex, count: integer;
+		resourceData: TJsonObject;
+		curResource, realResource: IInterface;
+		sig, resourceStr: string;
+	begin
+		Result := TJsonObject.create();
+		for i:=0 to resources.count-1 do begin
+			resourceData := TJsonObject(resources.Objects[i]);
+
+			count := resourceData.I['count'];
+
+			resIndex := resourceData.I['index'];
+			curResource := ObjectToElement(listRoomResources.Objects[resIndex]);
+
+			sig := Signature(curResource);
+
+			if(sig = 'AVIF') then begin
+				realResource := getMappedResource(curResource, resourceComplexity);
+				if(not assigned(realResource)) then begin
+					AddMessage('Failed to map '+EditorID(curResource)+' to anything');
+					continue;
+				end;
+			end else if(sig = 'MISC') then begin
+				// try finding the component
+				realResource := getFirstCVPA(curResource);
+				if(not assigned(realResource)) then begin
+					realResource := curResource;
+				end;
+			end else begin
+				realResource := curResource;
+			end;
+
+			resourceStr := FormToStr(realResource);
+			Result.I[resourceStr] := Result.I[resourceStr] + 1;
+		end;
+	end;
+
+	function createRoomUpgradeCOBJ(edidBase, descriptionText: string; resourceComplexity: integer; acti, availableGlobal: IInterface; resources: TStringList): IInterface;
+	var
+		edid, curName: string;
+		i, count: integer;
+		availCondition, complexityCondition, fvpa, component, conditions: IInterface;
+		cobjResources: TJsonObject;
+	begin
+		edid := edidBase + '_' + IntToStr(resourceComplexity);
+		Result := getCopyOfTemplate(targetFile, SS2_co_HQBuildableAction_GNN_RoomUpgrade_Template, edid);
+
+		SetElementEditValues(Result, 'DESC', descriptionText);
+
+		conditions := ElementByPath(Result, 'Conditions');
+
+		availCondition := ElementByIndex(conditions, 0);
+		complexityCondition := ElementByIndex(conditions, 1);
+
+		setPathLinksTo(availCondition, 'CTDA\Global', availableGlobal);
+		setElementEditValues(complexityCondition, 'CTDA\Comparison Value', IntToStr(resourceComplexity));
+
+		setPathLinksTo(Result, 'CNAM', acti);
+
+		// resources
+		cobjResources := getResourcesGrouped(resources, resourceComplexity);
+		RemoveElement(Result, 'FVPA');
+		fvpa := ensurePath(Result, 'FVPA');
+
+		for i:=0 to cobjResources.count-1 do begin
+			curName := cobjResources.names[i];
+			count := cobjResources.I[curName];
+
+			//component := Add(fvpa, 'Component', true);
+			component := ElementAssign(fvpa, HighInteger, nil, False);
+
+
+			setPathLinksTo(component, 'Component', StrToForm(curName));
+			SetElementEditValues(component, 'Count', IntToStr(count));
+		end;
+
+		cobjResources.free();
+	end;
+
+	procedure createRoomUpgradeCOBJs(acti, forHq, availableGlobal: IInterface; upgradeName: string; resources: TStringList; completionTime: float);
+	var
+		cobj1, cobj2, cobj3: IInterface;
+		edidBase, descriptionText, upgradeNameSpaceless: string;
+		numDays: float;
+	begin
+		descriptionText := upgradeName+' | Completion Time: ';
+
+		upgradeNameSpaceless := StringReplace(upgradeName, ' ', '', [rfReplaceAll]);
+		numDays := round(completionTime / 24 * 10) / 10;
+		if(floatEquals(numDays, 1)) then begin
+			descriptionText := descriptionText + '1 Day';
+		end else begin
+			descriptionText := descriptionText + FloatToStr(numDays) + ' Days';
+		end;
+
+		edidBase := 'SS2_HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
+		cobj1 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti, availableGlobal, resources);
+		cobj2 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti, availableGlobal, resources);
+		cobj3 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti, availableGlobal, resources);
+	end;
+
+	function createRoomUpgradeActivator(roomUpgradeMisc, forHq, hqManager: IInterface; upgradeName, modelStr: string): IInterface;
+	var
+		upgradeNameSpaceless, edid: string;
+		script: IInterface;
+	begin
+		upgradeNameSpaceless := StringReplace(upgradeName, ' ', '', [rfReplaceAll]);
+		edid := 'SS2_HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
+		// SS2_HQBuildableAction_Template
+		Result := getCopyOfTemplate(targetFile, SS2_HQBuildableAction_Template, edid);
+
+		script := getScript(Result, 'SimSettlementsV2:HQ:Library:ObjectRefs:HQWorkshopItemActionTrigger');
+
+		setScriptProp(script, 'HQAction', roomUpgradeMisc);
+		setScriptProp(script, 'SpecificHQManager', hqManager);
+
+		SetElementEditValues(Result, 'FULL', upgradeName);
+
+		if(modelStr <> '') then begin
+			ensurePath(Result, 'Model\MODL');
+			SetElementEditValues(Result, 'Model\MODL', modelStr);
+		end;
+	end;
+
+	function createRoomUpgradeMisc(
 		existingElem: IInterface;
 		targetRoomConfig: IInterface;
 		upgradeName: string;
@@ -1957,7 +2287,7 @@ unit ImportHqRoom;
 		targetDepartment: IInterface;
 		resources: TStringList;
 		roomFuncs: TStringList;
-		layouts: TStringList);
+		layouts: TStringList): IInterface;
 	var
 		upgradeResult: IInterface;
 		upgradeNameSpaceless, slotNameSpaceless, upgradeEdid, ActionAvailableGlobalEdid, HqName: string;
@@ -1973,12 +2303,11 @@ unit ImportHqRoom;
 		slotNameSpaceless := StringReplace(getElementEditValues(upgradeSlot, 'FULL'), ' ', '', [rfReplaceAll]);
 
 		upgradeNameSpaceless := StringReplace(upgradeName, ' ', '', [rfReplaceAll]);
-		AddMessage(upgradeName+', '+modelStr+', '+EditorID(upgradeSlot));
+		//AddMessage(upgradeName+', '+modelStr+', '+EditorID(upgradeSlot));
 		upgradeEdid := 'SS2_HQ'+HqName+'_Action_RoomUpgrade_' + upgradeNameSpaceless; //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
 		upgradeResult := getCopyOfTemplate(targetFile, SS2_HQ_Action_RoomUpgrade_Template, upgradeEdid);
 
 		if(modelStr <> '') then begin
-			AddMessage('Have model '+modelStr);
 			ensurePath(upgradeResult, 'Model\MODL');
 			SetElementEditValues(upgradeResult, 'Model\MODL', modelStr);
 		end;
@@ -2034,8 +2363,6 @@ unit ImportHqRoom;
 
 			curResObject := ObjectToElement(listRoomResources.Objects[resIndex]);
 
-			AddMessage('Got this resource: '+IntToStr(resIndex)+', '+IntToSTr(resCount)+' '+EditorID(curResObject));
-
 			newStruct := appendStructToProperty(ResourceCost);
 
 			setStructMember(newStruct, 'Item', curResObject);
@@ -2048,8 +2375,10 @@ unit ImportHqRoom;
 			appendObjectToProperty(ProvidedFunctionality, curRoomFunc);
 		end;
 
-		// layout: hard
+		hasRelativeCoordinateLayout   := false;
+		hasNonRelativeCoordinateLayout:= false;
 
+		// layouts
 		RoomLayouts := getOrCreateScriptPropArrayOfObject(script, 'RoomLayouts');
 		for i:=0 to layouts.count-1 do begin
 			resourceJson := TJsonObject(layouts.Objects[i]);
@@ -2061,8 +2390,20 @@ unit ImportHqRoom;
 
 			appendObjectToProperty(RoomLayouts, curLayout);
 		end;
+		
+		if(hasRelativeCoordinateLayout and hasNonRelativeCoordinateLayout) then begin
+			AddMessage('=== WARNING: some but not all layouts have a RoomExportHelper. This is probably a mistake, they should either all have it, or none should.');
+		end;
 
-		// CONTINUE HERE
+		Result := upgradeResult;
+	end;
+
+	function getActionAvailableGlobal(upgradeMisc: IInterface): IInterface;
+	var
+		script: IInterface;
+	begin
+		script := getScript(upgradeMisc, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
+		Result := getScriptProp(script, 'ActionAvailableGlobal');
 	end;
 
 	procedure showRoomUpgradeDialog(existingElem: IInterface);
@@ -2388,6 +2729,8 @@ unit ImportHqRoom;
 		listModels.free();
 		listRoomResources.free();
 
+		edidLookupCache.free();
+		resourceLookupTable.free();
 		progressBarStack.free();
 	end;
 

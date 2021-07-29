@@ -744,6 +744,16 @@ unit PraUtil;
         Result := getFormByLoadOrderFormID(theFormID);
     end;
 
+	function floatEqualsWithTolerance(val1, val2, tolerance: float): boolean;
+	begin
+		Result := abs(val1 - val2) < tolerance;
+	end;
+
+	function floatEquals(val1, val2: float): boolean;
+	begin
+		Result := floatEqualsWithTolerance(val1, val2, 0.0001);
+	end;
+
     {
         Checks whenever a subrecord is any kind of array
     }
@@ -2228,7 +2238,7 @@ unit PraUtil;
             Result.items := items;
         end;
     end;
-	
+
 	function CreateListBox(frm: TForm; left: Integer; top: Integer; width: Integer; height: Integer; items: TStringList): TListBox;
 	begin
 		Result := TListBox.Create(frm);
