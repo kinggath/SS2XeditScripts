@@ -7,7 +7,8 @@ unit RecycleRedundantMiscs;
     var
         miscCache: TStringList;
         targetFile: IInterface;
-        
+		changesDone: boolean;
+
     procedure replaceRecordUsage(haystack, searchFor, replaceBy: IInterface);
     var
         i: integer;
@@ -37,24 +38,23 @@ unit RecycleRedundantMiscs;
         miscCache := TStringList.create;
         miscCache.sorted := true;
         targetFile := nil;
+		changesDone := false;
     end;
-    
+
     procedure processMisc(e: IInterface);
     var
         script, oldMisc, curRef: IInterface;
         key: string;
         i, oldIndex: integer;
     begin
-        
+
         // maybe this is a recycled misc?
         if(strStartsWith(EditorID(e), recycleableMiscPrefix)) then begin
             exit;
         end;
-        
+
         script := getScript(e, 'SimSettlementsV2:MiscObjects:StageItem');
         if(not assigned(script)) then exit;
-        
-        
 
         key := getMiscLookupKeyFromScript(script);
         if(key = '') then exit;
@@ -65,17 +65,18 @@ unit RecycleRedundantMiscs;
             miscCache.AddObject(key, e);
             exit;
         end;
-        
-        
+		
+		changesDone := true;
+
         // otherwise replace... oof
         oldMisc := ObjectToElement(miscCache.Objects[oldIndex]);
         AddMessage('Found redundancy: '+EditorID(e)+' is redundant with '+EditorID(oldMisc));
-        
+
         for i:=0 to ReferencedByCount(e)-1 do begin
             curRef := ReferencedByIndex(e, i);
             replaceRecordUsage(curRef, e, oldMisc);
         end;
-        
+
         AddMessage('Recycling '+EditorID(e));
         recycleSpawnMiscIfPossible(e);
 
@@ -89,32 +90,44 @@ unit RecycleRedundantMiscs;
         i, oldIndex: integer;
     begin
         Result := 0;
-        
+
         if(not assigned(targetFile)) then begin
             targetFile := GetFile(e);
         end;
 
     end;
+	
+	procedure forceRegenerateCache(targetFile: IInterface);
+	begin
+		loadMiscsFromCache(nil);
+		loadRecycledMiscsNoCacheFile(targetFile, true);
+	end;
 
     // Called after processing
     // You can remove it if script doesn't require finalization code
     function Finalize: integer;
     var
-        curElem, miscGroup: IInterface;        
+        curElem, miscGroup: IInterface;
         i: integer;
     begin
         if(not assigned(targetFile)) then exit;
         miscGroup := GroupBySignature(targetFile, 'MISC');
-        
+
         if(not assigned(miscGroup)) then exit;
-        
-        loadRecycledMiscs(targetFile, false);
-        
+
+        loadRecycledMiscsNoCacheFile(targetFile, false);
+		// AddMessage('Finished building Spawn Misc cache. Found '+IntToStr(miscItemCache.count)+' recycled Miscs');
+
         for i:=0 to ElementCount(miscGroup)-1 do begin
             curElem := ElementByIndex(miscGroup, i);
             processMisc(curElem);
         end;
-    
+		
+		if(changesDone) then begin
+			// now force-regenerate the cache file
+			forceRegenerateCache(targetFile);
+		end;
+
         Result := 0;
         cleanupSS2Lib();
         miscCache.free();

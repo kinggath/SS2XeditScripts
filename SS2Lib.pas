@@ -54,6 +54,8 @@ unit SS2Lib;
 
         enableOutpostSubtype = false;
 
+		miscItemCacheFileName = ProgramPath + 'Edit Scripts\SS2\PlotMiscItemCache.json';
+
     // variables, templates and such
     var
         ss2masterFile: IInterface;
@@ -394,14 +396,17 @@ unit SS2Lib;
 		newFormPrefix: string;
 
         // Cache for MISCs for recycling
-        miscItemCache: TList;
+        // miscItemCache: TList;
 
         miscItemLastIndex: integer;
 
         // table of data hash -> misc item in the current file
-        miscItemLookupTable: TStringList;
+        // miscItemLookupTable: TStringList;
         // to show the warning
         numRecycleableMiscs: integer;
+
+		spawnMiscData: TJsonObject;
+		spawnMiscDataLoaded: boolean;
 
         // cache for stacked mod items
         stackedFormlistCache: IInterface;
@@ -429,11 +434,15 @@ unit SS2Lib;
         Result := IntToStr(Round(x * 10000));
     end;
 
-    function getMiscLookupKey(formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): string;
+    function getMiscLookupKey(targetFile, formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): string;
     var
-        formToSpawnId, reqItemId: string;
+        formToSpawnId, reqItemId, curFileName: string;
+		curFile: IInterface;
     begin
-        formToSpawnId := IntToHex(FormID(formToSpawn), 8);
+		curFile := GetFile(formToSpawn);
+		curFileName := GetFileName(curFile);
+        // formToSpawnId := IntToHex(getLocalFormId(curFile, FormID(formToSpawn)), 8);
+        formToSpawnId := IntToStr(getLocalFormId(curFile, FormID(formToSpawn)));
 
         reqItemId := '';
         if(assigned(requirementsItem)) then begin
@@ -443,6 +452,7 @@ unit SS2Lib;
         // F4 uses at most 4 decimals, rounding them if necessary
 
         Result :=
+			curFileName+'-'+
             formToSpawnId+'-'+
             normalizeKeyFloat(posX)+'-'+
             normalizeKeyFloat(posY)+'-'+
@@ -489,16 +499,17 @@ unit SS2Lib;
         spawnName := getScriptPropDefault(miscScript, 'sSpawnName', '');
         reqItem := getScriptPropDefault(miscScript, 'Requirements', nil);
 
-        Result := getMiscLookupKey(formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, iType, spawnName, reqItem);
+        Result := getMiscLookupKey(GetFile(miscScript), formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, iType, spawnName, reqItem);
     end;
 
     procedure addMiscToLookup(misc, miscScript: IInterface);
     var
-        oldScript: IInterface;
+        oldScript, curFile: IInterface;
 
         oldIndex: integer;
-        hashedString: string;
+        hashedString, curFileName: string;
         oldMisc: IInterface;
+		curArray: TJsonObject;
     begin
         // super special workaround:
         if(EditorID(misc) = 'SS2_Template_StageItem') then exit;
@@ -509,45 +520,72 @@ unit SS2Lib;
             exit;
         end;
 
-        oldIndex := miscItemLookupTable.indexOf(hashedString);
+		curFile := GetFile(misc);
+		curFileName := GetFileName(curFile);
 
-        if(oldIndex > -1) then begin
-            oldMisc := ObjectToElement(miscItemLookupTable.Objects[oldIndex]);
+		curArray := spawnMiscData.O[curFileName].O['spawns'];
+		AddMessage('Will be adding misc to lookup: '+EditorID(misc)+' -> '+hashedString+' file: '+curFileName);
 
-            if(Equals(oldMisc, misc)) then begin
+		if(curArray.S[hashedString] <> '') then begin
+			oldMisc := getFormByFileAndFormID(curFile, StrToInt(curArray.S[hashedString]));
+
+			if(Equals(oldMisc, misc)) then begin
                 // for some reason, we have this already
+				AddMessage('!!!CONFLICT!!! '+hashedString);
                 exit;
             end;
 
-            oldScript := getScript(oldMisc, 'SimSettlementsV2:MiscObjects:StageItem');
-            if(ElementsEquivalent(oldScript, miscScript)) then begin
+			oldScript := getScript(oldMisc, 'SimSettlementsV2:MiscObjects:StageItem');
+			if(ElementsEquivalent(oldScript, miscScript)) then begin
                 numRecycleableMiscs := numRecycleableMiscs + 1;
                 // AddMessage('WARNING! Redundant MISCs found: '+EditorID(oldMisc)+'/'+EditorID(misc)+', you should run SS2_RecycleRedundantMiscs on your AddOn.');
             end else begin
                 AddMessage('WARNING! Seems like SS2Lib can no longer generate text keys for spawn miscs! Generated '+hashedString+' for '+EditorID(oldMisc)+'/'+EditorID(misc)+', which seem to be different!');
             end;
             exit;
-        end;
+		end;
 
+		AddMessage('Should be putting it in now');
         // otherwise put it in
-        miscItemLookupTable.AddObject(hashedString, misc);
+		curArray.S[hashedString] := IntToStr(getLocalFormId(curFile, FormID(misc)));
+
+        //miscItemLookupTable.AddObject(hashedString, misc);
     end;
 
-    function getSpawnMiscByParams(formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): IInterface;
+	procedure addMiscToRecycled(misc: IInterface);
+	var
+		curFile: IInterface;
+		curFileName: string;
+		curFormId: cardinal;
+	begin
+
+		curFile := GetFile(misc);
+		curFileName := GetFileName(curFile);
+		curFormId := getLocalFormId(curFile, FormID(misc));
+
+		spawnMiscData.O[curFileName].A['recycled'].add(IntToStr(curFormId));
+	end;
+
+    function getSpawnMiscByParams(targetFile, formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): IInterface;
     var
         key: string;
+		curFileName: string;
         i: integer;
+		curArray: TJsonObject;
     begin
         Result := nil;
-        if(miscItemLookupTable = nil) then exit;
-        key := getMiscLookupKey(formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, iType, spawnName, requirementsItem);
+        //if(miscItemLookupTable = nil) then exit;
+        key := getMiscLookupKey(targetFile, formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, iType, spawnName, requirementsItem);
 
-        // AddMessage('-> Looking for MISC: '+key);
+		curFileName := GetFileName(targetFile);
 
-        i := miscItemLookupTable.indexOf(key);
-        if (i<0) then exit;
+        AddMessage('-> Looking for MISC: '+key+' in '+curFileName);
+		curArray := spawnMiscData.O[curFileName].O['spawns'];
+		//i := curArray.IndexOfName(key);
+        if (curArray.S[key] = '') then exit;
 
-        Result := ObjectToElement(miscItemLookupTable.Objects[i]);
+        AddMessage('should have it '+curArray.S[key]);
+		Result := getFormByFileAndFormID(targetFile, StrToInt(curArray.S[key]));
     end;
 
     function tryToParseInt(s: string): integer;
@@ -571,35 +609,139 @@ unit SS2Lib;
         end;
     end;
 
-    procedure loadRecycledMiscs(targetFile: IInterface; buildSpawnCache: boolean);
+	function testConcat(l: TStringList): string;
+	var
+		i: integer;
+	begin
+		Result := '';
+
+		for i:=0 to l.count-1 do begin
+			Result := Result + l[i];
+		end;
+	end;
+
+	function loadMiscsFromCache(targetFile: IInterface): boolean;
+	var
+		jsonData, curData, curSpawnData: TJsonObject;
+		recycled, spawns: TJsonArray;
+		curFileName, testwhat, curkey: string;
+		tempStringList: TStringList;
+		i: integer;
+		curFormId: cardinal;
+		curForm: IInterface;
+	begin
+		spawnMiscDataLoaded := true;
+		AddMessage('Loading Spawn Misc cache from '+miscItemCacheFileName);
+		tempStringList := TStringList.create;
+
+		tempStringList.LoadFromFile(miscItemCacheFileName);
+
+		//jsonData := TJsonObject.create;
+		//tempStringList.Delimiter := #10;
+		testwhat := testConcat(tempStringList);
+		//AddMessage(testwhat);
+		spawnMiscData := spawnMiscData.parse(testwhat);
+
+		tempStringList.free();
+
+		if(not assigned(targetFile)) then begin
+			AddMessage('Cache loaded.');
+			exit;
+		end;
+		curFileName := getFileName(targetFile);
+		curData := spawnMiscData.O[curFileName];
+		//spawnMiscData
+		if(not spawnMiscData.O[curFileName].B['exists']) then begin
+			AddMessage('No data for '+GetFileName(targetFile)' present in cache, cache will be rebuilt.');
+			Result := true;
+			exit;
+		end;
+		
+		miscItemLastIndex := curData.I['max_index'];
+
+		recycled := curData.A['recycled'];
+		spawns := curData.O['spawns'];
+
+		AddMessage('Loaded Spawn Misc cache from file. Found '+(IntToStr(recycled.count))+' recycled, '+IntToStr(spawns.count)+' used for '+GetFileName(targetFile));
+
+		Result := false;
+		//curData.free();
+	end;
+
+	procedure saveMiscsToCache();
+	var
+		//lookupData: TJsonObject;
+		curFile, curObj: IInterface;
+		curFileName, curKey: string;
+		i: integer;
+		curFormId: cardinal;
+		tempStringList: TStringList;
+	begin
+		if(not spawnMiscDataLoaded) then begin
+			exit;
+		end;
+
+		tempStringList := TStringList.create;
+
+		tempStringList.add(spawnMiscData.toString());
+		tempStringList.saveToFile(miscItemCacheFileName);
+
+		tempStringList.free();
+		//jsonData.free();
+	end;
+
+    procedure loadRecycledMiscs(targetFile: IInterface; deprecated: boolean);
     var
         i, curIndex: integer;
         curElem, miscGroup, miscScript: IInterface;
         curEdid, substr: string;
+		doRebuildCache: boolean;
     begin
-        AddMessage('Building Spawn Misc cache...');
-        miscItemLastIndex := 0;
-        if(miscItemCache = nil) then begin
-            miscItemCache := TList.create;
-        end else begin
-            miscItemCache.clear();
-        end;
+		doRebuildCache := true;
+		spawnMiscDataLoaded := true;
 
-        if(miscItemLookupTable = nil) then begin
-            miscItemLookupTable := TStringList.create;
-            miscItemLookupTable.sorted := true;
-        end else begin
-            miscItemLookupTable.clear();
-        end;
+		miscItemLastIndex := 0;
+
+		if (FileExists(miscItemCacheFileName)) then begin
+			// load cache
+			doRebuildCache := loadMiscsFromCache(targetFile);
+		end;
+
+		if(not doRebuildCache) then begin
+			exit;
+		end;
+
+        loadRecycledMiscsNoCacheFile(targetFile, true);
+
+		// saveMiscsToCache();
+
+		//AddMessage('Finished building Spawn Misc cache. Found '+IntToStr(miscItemCache.count)+' recycled Miscs, indexed '+IntToStr(miscItemLookupTable.count)+' used Miscs');
+		if(numRecycleableMiscs > 0) then begin
+			AddMessage('WARNING! Found '+IntToStr(numRecycleableMiscs)+' Redundant MISCs! You should run SS2_RecycleRedundantMiscs on your AddOn.');
+		end;
+    end;
+
+	procedure loadRecycledMiscsNoCacheFile(targetFile: IInterface; buildSpawnList: boolean);
+    var
+        i, curIndex: integer;
+        curElem, miscGroup, miscScript: IInterface;
+        curFilename, curEdid, substr: string;
+    begin
+		spawnMiscDataLoaded := true;
+		curFilename := GetFileName(targetFile);
+
+        AddMessage('Building Spawn Misc cache from scratch for file '+curFilename+'...');
+
+		spawnMiscData.O[curFilename].clear();
 
         numRecycleableMiscs := 0;
         miscGroup := GroupBySignature(targetFile, 'MISC');
-
         for i:=0 to ElementCount(miscGroup)-1 do begin
             curElem := ElementByIndex(miscGroup, i);
             curEdid := EditorID(curElem);
             if(strStartsWith(curEdid, recycleableMiscPrefix)) then begin
-                miscItemCache.add(curElem);
+
+                addMiscToRecycled(curElem);
 
                 substr := copy(curEdid, length(recycleableMiscPrefix)+1, length(curEdid));
                 // this MIGHT be numeric, or maybe not
@@ -608,58 +750,59 @@ unit SS2Lib;
                 if(curIndex > miscItemLastIndex) then begin
                     miscItemLastIndex := curIndex;
                 end;
+
             end else begin
-                if(buildSpawnCache) then begin
-                    miscScript := getScript(curElem, 'SimSettlementsV2:MiscObjects:StageItem');
-                    if(assigned(miscScript)) then begin
-                        addMiscToLookup(curElem, miscScript);
-                    end;
-                end;
+				if(buildSpawnList) then begin
+					miscScript := getScript(curElem, 'SimSettlementsV2:MiscObjects:StageItem');
+					if(assigned(miscScript)) then begin
+						addMiscToLookup(curElem, miscScript);
+					end;
+				end;
             end;
         end;
-        if(buildSpawnCache) then begin
-            AddMessage('FinishedBuilding Spawn Misc cache. Found '+IntToStr(miscItemCache.count)+' recycled Miscs, indexed '+IntToStr(miscItemLookupTable.count)+' used Miscs');
-            if(numRecycleableMiscs > 0) then begin
-                AddMessage('WARNING! Found '+IntToStr(numRecycleableMiscs)+' Redundant MISCs! You should run SS2_RecycleRedundantMiscs on your AddOn.');
-            end;
-        end else begin
-            AddMessage('FinishedBuilding Spawn Misc cache. Found '+IntToStr(miscItemCache.count)+' recycled Miscs');
-        end;
+		//
+		spawnMiscData.O[curFilename].B['exists'] := true;
+		spawnMiscData.O[curFilename].I['max_index'] := miscItemLastIndex;
+		AddMessage('Spawn Misc cache built.');
     end;
 
-    function getRecycledMisc(): IInterface;
+    function getRecycledMisc(targetFile: IInterface): IInterface;
     var
         lastIndex: index;
-    begin
+
+		curFileName: string;
+		curFormId: cardinal;
+		curArray: TJsonArray;
+	begin
         Result := nil;
-        if(miscItemCache = nil) then begin
-            exit;
-        end;
+		curFileName := GetFileName(targetFile);
 
-        if(miscItemCache.count = 0) then begin
-            exit;
-        end;
+		curArray := spawnMiscData.O[curFileName].A['recycled'];
+		if(curArray.count = 0) then begin
+			exit;
+		end;
 
-        lastIndex := miscItemCache.count-1;
+		lastIndex := curArray.count - 1;
 
-        Result := ObjectToElement(miscItemCache[lastIndex]);
+		Result := getFormByFileAndFormID(targetFile, StrToInt(curArray.S[lastIndex]));
 
-        miscItemCache.delete(lastIndex);
+		curArray.delete(lastIndex);
     end;
 
     procedure addRecycledMisc(misc: IInterface);
     begin
         miscItemLastIndex := miscItemLastIndex + 1;
         SetElementEditValues(misc, 'EDID', recycleableMiscPrefix + IntToStr(miscItemLastIndex));
-        if(miscItemCache = nil) then exit;
-        miscItemCache.add(misc);
+        // if(miscItemCache = nil) then exit;
+        addMiscToRecycled(misc);
     end;
 
     procedure recycleSpawnMiscIfPossible(misc: IInterface);
     var
-        curSpawnScript: IInterface;
-        key: string;
+        curSpawnScript, curFile: IInterface;
+        key, curFileName: string;
         i: index;
+		curArray: TJsonObject;
     begin
         if(not assigned(misc)) then begin
             AddMessage('recycleSpawnMiscIfPossible called with unassigned misc');
@@ -671,16 +814,25 @@ unit SS2Lib;
             exit;
         end;
 
-        AddMessage('Spawn Misc '+EditorID(misc)+' is no longer used, recycling');
+        // AddMessage('Spawn Misc '+EditorID(misc)+' is no longer used, recycling');
 
         curSpawnScript := getScript(misc, 'SimSettlementsV2:MiscObjects:StageItem');
-        if(miscItemLookupTable <> nil) then begin
-            key := getMiscLookupKeyFromScript(curSpawnScript);
-            i := miscItemLookupTable.indexOf(key);
-            if(i >= 0) then begin
-                miscItemLookupTable.delete(i);
-            end;
-        end;
+
+		curFile := GetFile(misc);
+		curFileName := GetFileName(curFile);
+
+		curArray := spawnMiscData.O[curFileName].O['spawns'];
+
+		key := getMiscLookupKeyFromScript(curSpawnScript);
+        AddMessage('Spawn Misc '+EditorID(misc)+' is no longer used, recycling '+key);
+
+		//i := curArray.IndexOfName(key);
+
+		//i := miscItemLookupTable.indexOf(key);
+		if(curArray.S[key] <> '') then begin
+			AddMessage('Deleting spawn '+key+' from used list');
+			curArray.delete(key);
+		end;
 
         deleteScriptProps(curSpawnScript);
 
@@ -1521,8 +1673,11 @@ unit SS2Lib;
     begin
         Result := true;
 
-        miscItemLookupTable := nil;
-        miscItemCache := nil;
+		//miscItemCache := nil;
+		//miscItemLookupTable := nil;
+		spawnMiscData := TJsonObject.create;
+
+
         plotDialogOkBtn := nil;
 
         currentAddonQuest := nil;
@@ -1815,6 +1970,7 @@ unit SS2Lib;
 
     procedure cleanupSS2Lib();
     begin
+		saveMiscsToCache();
         validMastersList.free();
         plotTypeNames.free();
         //plotTypeNamesShort.free();
@@ -1826,13 +1982,18 @@ unit SS2Lib;
         hardcodedEdidMappingKeys.free();
         hardcodedEdidMappingValues.free();
 
-        if(miscItemCache <> nil) then begin
-            miscItemCache.free();
-        end;
-
+        //if(miscItemCache <> nil) then begin
+            //miscItemCache.free();
+        //end;
+{
         if(miscItemLookupTable <> nil) then begin
             miscItemLookupTable.free();
         end;
+
+		if(spawnMiscData <> nil) then begin
+			spawnMiscData.free();
+		end;
+		}
 
         themeTagList.free();
 
@@ -2571,19 +2732,19 @@ unit SS2Lib;
         isNewForm := false;
         // before even trying, see if we have an equivalent already
         // getMiscLookupKey(formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): string;
-        Result := getSpawnMiscByParams(formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, spawnType, spawnName, requirementsItem);
+        Result := getSpawnMiscByParams(targetFile, formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, spawnType, spawnName, requirementsItem);
         if(assigned(Result)) then begin
             AddMessage('Reusing spawn misc '+EditorID(Result));
             exit;
         end;
 
-        Result := getRecycledMisc();
+        Result := getRecycledMisc(targetFile);
 
         if(not assigned(Result)) then begin
             isNewForm := true;
             Result := getCopyOfTemplate(targetFile, stageItemTemplate, edid);
         end else begin
-            AddMessage('Reusing '+EditorID(Result));
+            AddMessage('Reusing recycled '+EditorID(Result));
             SetElementEditValues(Result, 'EDID', edid);
         end;
 
