@@ -751,7 +751,7 @@ unit PlotConverter;
 		if(not FileExists(plotMappingFile)) then begin
 			exit;
 		end;
-		
+
 		plotMapping := TStringList.create;
 		plotMapping.CaseSensitive := false;
 		plotMapping.Duplicates := dupIgnore;
@@ -1215,12 +1215,13 @@ unit PlotConverter;
     function getNewStageItem(edid, suffix: string; oldSpawnEntry: IInterface; offsetX, offsetY, offsetZ: float): IInterface;
     var
         spawnName, itemEdid: string;
-        formToSpawn: IInterface;
+        formToSpawn, oldForm: IInterface;
 
     begin
         spawnName := getStructMemberDefault(oldSpawnEntry, 'sSpawnName', '');
 
-        formToSpawn := translateForm(getStructMember(oldSpawnEntry, 'FormToSpawn'));
+		oldForm := getFromFromOldSpawnStruct(oldSpawnEntry);
+        formToSpawn := translateForm(oldForm);
         // probably here
         addRequiredMastersSilent(formToSpawn, targetFile);
 
@@ -1233,6 +1234,7 @@ unit PlotConverter;
 
         // targetFile: IInterface; edid: string; formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; spawnType: integer; vipAV: IInterface; vipVal: integer
         // coords
+
 
 
         Result := createStageItemForm(
@@ -2051,10 +2053,12 @@ unit PlotConverter;
         oldEdid := EditorID(oldPlot);
 		// there might be mapping specified
 		AddMessage('Checking '+oldEdid);
-		mappingIndex := plotMapping.indexOf(oldEdid);
-		if(mappingIndex >= 0) then begin
-			Result := ObjectToElement(plotMapping.Objects[mappingIndex]);
-			exit;
+		if(nil <> plotMapping) then begin
+			mappingIndex := plotMapping.indexOf(oldEdid);
+			if(mappingIndex >= 0) then begin
+				Result := ObjectToElement(plotMapping.Objects[mappingIndex]);
+				exit;
+			end;
 		end;
 
         // it might exist in the cache
@@ -2141,10 +2145,28 @@ unit PlotConverter;
         AddMessage('Converting finished.');
     end;
 
+	function getFromFromOldSpawnStruct(oldStruct: IInterface): IInterface;
+	var
+		curFormId: cardinal;
+		curFileName: string;
+	begin
+		Result := getStructMember(oldStruct, 'FormToSpawn');
+		if(assigned(Result)) then begin
+			exit;
+		end;
+
+		// try formID/filename
+		curFormId := getStructMemberDefault(oldStruct, 'iExternalFormID', 0);
+		curFileName := getStructMemberDefault(oldStruct, 'sExternalPlugin', '');
+		if(curFormId > 0) and (curFileName <> '') then begin
+			Result := getFormByFilenameAndFormID(curFileName, curFormId);
+		end;
+	end;
+
     procedure processSkinLevelItems(forLevel: integer; oldItemArray, newLevelSkinScript: IInterface; propertyName, edidBase: string);
     var
         j, curLevel: integer;
-        curOld, newArray, newStruct, newItemSpawn, formToSpawn: IInterface;
+        curOld, newArray, newStruct, newItemSpawn, formToSpawn, oldForm: IInterface;
         itemSpawnEdid: string;
     begin
 
@@ -2157,7 +2179,6 @@ unit PlotConverter;
 
                 newStruct := appendStructToProperty(newArray);
 
-                //itemSpawnEdid := generateEdid(stageItemPrefix, StripPrefix(levelPlanPrefix, edidBase+IntToStr(forLevel)+'_'+IntToStr(j)));
                 itemSpawnEdid := generateStageItemEdid(
                     EditorID(formToSpawn),
                     stripPrefix(oldFormPrefix, edidBase),
@@ -2165,8 +2186,14 @@ unit PlotConverter;
                     ''
                 );
 
-                formToSpawn := translateForm(getStructMember(curOld, 'FormToSpawn'));
+				oldForm := getFromFromOldSpawnStruct(curOld);
 
+				if(not assigned(oldForm)) then begin
+					AddMessage('WARNING: failed to find spawn #'+IntToStr(j)+' in level '+IntToStr(forLevel));
+					continue;
+				end;
+
+                formToSpawn := translateForm(oldForm);
                 newItemSpawn := createStageItemForm(
                     targetFile,
                     itemSpawnEdid,
@@ -3892,6 +3919,7 @@ unit PlotConverter;
         f4esm: IInterface;
         miscGroup, kywdGroup: IInterface;
     begin
+		plotMapping := nil;
 
         //f4esm := FileByName('Fallout4.esm');
         //targetFile := showFileSelectionDialog();
@@ -4016,7 +4044,9 @@ unit PlotConverter;
 
 		Result := 0;
 
-		plotMapping.free();
+		if(nil <> plotMapping) then begin
+			plotMapping.free();
+		end;
         typeFormlistCache.free();
         skinBacklog.free();
         formMappingCache.free();

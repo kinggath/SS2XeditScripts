@@ -624,11 +624,11 @@ unit SS2Lib;
 	var
 		jsonData, curData, curSpawnData: TJsonObject;
 		recycled, spawns: TJsonArray;
-		curFileName, testwhat, curkey: string;
+		curFileName, testwhat, curKey, otherKey: string;
 		tempStringList: TStringList;
 		i: integer;
 		curFormId: cardinal;
-		curForm: IInterface;
+		curForm, curScript: IInterface;
 	begin
 		spawnMiscDataLoaded := true;
 		AddMessage('Loading Spawn Misc cache from '+miscItemCacheFileName);
@@ -656,11 +656,59 @@ unit SS2Lib;
 			Result := true;
 			exit;
 		end;
-		
+
 		miscItemLastIndex := curData.I['max_index'];
 
 		recycled := curData.A['recycled'];
 		spawns := curData.O['spawns'];
+
+		// check if cache is valid?
+		for i:=0 to recycled.count-1 do begin
+			curFormId := StrToInt(recycled.S[i]);
+			curForm := getFormByFileAndFormID(targetFile, curFormId);
+			if(not assigned(curForm)) then begin
+				AddMessage('Cache file is not valid, it will be rebuilt.');
+				Result := true;
+				exit;
+			end;
+			// is this a recycled misc?
+			if(not strStartsWith(EditorID(curForm), recycleableMiscPrefix)) then begin
+				AddMessage('Cache file is not valid, it will be rebuilt.');
+				Result := true;
+				exit;
+			end;
+		end;
+
+		for i:=0 to spawns.count-1 do begin
+			curKey := spawns.names[i];
+			curFormId := StrToInt(spawns.S[curKey]);
+			curForm := getFormByFileAndFormID(targetFile, curFormId);
+			if(not assigned(curForm)) then begin
+				AddMessage('Cache file is not valid, it will be rebuilt.');
+				Result := true;
+				exit;
+			end;
+
+			// is this a real spawn?
+			if(strStartsWith(EditorID(curForm), recycleableMiscPrefix)) then begin
+				AddMessage('Cache file is not valid, it will be rebuilt.');
+				Result := true;
+				exit;
+			end;
+
+			curScript := getScript(curForm, 'SimSettlementsV2:MiscObjects:StageItem');
+			if(not assigned(curScript)) then begin
+				AddMessage('Cache file is not valid, it will be rebuilt.');
+				Result := true;
+				exit;
+			end;
+			otherKey := getMiscLookupKeyFromScript(curScript);
+			if(otherKey <> curKey) then begin
+				AddMessage('Cache file is not valid, it will be rebuilt.');
+				Result := true;
+				exit;
+			end;
+		end;
 
 		AddMessage('Loaded Spawn Misc cache from file. Found '+(IntToStr(recycled.count))+' recycled, '+IntToStr(spawns.count)+' used for '+GetFileName(targetFile));
 
@@ -831,7 +879,7 @@ unit SS2Lib;
 		//i := miscItemLookupTable.indexOf(key);
 		if(curArray.S[key] <> '') then begin
 			AddMessage('Deleting spawn '+key+' from used list');
-			curArray.delete(key);
+			curArray.delete(curArray.indexOf(key));
 		end;
 
         deleteScriptProps(curSpawnScript);
@@ -2729,6 +2777,12 @@ unit SS2Lib;
         existingKey: string;
         isNewForm: boolean;
     begin
+		if(not assigned(formToSpawn)) then begin
+			Result := nil;
+			AddMessage('ERROR: createStageItemForm called with empty form');
+			assert(false);
+			exit;
+		end;
         isNewForm := false;
         // before even trying, see if we have an equivalent already
         // getMiscLookupKey(formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): string;
