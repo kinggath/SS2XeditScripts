@@ -2145,6 +2145,26 @@ unit PraUtil;
     begin
         Result := StringReplace(str, '&', '&&', [rfReplaceAll]);
     end;
+	
+	{
+		Removes all strings except letters, numbers, _ and -
+	}
+	function cleanStringForEditorID(str: string): string;
+	var
+        regex: TPerlRegEx;
+    begin
+        Result := '';
+        regex  := TPerlRegEx.Create();
+        try
+            regex.RegEx := '[^a-zA-Z0-9_-]+';
+            regex.Subject := trim(str);
+            regex.Replacement := '';
+            regex.ReplaceAll();
+            Result := regex.Subject;
+        finally
+            RegEx.Free;
+        end;
+	end;
 
     function CreateDialog(caption: String; width, height: Integer): TForm;
     var

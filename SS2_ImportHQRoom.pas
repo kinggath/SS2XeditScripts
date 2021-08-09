@@ -1,13 +1,24 @@
 {
     Run on Room Config to update. Run on anything else to generate a new
+
+	TODO:
+	- Allow not selecting slot for a layout. generate a new KW then
+	- Allow updating of existing room updates
+	DONE:
+	- The RoomUpgrade action should be pointing at either SS2C2_HQ_ActionGroup_RoomBuildBaseUpgrades_GNN or SS2C2_HQ_ActionGroup_RoomUpgrade_GNN for its DepartmentHQActionGroup, depending on whether its targeting the Base slot or not.
+	  For other HQs this might be different, so might be easier to just put a dropdown of all action groups for that HQ.
+	- Different model for upgrade MISCs: from under Meshes\SS2C2\Interface\GNNRoomShapes. also optional
+	- Probably shouldn't allow for no resources to be entered - as that will cause an unusable COBJ, and I believe an entry like this will cause the game to either crash or won't load the script properties of that object at all.
+	- When reusing the typed in name for parts of editor IDs, looks like you are stripping spaces, which is good - should also strip special characters like '
+	- Select Slot on layout-basis. Put the KW of the slot into TagKeyword
 }
 unit ImportHqRoom;
 	uses 'SS2\SS2Lib'; // uses praUtil
 	uses 'SS2\CobbLibrary';
 
 	const
-		cacheFileModels = ProgramPath + 'Edit Scripts\SS2\AnimationMarkers.cache';
-		cacheFileLists = ProgramPath + 'Edit Scripts\SS2\HqLists.cache';
+		cacheFile = ProgramPath + 'Edit Scripts\SS2\HqRoomCache.json';
+
 		progressBarChar = '|';
 		progressBarLength = 70;
 		RESOURCE_COMPLEXITY_FULL = 3;
@@ -26,6 +37,7 @@ unit ImportHqRoom;
 		listRoomFuncs: TStringList;
 		listHqManagers: TStringList;
 		listModels: TStringList;
+		listModelsMisc: TStringList;
 		listRoomResources: TStringList;
 		resourceLookupTable: TJsonObject;
 		edidLookupCache: TStringList;
@@ -57,7 +69,10 @@ unit ImportHqRoom;
 		hasFindObjectError: boolean;
 		hasRelativeCoordinateLayout: boolean;
 		hasNonRelativeCoordinateLayout: boolean;
-		
+		currentListOfUpgradeSlots: TStringList;
+
+		currentCacheFile: TJsonObject;
+
 	function StringRepeat(str: string; len: integer): string;
 	var
 		i: integer;
@@ -91,6 +106,8 @@ unit ImportHqRoom;
 
 	procedure endProgress();
 	begin
+
+//AddMessage('END progress');
 		progressBarStack.delete(progressBarStack.count-1);
 
 		if(progressBarStack.count = 0) then begin
@@ -107,6 +124,7 @@ unit ImportHqRoom;
 		textLabel, textBar: TLabel;
 		prevProgressData, thisProgressData: TJsonObject;
 	begin
+//AddMessage('Start Progress for '+text+', max '+IntToStr(max));
 		if(progressBarWindow = nil) then begin
 			showProgressWindow();
 		end;
@@ -123,9 +141,13 @@ unit ImportHqRoom;
 		thisProgressData.F['size'] := progressBarLength;
 		// current progress
 		thisProgressData.I['pos'] := 0;
-
-		if(prevProgressData <> nil) then begin
-			thisProgressData.F['size'] := prevProgressData.F['size'] / prevProgressData.F['max'];
+		// special stuff
+		if(max = 0) then begin
+			thisProgressData.F['size'] := 0; // always 0
+		end else begin
+			if(prevProgressData <> nil) then begin
+				thisProgressData.F['size'] := prevProgressData.F['size'] / prevProgressData.F['max'];
+			end;
 		end;
 
 		if(text <> '') then begin
@@ -145,6 +167,7 @@ unit ImportHqRoom;
 		progressData: TJsonObject;
 		newText: string;
 	begin
+
 		if(progressBarWindow = nil) then begin
 			exit;
 		end;
@@ -159,11 +182,15 @@ unit ImportHqRoom;
 		for i:=0 to progressBarStack.count-1 do begin
 			progressData := progressBarStack.O[i];
 
-			if(i < progressBarStack.count-1) then begin
-				newNr := newNr + Round((progressData.I['cur'] / progressData.I['max']) * progressData.F['size']);
-			end else begin
-				newNr := newNr + Round(((cur) / progressData.I['max']) * progressData.F['size']);
-				progressData.I['cur']  := cur;
+			//AddMessage('checking stack '+progressData.toString());
+
+			if(progressData.I['max'] > 0) then begin
+				if(i < progressBarStack.count-1) then begin
+					newNr := newNr + Round((progressData.I['cur'] / progressData.I['max']) * progressData.F['size']);
+				end else begin
+					newNr := newNr + Round(((cur) / progressData.I['max']) * progressData.F['size']);
+					progressData.I['cur']  := cur;
+				end;
 			end;
 
 		end;
@@ -195,42 +222,72 @@ unit ImportHqRoom;
 
 	procedure loadModels();
 	var
-		containers, assets: TStringList;
+		containers, assets, relevantContainers: TStringList;
 		i, j: integer;
-		curRes: string;
+		curRes, curFileName: string;
 	begin
+		AddMessage('Loading models (this will take a long time, but hopefully only necessary once)');
 
-		if(FileExists(cacheFileModels)) then begin
-			// load
-			listModels.LoadFromFile(cacheFileModels);
-			// removePrefixFromList('Meshes\AutoBuildPlots\Markers\Visible\Animation\', listModels);
-		end else begin
-			containers := TStringList.create();
-			startProgress('Loading models...', containers.count-1);
-			ResourceContainerList(containers);
-			for i:=0 to containers.count-1 do begin
-				assets := TStringList.create();
+		containers := TStringList.create();
+		relevantContainers := TStringList.create();
+		ResourceContainerList(containers);
 
-				ResourceList(containers[i], assets);
-				for j:=0 to assets.count-1 do begin
-					curRes := assets[j];
+		for i:=0 to containers.count-1 do begin
+			if(containers[i] = '') then begin
+				// add loose files
+				relevantContainers.add(containers[i]);
+			end else begin
+				curFileName := ExtractFileName(containers[i]);
+				if(strEndsWithCI(curFileName, ' - Textures.ba2')) then begin
+					continue;
+				end;
 
-					if(strStartsWithCI(curRes, 'Meshes\AutoBuildPlots\Markers\Visible\Animation\')) then begin
-						if(listModels.indexOf(curRes) < 0) then begin
-							listModels.add(regexReplace(curRes, '^Meshes\\AutoBuildPlots\\Markers\\Visible\\Animation\\', ''));
-						end;
+				if(strStartsWithCI(curFileName, 'Fallout4 - ')) then begin
+					continue;
+				end;
+
+				if ((LowerCase(curFileName) = 'ss2 - main.ba2') or strStartsWithCI(curFileName, 'SS2_XPAC')) then begin
+					relevantContainers.add(containers[i]);
+				end;
+
+			end;
+		end;
+		containers.free();
+
+
+		startProgress('Loading models...', relevantContainers.count);
+		for i:=0 to relevantContainers.count-1 do begin
+			assets := TStringList.create();
+
+			ResourceList(relevantContainers[i], assets);
+			AddMessage('Looking for models in '+relevantContainers[i]+', checking '+IntToStr(assets.count)+' assets');
+			startProgress('', assets.count);
+			for j:=0 to assets.count-1 do begin
+				curRes := assets[j];
+
+				if(strStartsWithCI(curRes, 'Meshes\AutoBuildPlots\Markers\Visible\Animation\')) then begin
+					if(listModels.indexOf(curRes) < 0) then begin
+						listModels.add(regexReplace(curRes, '^Meshes\\AutoBuildPlots\\Markers\\Visible\\Animation\\', ''));
+					end;
+				end else if(strStartsWithCI(curRes, 'Meshes\SS2C2\Interface\GNNRoomShapes')) then begin
+					if(listModelsMisc.indexOf(curRes) < 0) then begin
+						listModelsMisc.add(regexReplace(curRes, '^Meshes\\SS2C2\\Interface\\GNNRoomShapes\\', ''));
 					end;
 				end;
-				updateProgress(i);
-
-				assets.free();
+				updateProgress(j);
 			end;
-
 			endProgress();
 
-			containers.free();
-			listModels.saveToFile(cacheFileModels);
+			updateProgress(i);
+
+			assets.free();
 		end;
+
+		endProgress();
+
+
+		relevantContainers.free();
+
 	end;
 
 	function getResourceAvName(av: IInterface): string;
@@ -394,7 +451,7 @@ unit ImportHqRoom;
 	procedure loadForRoomUpgade();
 	begin
 		loadResources();
-		loadModels();
+
 		loadResourceGroups();
 	end;
 
@@ -524,7 +581,7 @@ unit ImportHqRoom;
 			curRec := ElementByIndex(group, i);
 			edid := EditorID(curRec);
 
-			if(strStartsWith(edid, 'SS2_Tag_RoomShape')) then begin
+			if(strStartsWithSS2(edid, 'Tag_RoomShape')) then begin
 				// AddMessage('Found RoomShape! '+EditorID(curRec));
 				listRoomShapes.addObject(edid, curRec);
 			end;
@@ -544,7 +601,7 @@ unit ImportHqRoom;
 			curRec := ElementByIndex(group, i);
 			edid := EditorID(curRec);
 
-			if(strStartsWith(edid, 'SS2_HQ_DepartmentObject_')) then begin
+			if(strStartsWithSS2(edid, 'HQ_DepartmentObject_')) then begin
 				// AddMessage('Found Department! '+EditorID(curRec));
 				listDepartmentObjects.addObject(edid, curRec);
 			end;
@@ -588,6 +645,24 @@ unit ImportHqRoom;
 		endProgress();
 	end;
 
+	{
+		Checks if string starts with either SS2_+prefix or SS2C2_+prefix
+	}
+	function strStartsWithSS2(str, prefix: string): boolean;
+	begin
+		if(strStartsWith(str, 'SS2_'+prefix)) then begin
+			Result := true;
+			exit;
+		end;
+
+		if(strStartsWith(str, 'SS2C2_'+prefix)) then begin
+			Result := true;
+			exit;
+		end;
+
+		Result := false;
+	end;
+
 	procedure loadMiscsFromFile(fromFile:  IInterface);
 	var i: integer;
 		curRec, group, curHq, curScript: IInterface;
@@ -600,13 +675,15 @@ unit ImportHqRoom;
 			curRec := ElementByIndex(group, i);
 			edid := EditorID(curRec);
 
-			if(strStartsWith(edid, 'SS2_HQ_ActionGroup_')) then begin
-				curScript := getScript(curRec, 'SimSettlementsV2:HQ:Library:MiscObjects:HQActionGroup');
-				if(assigned(curScript)) then begin
+			if(strStartsWithSS2(edid, 'HQ_ActionGroup_')) then begin
+				if(edid <> 'SS2_HQ_ActionGroup_Template') then begin
+					curScript := getScript(curRec, 'SimSettlementsV2:HQ:Library:MiscObjects:HQActionGroup');
+					if(assigned(curScript)) then begin
 
-					curHq := getHqFromRoomActionGroup(curRec);
-					if(FormsEqual(curHq, targetHQ)) then begin
-						listActionGroups.addObject(edid, curRec);
+						curHq := getHqFromRoomActionGroup(curRec);
+						if(FormsEqual(curHq, targetHQ)) then begin
+							listActionGroups.addObject(edid, curRec);
+						end;
 					end;
 				end;
 				continue;
@@ -622,7 +699,7 @@ unit ImportHqRoom;
 				continue;
 			end;
 
-			if(strStartsWith(edid, 'SS2_HQRoomFunctionality_')) then begin
+			if(strStartsWithSS2(edid, 'HQRoomFunctionality_')) then begin
 				curScript := getScript(curRec, 'SimSettlementsV2:HQ:Library:MiscObjects:HQRoomFunctionality');
 				if(assigned(curScript)) then begin
 					curName := GetElementEditValues(curRec, 'FULL');
@@ -632,7 +709,7 @@ unit ImportHqRoom;
 			end;
 
 
-			if(strStartsWith(edid, 'SS2_HQResourceToken_WorkEnergy_')) then begin
+			if(strStartsWithSS2(edid, 'HQResourceToken_WorkEnergy_')) then begin
 				listRoomResources.addObject(GetElementEditValues(curRec, 'FULL'), curRec);
 			end;
 			updateProgress(i);
@@ -670,12 +747,73 @@ unit ImportHqRoom;
 		end;
 	end;
 
+	procedure writeObjectList(sourceList: TStringList; targetJson: TJsonObject);
+	var
+		i: integer;
+		curObj, curFile: IInterface;
+		curFileName: string;
+		curFormId: cardinal;
+		curSubJson: TJsonObject;
+	begin
+		for i:=0 to sourceList.count-1 do begin
+			curObj := ObjectToElement(sourceList.Objects[i]);
+			curFile := GetFile(curObj);
+			if(not FilesEqual(targetFile, curFile)) then begin
+				curFormId := getLocalFormId(targetFile, FormId(curObj));
+
+				curSubJson := targetJson.A[GetFileName(curFile)].addObject();
+				curSubJson.S['FormID'] := IntToHex(curFormId, 8);
+				curSubJson.S['Text'] := sourceList[i];
+			end;
+		end;
+
+	end;
+
+	procedure writeStringList(sourceList: TStringList; targetJson: TJsonArray);
+	var
+		i: integer;
+		curObj, curFile: IInterface;
+		curFileName: string;
+		curFormId: cardinal;
+	begin
+		for i:=0 to sourceList.count-1 do begin
+			targetJson.add(sourceList[i]);
+		end;
+	end;
+
 	procedure saveListsToCache();
 	var
 		fileContents: TStringList;
 		i: integer;
 
+		//cacheJson: TJsonObject;
+
 	begin
+		//cacheJson := TJsonObject.create();
+		if(not assigned(currentCacheFile)) then begin
+			currentCacheFile := TJsonObject.create;
+		end;
+
+		writeObjectList(listHQRefs, currentCacheFile.O['HQs']);
+		writeObjectList(listRoomShapes, currentCacheFile.O['RoomShapes']);
+		writeObjectList(listDepartmentObjects, currentCacheFile.O['Departments']);
+		writeObjectList(listActionGroups, currentCacheFile.O['ActionGroups']);
+		writeObjectList(listRoomConfigs, currentCacheFile.O['RoomConfigs']);
+		writeObjectList(listRoomFuncs, currentCacheFile.O['RoomFuncs']);
+		writeObjectList(listHqManagers, currentCacheFile.O['HqManagers']);
+		writeObjectList(listRoomResources, currentCacheFile.O['RoomResources']);
+
+		writeStringList(listModels, currentCacheFile.A['ActivatorModels']);
+		writeStringList(listModelsMisc, currentCacheFile.A['MiscModels']);
+
+		fileContents := TStringList.create;
+		fileContents.add(currentCacheFile.toString());
+		fileContents.saveToFile(cacheFile);
+		fileContents.free();
+		// cacheJson.free();
+
+
+		{
 		fileContents := TStringList.create;
 		fileContents.add('[HQs]');
 		appendObjectLists(fileContents, listHQRefs);
@@ -700,13 +838,71 @@ unit ImportHqRoom;
 
 		fileContents.add('[RoomResources]');
 		appendObjectLists(fileContents, listRoomResources);
-		{
 
 		listRoomResources: TStringList;
-		}
 		//
+
+		// fileContents.add(cacheFile
+
 		fileContents.saveToFile(cacheFileLists);
 		fileContents.free();
+		}
+	end;
+
+	function concatLines(l: TStringList): string;
+	var
+		i: integer;
+	begin
+		Result := '';
+
+		for i:=0 to l.count-1 do begin
+			Result := Result + l[i];
+		end;
+	end;
+
+	procedure readObjectList(targetList: TStringList; sourceJson: TJsonObject);
+	var
+		i, j, k: integer;
+		curObj, curFile: IInterface;
+		curFileName, curHexId, curCaption: string;
+		curFormId: cardinal;
+		curSubJson: TJsonArray;
+		objectEntry: TJsonObject;
+	begin
+		for i:=0 to sourceJson.count-1 do begin
+			curFileName := sourceJson.names[i];
+			curFile := FindFile(curFileName);
+			if(not assigned(curFile)) then begin
+				AddMessage('Couldn''t find file '+curFileName);
+				continue;
+			end;
+			curSubJson := sourceJson.A[curFileName];
+
+			for j := 0 to curSubJson.count-1 do begin
+				objectEntry := curSubJson.O[j];
+
+				curHexId := objectEntry.S['FormID'];
+				curCaption := objectEntry.S['Text'];
+
+				curFormId := StrToInt('$' + curHexId);
+				curObj := getFormByFileAndFormID(curFile, curFormId);
+				if(assigned(curObj)) then begin
+					targetList.addObject(curCaption, curObj);
+				end;
+			end;
+		end;
+	end;
+
+	procedure readStringList(targetList: TStringList; sourceJson: TJsonArray);
+	var
+		i: integer;
+		curObj, curFile: IInterface;
+		curFileName: string;
+		curFormId: cardinal;
+	begin
+		for i:=0 to sourceJson.count-1 do begin
+			targetList.add(sourceJson.S[i]);
+		end;
 	end;
 
 	procedure loadListsFromCache();
@@ -728,6 +924,30 @@ unit ImportHqRoom;
 		curFormId: cardinal;
 		curObj, base: IInterface;
 	begin
+		AddMessage('Loading cache '+cacheFile);
+		listData := TStringList.create;
+		listData.loadFromFile(cacheFile);
+
+		currentCacheFile := TJsonObject.create();
+		currentCacheFile := currentCacheFile.parse(concatLines(listData));
+
+		// now read
+		readObjectList(listHQRefs, currentCacheFile.O['HQs']);
+		readObjectList(listRoomShapes, currentCacheFile.O['RoomShapes']);
+		readObjectList(listDepartmentObjects, currentCacheFile.O['Departments']);
+		readObjectList(listActionGroups, currentCacheFile.O['ActionGroups']);
+		readObjectList(listRoomConfigs, currentCacheFile.O['RoomConfigs']);
+		readObjectList(listRoomFuncs, currentCacheFile.O['RoomFuncs']);
+		readObjectList(listHqManagers, currentCacheFile.O['HqManagers']);
+		readObjectList(listRoomResources, currentCacheFile.O['RoomResources']);
+
+		readStringList(listModels, currentCacheFile.A['ActivatorModels']);
+		readStringList(listModelsMisc, currentCacheFile.A['MiscModels']);
+
+		listData.free();
+		AddMessage('Cache loaded');
+		{
+
 		AddMessage('Loading cache '+cacheFileLists);
 		listData := TStringList.create;
 		listData.loadFromFile(cacheFileLists);
@@ -797,6 +1017,8 @@ unit ImportHqRoom;
 		AddMessage('Cache loaded');
 		endProgress();
 		listData.free();
+
+		}
 	end;
 
 	procedure loadForms();
@@ -806,7 +1028,7 @@ unit ImportHqRoom;
 	begin
 		AddMessage('Loading data for HQ '+findHqName(targetHQ)+'...');
 
-		if(FileExists(cacheFileLists)) then begin
+		if(FileExists(cacheFile)) then begin
 			startProgress('Loading data...', 2);
 			updateProgress(0);
 			loadListsFromCache();
@@ -816,6 +1038,7 @@ unit ImportHqRoom;
 		end else begin;
 			AddMessage('No cache found, reloading data from masters');
 			numData := MasterCount(targetFile);
+
 			startProgress('Loading data...', numData+1);
 			for i:=0 to numData-1 do begin
 				updateProgress(i);
@@ -825,8 +1048,10 @@ unit ImportHqRoom;
 			updateProgress(numData);
 			loadFormsFromFile(targetFile);
 			loadHqDepartments();
-			AddMessage('Data loaded.');
 			endProgress();
+
+			loadModels();
+			AddMessage('Data loaded.');
 			saveListsToCache();
 		end;
 	end;
@@ -845,6 +1070,7 @@ unit ImportHqRoom;
     // You can remove it if script doesn't require initialization code
     function Initialize: integer;
     begin
+		currentCacheFile := nil;
 		progressBarWindow := nil;
         Result := 0;
 
@@ -894,6 +1120,7 @@ unit ImportHqRoom;
 		listRoomFuncs := TStringList.create;
 		listHqManagers := TStringList.create;
 		listModels := TStringList.create;
+		listModelsMisc := TStringList.create;
 		listRoomResources := TStringList.create;
 		listRoomConfigs := TStringList.create;
 
@@ -901,8 +1128,10 @@ unit ImportHqRoom;
 		edidLookupCache     := TStringList.create;
 
 
+		listRoomFuncs.Sorted := true;
 		listRoomResources.Sorted := true;
 		listModels.Sorted := true;
+		listModelsMisc.Sorted := true;
 		listRoomConfigs.Sorted := true;
     end;
 
@@ -964,7 +1193,7 @@ unit ImportHqRoom;
         listSlots := TListBox(frm.FindComponent('listSlots'));
 
 		if(InputQuery('Room Config', 'Input upgrade slot name', newString)) then begin
-			newString := StringReplace(trim(newString), ' ', '', [rfReplaceAll]);
+			newString := cleanStringForEditorID(trim(newString));
 			if(newString <> '') then begin
 				if(listSlots.Items.indexOf(newString) < 0) then begin
 					listSlots.Items.add(newString);
@@ -1049,7 +1278,7 @@ unit ImportHqRoom;
 		i: integer;
 	begin
 
-		roomNameSpaceless := StringReplace(roomName, ' ', '', [rfReplaceAll]);
+		roomNameSpaceless := cleanStringForEditorID(roomName);
 
 		if (assigned(roomShapeKw)) then begin
 			roomShapeKwEdid := EditorID(roomShapeKw);
@@ -1098,7 +1327,7 @@ unit ImportHqRoom;
 		clearProperty(roomUpgradeSlots);
 		// RoomUpgradeSlots array of obj, generated from UpgradeSlots
 		for i:=0 to UpgradeSlots.count-1 do begin
-			curSlotName := StringReplace(UpgradeSlots[i], ' ', '', [rfReplaceAll]);
+			curSlotName := cleanStringForEditorID(UpgradeSlots[i]);
 
 			oldUpgradeMisc := ObjectToElement(UpgradeSlots.Objects[i]);
 
@@ -1140,6 +1369,24 @@ unit ImportHqRoom;
 		end else begin
 			dropDown.ItemIndex := -1;
 		end;
+	end;
+
+	procedure setItemIndexByForm(dropDown: TComboBox; form: IInterface);
+	var
+		i, index: integer;
+		curForm: IInterface;
+	begin
+		for i:=0 to dropDown.Items.count-1 do begin
+			if(dropDown.Items.Objects[i] <> nil) then begin
+				curForm := ObjectToElement(dropDown.Items.Objects[i]);
+				if(FormsEqual(curForm, form)) then begin
+					dropDown.ItemIndex := i;
+					exit;
+				end;
+			end;
+		end;
+
+		dropDown.ItemIndex := -1;
 	end;
 
 	function GetRoomSlotName(slotMisc: IInterface): string;
@@ -1188,16 +1435,21 @@ unit ImportHqRoom;
 
 	end;
 
-	function prependNoneEntry(list: TStringList): TStringList;
+	function prependDummyEntry(list: TStringList; title: string): TStringList;
 	var
 		i: integer;
 	begin
 		Result := TStringList.create();
-		Result.add('- NONE -');
+		Result.add(title);
 
 		for i:=0 to list.count-1 do begin
 			Result.addObject(list[i], list.Objects[i]);
 		end;
+	end;
+
+	function prependNoneEntry(list: TStringList): TStringList;
+	begin
+		Result := prependDummyEntry(list, '- NONE -');
 	end;
 
 	procedure addResourceToList(resIndex, cnt: Integer; box: TListBox);
@@ -1419,7 +1671,10 @@ unit ImportHqRoom;
 	var
 		btnOk: TButton;
 		inputName, inputPath: TEdit;
+		//selectUpgradeSlot: TComboBox;
 	begin
+		//selectUpgradeSlot
+		//selectUpgradeSlot := TComboBox(sender.parent.FindComponent('selectUpgradeSlot'));
 		inputPath := TEdit(sender.parent.FindComponent('inputPath'));
 		inputName := TEdit(sender.parent.FindComponent('inputName'));
 		btnOk := TButton(sender.parent.FindComponent('btnOk'));
@@ -1439,9 +1694,10 @@ unit ImportHqRoom;
 		end;
 	end;
 
-	function getLayoutDisplayName(layoutName: string; layoutPath: string): string;
+	function getLayoutDisplayName(layoutName: string; layoutPath: string; upgradeSlot: IInterface): string;
 	begin
-		Result := layoutName + ': ' + ExtractFileName(layoutPath);
+		//
+		Result := layoutName + ' (' + GetRoomSlotName(upgradeSlot)+ '): ' + ExtractFileName(layoutPath);
 	end;
 
 	procedure addOrEditLayout(layoutsBox: TListBox; index: integer);
@@ -1449,39 +1705,60 @@ unit ImportHqRoom;
         frm: TForm;
 		btnOk, btnCancel, btnBrowse: TButton;
 		inputName, inputPath: TEdit;
-		title, layoutName, layoutPath, layoutDisplayName: string;
+		title, layoutName, layoutPath, layoutDisplayName, selectedSlotStr: string;
 		resultCode: integer;
 		layoutData: TJsonObject;
+		yOffset: integer;
+		selectUpgradeSlot: TComboBox;
+		roomSlotsOptional: TStringList;
+		selectedSlot: IInterface;
 	begin
 		if(index < 0) then begin
 			title := 'Add Room Layout';
 		end else begin
 			title := 'Edit Room Layout';
 		end;
-		frm := CreateDialog(title, 400, 160);
+		frm := CreateDialog(title, 400, 180);
 
-		CreateLabel(frm, 10, 10, 'Layout Name:');
-		inputName := CreateInput(frm, 130, 8, '');
+		yOffset := 0;
+
+		CreateLabel(frm, 10, yOffset+10, 'Layout Name:');
+		inputName := CreateInput(frm, 150, yOffset+8, '');
 		inputName.Name := 'inputName';
 		inputName.Text := '';
 		inputName.onchange := layoutBrowseUpdateOk;
+		inputName.Width := 150;
 
-		CreateLabel(frm, 10, 34, 'Layout Spawns File:');
-		inputPath := CreateInput(frm, 10, 54, '');
+		// TODO: add a "custom" entry or such, which would generate a new KW from scratch
+		//roomSlotsOptional := prependDummyEntry(currentListOfUpgradeSlots, '- DEFAULT -');
+		// TODO: limit the list by which are filled already
+		roomSlotsOptional := currentListOfUpgradeSlots;
+
+		yOffset := yOffset + 24;
+		CreateLabel(frm, 10, yOffset+10, 'Upgrade Slot:');
+		selectUpgradeSlot := CreateComboBox(frm, 150, yOffset+8, 150, roomSlotsOptional);
+		selectUpgradeSlot.Style := csDropDownList;
+		selectUpgradeSlot.Name := 'selectUpgradeSlot';
+		selectUpgradeSlot.ItemIndex := 0;
+
+		yOffset := yOffset + 44;
+		CreateLabel(frm, 10, yOffset, 'Layout Spawns File:');
+		inputPath := CreateInput(frm, 10, 20+yOffset, '');
 		inputPath.Width := 320;
 		inputPath.Name := 'inputPath';
 		inputPath.Text := '';
 		inputPath.onchange := layoutBrowseUpdateOk;
 
-		btnBrowse := CreateButton(frm, 340, 52, '...');
+		btnBrowse := CreateButton(frm, 340, 18+yOffset, '...');
 		btnBrowse.onclick := layoutBrowseHandler;
 
-		btnOk := CreateButton(frm, 100, 84, 'OK');
+		yOffset := yOffset + 48;
+		btnOk := CreateButton(frm, 100, yOffset, 'OK');
 		btnOk.ModalResult := mrYes;
 		btnOk.Name := 'btnOk';
 		btnOk.Default := true;
 
-		btnCancel := CreateButton(frm, 200, 84, 'Cancel');
+		btnCancel := CreateButton(frm, 200, yOffset, 'Cancel');
 		btnCancel.ModalResult := mrCancel;
 
 		btnOk.Width := 75;
@@ -1491,6 +1768,11 @@ unit ImportHqRoom;
 			layoutData := layoutsBox.Items.Objects[index];
 			inputName.Text := layoutData.S['name'];
 			inputPath.Text := layoutData.S['path'];
+			selectedSlotStr := layoutData.S['slot'];
+
+			selectedSlot := StrToForm(selectedSlotStr);
+			setItemIndexByForm(selectUpgradeSlot, selectedSlot);
+
 		end;
 
 		layoutBrowseUpdateOk(btnOk);
@@ -1499,23 +1781,39 @@ unit ImportHqRoom;
 		if(resultCode = mrYes) then begin
 			layoutName := trim(inputName.Text);
 			layoutPath := trim(inputPath.Text);
-			layoutDisplayName := getLayoutDisplayName(layoutName, layoutPath);
+
+			// selectedSlot := nil;
+			//if(selectUpgradeSlot.ItemIndex > 0) then begin
+			selectedSlot := ObjectToElement(selectUpgradeSlot.Items.Objects[selectUpgradeSlot.ItemIndex]);
+			//end;
+			layoutDisplayName := getLayoutDisplayName(layoutName, layoutPath, selectedSlot);
+
 			if(index < 0) then begin
 				layoutData := TJsonObject.create();
 				layoutData.S['name'] := layoutName;
 				layoutData.S['path'] := layoutPath;
+				layoutData.S['slot'] := FormToStr(selectedSlot);
+				{
+				if(assigned(selectedSlot)) then begin
+					layoutData.S['slot'] := FormToStr(selectedSlot);
+				end else begin
+					layoutData.S['slot'] := '';
+				end;
+				}
 
 				layoutsBox.Items.addObject(layoutDisplayName, layoutData);
 			end else begin
 				layoutData := layoutsBox.Items.Objects[index];
 				layoutData.S['name'] := layoutName;
 				layoutData.S['path'] := layoutPath;
+				layoutData.S['slot'] := FormToStr(selectedSlot);
 				layoutsBox.Items[index] := layoutDisplayName;
 			end;
 			showRoomUpradeDialog2UpdateOk(layoutsBox.parent);
 		end;
 
 		frm.free();
+		// roomSlotsOptional.free();
 	end;
 
 	procedure addLayoutHandler(Sender: TObject);
@@ -1609,10 +1907,10 @@ unit ImportHqRoom;
 	var
 		btnOk: TButton;
 		inputName, inputDuration: TEdit;
-		selectUpgradeSlot: TComboBox;
+		selectUpgradeSlot, selectActionGroup: TComboBox;
 		resourceBox, roomFuncsBox, layoutsBox: TListBox;
 		durationNr: float;
-		layoutsGroup : TGroupBox;
+		layoutsGroup, resourceGroup: TGroupBox;
 	begin
 		btnOk := TButton(sender.parent.FindComponent('btnOk'));
 
@@ -1620,9 +1918,15 @@ unit ImportHqRoom;
 		inputDuration := TEdit(sender.parent.FindComponent('inputDuration'));
 
 		selectUpgradeSlot := TComboBox(sender.parent.FindComponent('selectUpgradeSlot'));
+		selectActionGroup := TComboBox(sender.parent.FindComponent('selectActionGroup'));
 
-		//resourceBox := TListBox(sender.parent.FindComponent('resourceBox'));
-		//roomFuncsBox := TListBox(sender.parent.FindComponent('roomFuncsBox'));
+		resourceBox := TListBox(sender.parent.FindComponent('resourceBox'));
+		if(resourceBox = nil) then begin
+			resourceGroup := TGroupBox (sender.parent.FindComponent('resourceGroup'));
+			resourceBox := TListBox(resourceGroup.FindComponent('resourceBox'));
+		end;
+
+		// roomFuncsBox := TListBox(sender.parent.FindComponent('roomFuncsBox'));
 		layoutsBox := TListBox(sender.parent.FindComponent('layoutsBox'));
 		if(layoutsBox = nil) then begin
 			layoutsGroup := TGroupBox (sender.parent.FindComponent('layoutsGroup'));
@@ -1631,7 +1935,7 @@ unit ImportHqRoom;
 
 		durationNr := tryToParseFloat(trim(inputDuration.Text));
 
-		btnOk.enabled := (trim(inputName.Text) <> '') and (durationNr > 0) and (selectUpgradeSlot.ItemIndex >= 0) and (layoutsBox.Items.count > 0);
+		btnOk.enabled := (trim(inputName.Text) <> '') and (durationNr > 0) and (selectUpgradeSlot.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and (layoutsBox.Items.count > 0) and (resourceBox.Items.count > 0);
 
 	end;
 
@@ -1639,12 +1943,12 @@ unit ImportHqRoom;
 	var
         frm: TForm;
 		btnOk, btnCancel: TButton;
-		resultCode, curY: integer;
-		roomSlots: TStringList;
-		selectUpgradeSlot, selectDepartment, selectModel, selectHqManager: TComboBox;
+		resultCode, curY, secondRowOffset: integer;
+		// roomSlots: TStringList;
+		selectUpgradeSlot, selectDepartment, selectModel, selectMiscModel, selectHqManager, selectActionGroup: TComboBox;
 		assignDepAtEnd, assignDepAtStart, disableClutter, disableGarbarge, defaultConstMarkers, realTimeTimer: TCheckBox;
 		doRegisterCb: TCheckBox;
-		departmentList, modelList: TStringList;
+		departmentList, modelList, modelListMisc: TStringList;
 		inputName, inputDuration: TEdit; ///Duration: Float - default to 24
 
 		resourceGroup: TGroupBox;
@@ -1659,18 +1963,23 @@ unit ImportHqRoom;
 		layoutsBox: TListBox;
 		layoutsAddBtn, layoutsRemBtn, layoutsEdtBtn: TButton;
 
-		modelStr, upgradeName: string;
+		modelStr, modelStrMisc, upgradeName: string;
 		targetDepartment: IInterface;
 
 		roomUpgradeMisc, roomUpgradeActi: IInterface;
 		upgradeDuration: float;
+
+		upgradeSlot, actionGroup: IInterface;
 	begin
 		// load the slots for what we have
 		if(assigned(targetRoomConfig)) then begin
-			roomSlots := getRoomUpgradeSlots(targetRoomConfig);
+			currentListOfUpgradeSlots := getRoomUpgradeSlots(targetRoomConfig);
+		end else begin
+			// still need to fetch it
 		end;
+		secondRowOffset := 300;
 
-		frm := CreateDialog('Generating Room Upgrade', 590, 560);
+		frm := CreateDialog('Generating Room Upgrade', 620, 580);// x=+30 y=+20
 		curY := 0;
 		if(not assigned(existingElem)) then begin
 			CreateLabel(frm, 10, 10+curY, 'HQ: '+EditorID(targetHQ)+'.');
@@ -1678,36 +1987,52 @@ unit ImportHqRoom;
 		end;
 		curY := curY + 42;
 		CreateLabel(frm, 10, 10+curY, 'Name:');
-		inputName := CreateInput(frm, 150, 8+curY, '');
+		inputName := CreateInput(frm, 100, 8+curY, '');
 		inputName.Name := 'inputName';
 		inputName.Text := '';
 		inputName.width := 200;
 		inputName.onChange := showRoomUpradeDialog2UpdateOk;
 
 		curY := curY + 24;
-		CreateLabel(frm, 10, 10+curY, 'Model:');
 
+		modelListMisc := prependNoneEntry(listModelsMisc);
 		modelList := prependNoneEntry(listModels);
-		selectModel := CreateComboBox(frm, 150, 8+curY, 200, modelList);
+		//selectActionGroup
+		CreateLabel(frm, 10, 10+curY, 'Action Group:');
+		selectActionGroup := CreateComboBox(frm, 100, 8+curY, 500, listActionGroups);
+		selectActionGroup.Style := csDropDownList;
+		selectActionGroup.Name := 'selectActionGroup';
+		selectActionGroup.ItemIndex := -1;
+		selectActionGroup.onChange := showRoomUpradeDialog2UpdateOk;
+
+		curY := curY + 24;
+		CreateLabel(frm, 10, 10+curY, 'Misc Model:');
+		selectMiscModel := CreateComboBox(frm, 100, 8+curY, 500, modelListMisc);
+		selectMiscModel.Style := csDropDownList;
+		selectMiscModel.Name := 'selectMiscModel';
+		selectMiscModel.ItemIndex := 0;
+
+		curY := curY + 24;
+		CreateLabel(frm, 10, 10+curY, 'Activator Model:');
+		selectModel := CreateComboBox(frm, 100, 8+curY, 500, modelList);
 		selectModel.Style := csDropDownList;
 		selectModel.Name := 'selectModel';
 		selectModel.ItemIndex := 0;
 
 		curY := curY + 24;
-		CreateLabel(frm, 10, 10+curY, 'Upgrade slot: ');
-		selectUpgradeSlot := CreateComboBox(frm, 150, 8+curY, 200, roomSlots);
+		CreateLabel(frm, 10, 10+curY, 'Upgrade slot:');
+		selectUpgradeSlot := CreateComboBox(frm, 100, 8+curY, 200, currentListOfUpgradeSlots);
 		selectUpgradeSlot.Style := csDropDownList;
 		selectUpgradeSlot.Name := 'selectUpgradeSlot';
 		selectUpgradeSlot.onChange := showRoomUpradeDialog2UpdateOk;
 
-		// ADD HERE
-		curY := curY + 24;
-		CreateLabel(frm, 10, 10+curY, 'HQ Manager: ');
-		selectHQManager := CreateComboBox(frm, 150, 8+curY, 200, listHqManagers);
+
+		CreateLabel(frm, secondRowOffset+10, 10+curY, 'HQ Manager: ');
+		selectHQManager := CreateComboBox(frm, secondRowOffset+100, 8+curY, 200, listHqManagers);
 		selectHQManager.Style := csDropDownList;
 		selectHQManager.Name := 'selectHQManager';
-		// selectHQManager.onChange := showRoomUpradeDialog2UpdateOk;
 		selectHQManager.ItemIndex := 0;
+
 
 
 		// selectUpgradeSlot.onChange := updateRoomUpgrade1OkBtn;
@@ -1749,13 +2074,10 @@ unit ImportHqRoom;
 
 		//CreateLabel();
 		resourceGroup := CreateGroup(frm, 10, curY, 290, 88, 'Resources');
-
+		resourceGroup.Name := 'resourceGroup';
 
 		resourceBox := CreateListBox(resourceGroup, 8, 16, 200, 72, nil);
 		resourceBox.Name := 'resourceBox';
-
-		//resourceBox.onChange := showRoomUpradeDialog2UpdateOk;// WHY
-
 
 		resourceBox.ondblclick := editResourceHandler;
 
@@ -1845,6 +2167,15 @@ unit ImportHqRoom;
 				// if(strStartsWithCI(curRes, 'Meshes\AutoBuildPlots\Markers\Visible\Animation\')) then begin
 			end;
 
+			modelStrMisc := '';
+			if(selectMiscModel.ItemIndex > 0) then begin
+				modelStrMisc := selectMiscModel.Items[selectMiscModel.ItemIndex];
+				if(not ResourceExists(modelStrMisc)) then begin
+					modelStrMisc := 'Meshes\SS2C2\Interface\GNNRoomShapes\' + modelStrMisc;
+				end;
+				// if(strStartsWithCI(curRes, 'Meshes\AutoBuildPlots\Markers\Visible\Animation\')) then begin
+			end;
+
 			targetDepartment := nil;
 			if(selectDepartment.ItemIndex > 0) then begin
 				targetDepartment := ObjectToElement(selectDepartment.Items.Objects[selectDepartment.ItemIndex]);
@@ -1852,13 +2183,16 @@ unit ImportHqRoom;
 
 			upgradeName := trim(inputName.Text);
 			upgradeDuration := tryToParseFloat(inputDuration.Text);
+			upgradeSlot := ObjectToElement(currentListOfUpgradeSlots.Objects[selectUpgradeSlot.ItemIndex]);
+
+			actionGroup := ObjectToElement(listActionGroups.Objects[selectActionGroup.ItemIndex]);
 
 			roomUpgradeMisc := createRoomUpgradeMisc(
 				nil,
 				targetRoomConfig,
 				upgradeName,
-				modelStr,
-				ObjectToElement(roomSlots.Objects[selectUpgradeSlot.ItemIndex]),
+				modelStrMisc,
+				upgradeSlot,
 				assignDepAtStart.Checked,
 				assignDepAtEnd.Checked,
 				defaultConstMarkers.Checked,
@@ -1869,7 +2203,8 @@ unit ImportHqRoom;
 				targetDepartment,
 				resourceBox.Items,
 				roomFuncsBox.Items,
-				layoutsBox.Items
+				layoutsBox.Items,
+				actionGroup
 			);
 
 			roomUpgradeActi := createRoomUpgradeActivator(roomUpgradeMisc, targetHQ, ObjectToElement(listHqManagers.Objects[selectHQManager.ItemIndex]), upgradeName, modelStr);
@@ -1889,13 +2224,13 @@ unit ImportHqRoom;
 		freeStringListObjects(resourceBox.Items);
 		freeStringListObjects(layoutsBox.Items);
 
-		roomSlots.free();
+		currentListOfUpgradeSlots.free();
 		modelList.free();
 		departmentList.free();
 		frm.free();
 	end;
 
-	function createRoomLayout(layoutName, csvPath, upgradeNameSpaceless, slotNameSpaceless: string): IInterface;
+	function createRoomLayout(layoutName, csvPath, upgradeNameSpaceless, slotNameSpaceless: string; upgradeSlot: IInterface): IInterface;
 	var
 		resultEdid, layoutNameSpaceless, curLine, curEditorId, curFileName: string;
 		spawnData: TJsonObject;
@@ -1909,14 +2244,25 @@ unit ImportHqRoom;
 
 		curSpawnObj, itemPosVector, itemRotVector, rotatedData: TJsonObject;
 		itemScale: float;
+
+		slotKw, slotScript: IInterface;
 	begin
-		layoutNameSpaceless := StringReplace(layoutName, ' ', '', [rfReplaceAll]);
+		layoutNameSpaceless := cleanStringForEditorID(layoutName);
 		resultEdid := 'SS2_HQRoomLayout_'+upgradeNameSpaceless+'_'+slotNameSpaceless+'_'+layoutNameSpaceless;
 		Result := getCopyOfTemplate(targetFile, SS2_HQRoomLayout_Template, resultEdid);
 
 		resultScript := getScript(Result, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
 
 		SetElementEditValues(Result, 'FULL', layoutName);
+
+		// put in the slot KW
+		slotScript := getScript(upgradeSlot, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot_GNN');
+		if(not assigned(slotScript)) then begin
+			slotScript := getScript(upgradeSlot, 'simsettlementsv2:hq:library:miscobjects:requirementtypes:hqroomupgradeslot');
+		end;
+		slotKw := getScriptProp(slotScript, 'UpgradeSlotKeyword');
+
+		setScriptProp(resultScript, 'TagKeyword', slotKw);
 
 		// now, the hard part
 		spawnData := TJsonObject.create();
@@ -2234,7 +2580,7 @@ unit ImportHqRoom;
 	begin
 		descriptionText := upgradeName+' | Completion Time: ';
 
-		upgradeNameSpaceless := StringReplace(upgradeName, ' ', '', [rfReplaceAll]);
+		upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
 		numDays := round(completionTime / 24 * 10) / 10;
 		if(floatEquals(numDays, 1)) then begin
 			descriptionText := descriptionText + '1 Day';
@@ -2253,7 +2599,7 @@ unit ImportHqRoom;
 		upgradeNameSpaceless, edid: string;
 		script: IInterface;
 	begin
-		upgradeNameSpaceless := StringReplace(upgradeName, ' ', '', [rfReplaceAll]);
+		upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
 		edid := 'SS2_HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
 		// SS2_HQBuildableAction_Template
 		Result := getCopyOfTemplate(targetFile, SS2_HQBuildableAction_Template, edid);
@@ -2287,22 +2633,23 @@ unit ImportHqRoom;
 		targetDepartment: IInterface;
 		resources: TStringList;
 		roomFuncs: TStringList;
-		layouts: TStringList): IInterface;
+		layouts: TStringList;
+		actionGroup: IInterface): IInterface;
 	var
 		upgradeResult: IInterface;
 		upgradeNameSpaceless, slotNameSpaceless, upgradeEdid, ActionAvailableGlobalEdid, HqName: string;
-		script, roomCfgScript, actionGroup, ActionAvailableGlobal: IInterface;
+		script, roomCfgScript, ActionAvailableGlobal: IInterface;
 		i, resIndex, resCount: integer;
 		ResourceCost, ProvidedFunctionality, RoomLayouts, curResObject, curRoomFunc, newStruct, RoomRequiredKeywords, UpgradeSlotKeyword: IInterface;
 		resourceJson: TJsonObject;
 		curLayout: IInterface;
-		curLayoutName, curLayoutPath: string;
+		curLayoutName, curLayoutPath, selectedSlotStr: string;
+		upgradeSlotLayout: IInterface;
 	begin
 		HqName := findHqNameShort(targetHq);
+		slotNameSpaceless := cleanStringForEditorID(getElementEditValues(upgradeSlot, 'FULL'));
 
-		slotNameSpaceless := StringReplace(getElementEditValues(upgradeSlot, 'FULL'), ' ', '', [rfReplaceAll]);
-
-		upgradeNameSpaceless := StringReplace(upgradeName, ' ', '', [rfReplaceAll]);
+		upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
 		//AddMessage(upgradeName+', '+modelStr+', '+EditorID(upgradeSlot));
 		upgradeEdid := 'SS2_HQ'+HqName+'_Action_RoomUpgrade_' + upgradeNameSpaceless; //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
 		upgradeResult := getCopyOfTemplate(targetFile, SS2_HQ_Action_RoomUpgrade_Template, upgradeEdid);
@@ -2322,11 +2669,11 @@ unit ImportHqRoom;
 		setScriptProp(script, 'bAssignDepartmentToRoomAtEnd', assignAtEnd);
 		setScriptProp(script, 'bDisableClutter_OnCompletion', disableClutter);
 		setScriptProp(script, 'bDisableGarbage_OnComplete', disableGarbage);
-		setScriptProp(script, 'bUseDefatultConstructionMarkers', defaultMarkers);
+		setScriptProp(script, 'bUseDefaultConstructionMarkers', defaultMarkers);
 		setScriptProp(script, 'RealTimeTimer', realTime);
 
-		roomCfgScript := getScript(targetRoomConfig, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
-		actionGroup := getScriptProp(roomCfgScript, 'ActionGroup');
+		//roomCfgScript := getScript(targetRoomConfig, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
+		//actionGroup := getScriptProp(roomCfgScript, 'ActionGroup');
 
 		setScriptProp(script, 'DepartmentHQActionGroup', actionGroup);
 
@@ -2351,6 +2698,7 @@ unit ImportHqRoom;
 		setScriptProp(script, 'ActionAvailableGlobal', ActionAvailableGlobal);
 
 		setScriptProp(script, 'TargetUpgradeSlot', upgradeSlot);
+
 
 		// prop: ResourceCost -> array of struct HQTransactionItem
 		ResourceCost := getOrCreateScriptPropArrayOfStruct(script, 'ResourceCost');
@@ -2385,12 +2733,14 @@ unit ImportHqRoom;
 
 			curLayoutName := resourceJson.S['name'];
 			curLayoutPath := resourceJson.S['path'];
+			selectedSlotStr := resourceJson.S['slot'];
+			upgradeSlotLayout := StrToForm(selectedSlotStr);
 
-			curLayout := createRoomLayout(curLayoutName, curLayoutPath, upgradeNameSpaceless, slotNameSpaceless);
+			curLayout := createRoomLayout(curLayoutName, curLayoutPath, upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout);
 
 			appendObjectToProperty(RoomLayouts, curLayout);
 		end;
-		
+
 		if(hasRelativeCoordinateLayout and hasNonRelativeCoordinateLayout) then begin
 			AddMessage('=== WARNING: some but not all layouts have a RoomExportHelper. This is probably a mistake, they should either all have it, or none should.');
 		end;
@@ -2590,7 +2940,7 @@ unit ImportHqRoom;
 			// do stuff
 			roomName := trim(inputName.Text);
 			roomShapeKw := nil;
-			roomShapeKwEdid := StringReplace(selectRoomShape.Text, ' ', '', [rfReplaceAll]);
+			roomShapeKwEdid := cleanStringForEditorID(selectRoomShape.Text);
 			primaryDepartment := ObjectToElement(listDepartmentObjects.Objects[selectMainDep.ItemIndex]);
 			actionGroup := ObjectToElement(listActionGroups.Objects[selectActionGroup.ItemIndex]);
 
@@ -2727,7 +3077,11 @@ unit ImportHqRoom;
 		listRoomFuncs.free();
 		listHqManagers.free();
 		listModels.free();
+		listModelsMisc.free();
 		listRoomResources.free();
+		if(currentCacheFile <> nil) then begin
+			currentCacheFile.free();
+		end;
 
 		edidLookupCache.free();
 		resourceLookupTable.free();
