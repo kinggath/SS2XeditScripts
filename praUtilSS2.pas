@@ -411,6 +411,11 @@ unit PraUtil;
         end;
         Result := $00FFFFFF and id;
     end;
+	
+	function getElementLocalFormId(e: IInterface): cardinal;
+	begin
+		Result := getLocalFormId(GetFile(e), FormID(e));
+	end;
 
     {
         An actually functional version of FileFormIDtoLoadOrderFormID.
@@ -715,7 +720,8 @@ unit PraUtil;
     end;
 
     {
-        Encodes the given form's ID into a string, so that it can be found again using that string
+        Encodes the given form's ID into a string, so that it can be found again using that string.
+		Bascially just gets the current LO formID as a hex string
     }
     function FormToStr(form: IInterface): string;
     var
@@ -743,6 +749,43 @@ unit PraUtil;
 
         Result := getFormByLoadOrderFormID(theFormID);
     end;
+	
+	{
+		Encodes a form into Filename:formID
+	}
+	function FormToAbsStr(form: IInterface): string;
+	var
+		theFile: IInterface;
+		theFormId: cardinal;
+		theFilename: string;
+	begin
+		theFile := GetFile(form);
+		theFilename := GetFileName(theFile);
+		theFormId := getLocalFormId(theFile, FormID(form));
+
+		Result := theFilename + ':'+IntToHex(theFormId, 8);
+	end;
+	
+	{
+		Decodes a Filename:formID string into a form
+	}
+	function AbsStrToForm(str: string): IInterface;
+	var
+		separatorPos: integer;
+		theFilename, formIdStr: string;
+		theFormId: cardinal;
+	begin
+		Result := nil;
+		separatorPos := Pos(':', str);
+		if(separatorPos <= 0) then begin
+			exit;
+		end;
+		
+		theFilename := copy(str, 1, separatorPos-1);
+		formIdStr := copy(str, separatorPos+1, length(str)-separatorPos+1);
+		
+		Result := getFormByFilenameAndFormID(theFilename, StrToInt('$'+formIdStr));
+	end;
 
 	function floatEqualsWithTolerance(val1, val2, tolerance: float): boolean;
 	begin

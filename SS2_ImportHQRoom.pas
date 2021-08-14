@@ -5,6 +5,7 @@
 	- Allow not selecting slot for a layout. generate a new KW then
 	- Allow updating of existing room updates
 	DONE:
+	- check what a script extends, not just the base
 	- The RoomUpgrade action should be pointing at either SS2C2_HQ_ActionGroup_RoomBuildBaseUpgrades_GNN or SS2C2_HQ_ActionGroup_RoomUpgrade_GNN for its DepartmentHQActionGroup, depending on whether its targeting the Base slot or not.
 	  For other HQs this might be different, so might be easier to just put a dropdown of all action groups for that HQ.
 	- Different model for upgrade MISCs: from under Meshes\SS2C2\Interface\GNNRoomShapes. also optional
@@ -15,6 +16,7 @@
 unit ImportHqRoom;
 	uses 'SS2\SS2Lib'; // uses praUtil
 	uses 'SS2\CobbLibrary';
+	uses 'SS2\PexParser';
 
 	const
 		cacheFile = ProgramPath + 'Edit Scripts\SS2\HqRoomCache.json';
@@ -30,17 +32,18 @@ unit ImportHqRoom;
 		targetHQ: IInterface;
 		// lists
 		listHQRefs: TStringList;
+		//listHqManagers: TStringList;
 		listRoomShapes: TStringList;
 		listDepartmentObjects: TStringList;
 		listActionGroups: TStringList;
 		listRoomConfigs: TStringList;
 		listRoomFuncs: TStringList;
-		listHqManagers: TStringList;
 		listModels: TStringList;
 		listModelsMisc: TStringList;
 		listRoomResources: TStringList;
-		resourceLookupTable: TJsonObject;
+		// other lists
 		edidLookupCache: TStringList;
+		resourceLookupTable: TJsonObject;
 		// general stuff needed from master
 		SS2_HQ_FauxWorkshop: IInterface;
 		SS2_FLID_HQActions: IInterface;
@@ -106,8 +109,6 @@ unit ImportHqRoom;
 
 	procedure endProgress();
 	begin
-
-//AddMessage('END progress');
 		progressBarStack.delete(progressBarStack.count-1);
 
 		if(progressBarStack.count = 0) then begin
@@ -124,7 +125,7 @@ unit ImportHqRoom;
 		textLabel, textBar: TLabel;
 		prevProgressData, thisProgressData: TJsonObject;
 	begin
-//AddMessage('Start Progress for '+text+', max '+IntToStr(max));
+
 		if(progressBarWindow = nil) then begin
 			showProgressWindow();
 		end;
@@ -218,6 +219,17 @@ unit ImportHqRoom;
 
 			end;
 		end;
+	end;
+
+	procedure addObjectDupIgnore(list: TStringList; str: string; elem: IInterface);
+	var
+		i: integer;
+	begin
+		if(list.indexOf(str) >= 0) then begin
+			exit;
+		end;
+
+		list.addObject(str, elem);
 	end;
 
 	procedure loadModels();
@@ -443,7 +455,7 @@ unit ImportHqRoom;
 			curAv := getFormListEntry(flst, i);
 			resName := getResourceAvName(curAv);
 			//AddMessage('Found resource: '+resName);
-			listRoomResources.addObject(resName, curAv);
+			addObjectDupIgnore(listRoomResources, resName, curAv);
 		end;
 	end;
 
@@ -490,26 +502,120 @@ unit ImportHqRoom;
 		Result := longName;
 	end;
 
+	procedure setStringListAt(list: TStringList; index: integer; str: string; e: IInterface);
+	var
+		i: integer;
+	begin
+		while(list.size <= index) do begin
+			list.add('');
+		end;
+		list[index] := str;
+		list.Objects[index] := e;
+
+	end;
+
+	function getHqManagerScript(e: IInterface): IInterface;
+	var
+        curScript, scripts: IInterface;
+        i: integer;
+		curScriptName: string;
+    begin
+        Result := nil;
+        scripts := ElementByPath(e, 'VMAD - Virtual Machine Adapter\Scripts');
+
+        for i := 0 to ElementCount(scripts)-1 do begin
+            curScript := ElementByIndex(scripts, i);
+
+			if (assigned(getScriptProp(curScript, 'HQRef'))) then begin
+				// might be
+				curScriptName := GetElementEditValues(curScript, 'scriptName');
+
+				if (checkScriptExtends(curScriptName, 'SimSettlementsV2:HQ:Library:Quests:SpecificHQManager')) then begin
+					Result := curScript;
+					exit;
+				end;
+			end;
+        end;
+
+	end;
+
+	procedure loadHQsFromFile(fromFile:  IInterface);
+	var i, j: integer;
+		curRec, group, curScript, hqRef: IInterface;
+		edid, hqName, curFileName, curHqKey: string;
+	begin
+		curFileName := GetFileName(fromFile);
+
+		// hack: skip vanilla files
+		if(Pos(curFileName, readOnlyFiles) > 0) then begin
+			exit;
+		end;
+
+		group := GroupBySignature(fromFile, 'QUST');
+		startProgress('Checking quests from '+GetFileName(fromFile), ElementCount(group));
+		for i:=0 to ElementCount(group)-1 do begin
+			curRec := ElementByIndex(group, i);
+			edid := EditorID(curRec);
+
+
+			// maybe do this the other way round: find a script which has HQRef, then check if it extends SimSettlementsV2:HQ:Library:Quests:SpecificHQManager
+			curScript := getHqManagerScript(curRec);
+
+			if(assigned(curScript)) then begin
+				hqRef := getScriptProp(curScript, 'HQRef');
+				if(not assigned(hqRef)) then begin
+					// hmmm...?
+					//hqRef := SS2_HQ_WorkshopRef_GNN;
+					AddMessage('HQ Manager without HQ ref? '+edid);
+					continue;
+				end;
+
+				if(EditorID(hqRef) = 'SS2_HQ_WorkshopRef_GNN') then begin
+					SS2_HQ_WorkshopRef_GNN := hqRef;
+				end;
+
+				hqName := findHqName(hqRef);
+
+				curHqKey := FormToAbsStr(hqRef);
+//
+				currentCacheFile.O['files'].O[curFileName].O['HQs'].S[curHqKey] := FormToAbsStr(curRec);
+				// actually load into the stringlist later
+{
+				j := listHQRefs.indexOf(hqName);
+
+				if(j < 0) then begin
+					j := listHQRefs.addObject(hqName, hqRef);
+					setStringListAt(listHqManagers, j, EditorID(curRec), curRec);
+				end;
+}
+
+				// addObjectDupIgnore(listHqManagers, edid, curRec);
+			end;
+			updateProgress(i);
+		end;
+		endProgress();
+	end;
+
+	{
 	procedure loadHQs();
 	var
 		curRef: IInterface;
-		i, numRefs: integer;
+		i, numData, numRefs: integer;
 		hqName, edid: string;
+		curFile: IInterface;
 	begin
-		numRefs := ReferencedByCount(SS2_HQ_FauxWorkshop)-1;
-		for i:=0 to numRefs do begin
-			curRef := ReferencedByIndex(SS2_HQ_FauxWorkshop, i);
-			if (Signature(curRef) = 'REFR') and (FormsEqual(SS2_HQ_FauxWorkshop, pathLinksTo(curRef, 'NAME'))) then begin
-				edid := EditorID(curRef);
-				if(edid = 'SS2_HQ_WorkshopRef_GNN') then begin
-					SS2_HQ_WorkshopRef_GNN := curRef;
-				end;
-				hqName := findHqName(curRef);
-				// found one
-				listHQRefs.addObject(hqName, curRef);
-			end;
+		numData := MasterCount(targetFile);
+
+		startProgress('Loading HQs...', numData);
+		for i:=0 to numData-1 do begin
+			curFile := MasterByIndex(targetFile, i);
+			loadHQsFromFile(curFile);
+			updateProgress(i);
 		end;
+		endProgress();
+
 	end;
+	}
 
 	function findLinkedRef(ref, kw: IInterface): IInterface;
 	var
@@ -527,24 +633,35 @@ unit ImportHqRoom;
 		end;
 	end;
 
-	procedure loadHqDepartments();
+	procedure loadDepartmentsForHq(hq, fromFile: IInterface);
 	var
 		base, curRef, script, linkedTarget: IInterface;
 		i: integer;
-		departmentName: string;
+		departmentName, curFileName, curHqKey: string;
+		curFormID: cardinal;
 	begin
-		for i:=0 to ReferencedByCount(targetHQ)-1 do begin
-			curRef := ReferencedByIndex(targetHQ, i);
+		// iterate HQs
+		curFileName := GetFileName(fromFile);
+		curHqKey := FormToAbsStr(hq);
+
+		for i:=0 to ReferencedByCount(hq)-1 do begin
+			curRef := ReferencedByIndex(hq, i);
 			if (Signature(curRef) <> 'REFR') then begin
 				continue;
 			end;
+
+			// skip stuff not from this file for now
+			if(not FilesEqual(fromFile, GetFile(curRef))) then begin
+				continue;
+			end;
+
 			base := PathLinksTo(curRef, 'NAME');
 			if (Signature(base) <> 'ACTI') then begin
 				continue;
 			end;
 
 			linkedTarget := findLinkedRef(curRef, WorkshopItemKeyword);
-			if (not FormsEqual(linkedTarget, targetHQ)) then begin
+			if (not FormsEqual(linkedTarget, hq)) then begin
 				continue;
 			end;
 
@@ -552,8 +669,12 @@ unit ImportHqRoom;
 			if(assigned(script)) then begin
 				// found!
 				departmentName := GetElementEditValues(base, 'FULL');
-				// AddMessage('Found '+FullPath(curRef));
-				listDepartmentObjects.addObject(departmentName, curRef);
+				AddMessage('Found '+FullPath(curRef));
+				//addObjectDupIgnore(listDepartmentObjects, departmentName, curRef);
+				curFormID := getElementLocalFormId(curRef);
+
+				currentCacheFile.O['files'].O[curFileName].O['HQData'].O[curHqKey].O['Departments'].S[departmentName] := IntToHex(curFormID, 8);
+
 			end;
 
 
@@ -570,6 +691,65 @@ unit ImportHqRoom;
 		end;
 	end;
 
+	procedure loadHqDepartments(fromFile: IInterface);
+	var
+		i, j: integer;
+		curFileName, hqString: string;
+		curFileObj, curHqObj: TJsonObject;
+		curHq: IInterface;
+		filesEntry: TJsonObject;
+	begin
+		filesEntry := currentCacheFile.O['files'];
+		for i:=0 to filesEntry.count-1 do begin
+			curFileName := filesEntry.names[i];
+			curHqObj := filesEntry.O[curFileName].O['HQs'];
+
+			for j:=0 to curHqObj.count-1 do begin
+				hqString := curHqObj.names[j];
+
+				curHq := AbsStrToForm(hqString);
+				loadDepartmentsForHq(curHq, fromFile);
+			end;
+
+		end;
+		{
+		$currentCacheFile = [
+			'files' => [
+				'somefile.esp' => [
+					'HQs' => [
+						FormToAbsStr(ref) => FormToAbsStr(manager),
+					],
+				],
+			],
+		],
+		}
+	end;
+
+	function getManagerForHq(hq: IInterface): IInterface;
+	var
+		i, j: integer;
+		curFileName, hqString, searchString, managerString: string;
+		curHqObj: TJsonObject;
+		curHq: IInterface;
+		filesEntry: TJsonObject;
+	begin
+		Result := nil;
+		filesEntry := currentCacheFile.O['files'];
+
+		searchString := FormToAbsStr(hq);
+		for i:=0 to filesEntry.count-1 do begin
+			curFileName := filesEntry.names[i];
+			curHqObj := filesEntry.O[curFileName].O['HQs'];
+
+			managerString := filesEntry.O[curFileName].O['HQs'].S[searchString];
+			if(managerString <> '') then begin
+
+				Result := AbsStrToForm(managerString);
+				exit;
+			end;
+		end;
+	end;
+
 	procedure loadKeywordsFromFile(fromFile:  IInterface);
 	var i: integer;
 		curRec, group: IInterface;
@@ -583,7 +763,7 @@ unit ImportHqRoom;
 
 			if(strStartsWithSS2(edid, 'Tag_RoomShape')) then begin
 				// AddMessage('Found RoomShape! '+EditorID(curRec));
-				listRoomShapes.addObject(edid, curRec);
+				addObjectDupIgnore(listRoomShapes, edid, curRec);
 			end;
 			updateProgress(i);
 		end;
@@ -603,7 +783,7 @@ unit ImportHqRoom;
 
 			if(strStartsWithSS2(edid, 'HQ_DepartmentObject_')) then begin
 				// AddMessage('Found Department! '+EditorID(curRec));
-				listDepartmentObjects.addObject(edid, curRec);
+				addObjectDupIgnore(listDepartmentObjects, edid, curRec);
 			end;
 			updateProgress(i);
 		end;
@@ -622,40 +802,19 @@ unit ImportHqRoom;
 		Result := confName + ' (' + edid+')';
 	end;
 
-	procedure loadQuestsFromFile(fromFile:  IInterface);
-	var i: integer;
-		curRec, group, curScript: IInterface;
-		edid: string;
-	begin
-		group := GroupBySignature(fromFile, 'QUST');
-		startProgress('Loading quests from '+GetFileName(fromFile), ElementCount(group));
-		for i:=0 to ElementCount(group)-1 do begin
-			curRec := ElementByIndex(group, i);
-			edid := EditorID(curRec);
 
-			curScript := getScript(curRec, 'SimSettlementsV2:HQ:HQManagerQuest');
-			// TODO figure out scripts which extend that
-
-			if(assigned(curScript)) then begin
-				// AddMessage('Found Department! '+EditorID(curRec));
-				listHqManagers.addObject(edid, curRec);
-			end;
-			updateProgress(i);
-		end;
-		endProgress();
-	end;
 
 	{
 		Checks if string starts with either SS2_+prefix or SS2C2_+prefix
 	}
 	function strStartsWithSS2(str, prefix: string): boolean;
 	begin
-		if(strStartsWith(str, 'SS2_'+prefix)) then begin
+		if(strStartsWithCI(str, 'SS2_'+prefix)) then begin
 			Result := true;
 			exit;
 		end;
 
-		if(strStartsWith(str, 'SS2C2_'+prefix)) then begin
+		if(strStartsWithCI(str, 'SS2C2_'+prefix)) then begin
 			Result := true;
 			exit;
 		end;
@@ -663,11 +822,83 @@ unit ImportHqRoom;
 		Result := false;
 	end;
 
+	function findHqByLocation(loc: IInterface): IInterface;
+	var
+		i: integer;
+		curHq, curLoc: IInterface;
+	begin
+		Result := nil;
+
+		for i:=0 to listHQRefs.count-1 do begin
+			curHq := ObjectToElement(listHQRefs.Objects[i]);
+			curLoc := getRefLocation(forHq);
+			if(Equals(curLoc, loc)) then begin
+				Result := curHq;
+				exit;
+			end;
+		end;
+	end;
+
+	function getHqForRoomConfig(e: IInterface): IInterface;
+	var
+		i: integer;
+		curScript, primaryDepartment, linkedRefs, curKw, curRef, linkedEntry: IInterface;
+		RoomUpgradeSlots, curSlot, curSlotScript, HQLocation: IInterface;
+	begin
+		AddMessage('Searching HQ for '+EditorID(e));
+		curScript := getScript(e, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
+
+		primaryDepartment := getScriptProp(curScript, 'PrimaryDepartment');
+		// primary department might be undefined...
+		if(assigned(primaryDepartment)) then begin
+			// this is a REFR
+			linkedRefs := ElementByPath(primaryDepartment, 'Linked References');
+			for i:=0 to ElementCount(linkedRefs)-1 do begin
+				linkedEntry := ElementByIndex(linkedRefs, i);
+				curKw := PathLinksTo(linkedEntry, 'Keyword/Ref');
+				curRef := PathLinksTo(linkedEntry, 'Ref');
+
+				if(EditorID(curKw) = 'WorkshopItemKeyword') then begin
+					AddMessage('Found HQ '+EditorID(curRef)+' via linked ref');
+					Result := curRef;
+					exit;
+				end;
+			end;
+		end;
+
+		// otherwise try going via the upgrade
+		RoomUpgradeSlots := getScriptProp(curScript, 'RoomUpgradeSlots');
+		for i:=0 to ElementCount(RoomUpgradeSlots)-1 do begin
+			curSlot := getObjectFromProperty(RoomUpgradeSlots, i);
+			curSlotScript := getScript(curSlot, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot_GNN');
+			if(assigned(curSlotScript)) then begin
+				AddMessage('Using default HQ because of _GNN script');
+				Result := SS2_HQ_WorkshopRef_GNN;
+				exit;
+			end;
+			curSlotScript := getScript(curSlot, 'simsettlementsv2:hq:library:miscobjects:requirementtypes:hqroomupgradeslot');
+			if(assigned(curSlotScript)) then begin
+				HQLocation := getScriptProp(curSlotScript, 'HQLocation');
+				Result := findHqByLocation(HQLocation);
+				if(assigned(Result)) then begin
+					AddMessage('Found '+EditorID(AddMessage)+' in upgrade');
+					exit;
+				end;
+			end;
+		end;
+
+		// finally, assume default HQ and hope for the best
+		AddMessage('Using default HQ');
+		Result := SS2_HQ_WorkshopRef_GNN;
+	end;
+
 	procedure loadMiscsFromFile(fromFile:  IInterface);
 	var i: integer;
 		curRec, group, curHq, curScript: IInterface;
-		edid, curName: string;
+		edid, curName, curFileName, curHqKey: string;
+		curFormID: cardinal;
 	begin
+		curFileName := GetFileName(fromFile);
 		group := GroupBySignature(fromFile, 'MISC');
 		startProgress('Loading MISCs from '+GetFileName(fromFile), ElementCount(group));
 		for i:=0 to ElementCount(group)-1 do begin
@@ -676,14 +907,29 @@ unit ImportHqRoom;
 			edid := EditorID(curRec);
 
 			if(strStartsWithSS2(edid, 'HQ_ActionGroup_')) then begin
-				if(edid <> 'SS2_HQ_ActionGroup_Template') then begin
-					curScript := getScript(curRec, 'SimSettlementsV2:HQ:Library:MiscObjects:HQActionGroup');
-					if(assigned(curScript)) then begin
 
-						curHq := getHqFromRoomActionGroup(curRec);
-						if(FormsEqual(curHq, targetHQ)) then begin
-							listActionGroups.addObject(edid, curRec);
+				if(edid <> 'SS2_HQ_ActionGroup_Template') then begin
+					AddMessage('Should have it '+edid);
+					//SimSettlementsV2:HQ:Library:MiscObjects:ActionGroupTypes:DepartmentHQActionGroup
+					curScript := findScriptInElementByName(curRec, 'SimSettlementsV2:HQ:Library:MiscObjects:HQActionGroup');
+					if(assigned(curScript)) then begin
+						curHq := getHqFromRoomActionGroup(curRec, curScript);
+						// theoretically, this might be unset
+						if(not assigned(curHq)) then begin
+							curHq := SS2_HQ_WorkshopRef_GNN;
 						end;
+
+						curHqKey := FormToAbsStr(curHq);
+
+						//AddMessage(BoolToStr(assigned(curRec)));
+						curFormID := getElementLocalFormId(curRec);
+						// put into cache file
+						currentCacheFile.O['files'].O[curFileName].O['HQData'].O[curHqKey].O['ActionGroups'].S[edid] := IntToHex(curFormID, 8);
+						// load into the proper stringlist later
+
+						//if(FormsEqual(curHq, targetHQ)) then begin
+							//addObjectDupIgnore(listActionGroups, edid, curRec);
+						//end;
 					end;
 				end;
 				continue;
@@ -694,7 +940,11 @@ unit ImportHqRoom;
 				if(assigned(curScript)) then begin
 					// yes
 					curName := getRoomConfigName(curRec);
-					listRoomConfigs.addObject(curName, curRec);
+					// addObjectDupIgnore(listRoomConfigs, curName, curRec);
+					curFormID := getElementLocalFormId(curRec);
+					curHq := getHqForRoomConfig(curRec);
+					curHqKey := FormToAbsStr(curHq);
+					currentCacheFile.O['files'].O[curFileName].O['HQData'].O[curHqKey].O['RoomConfigs'].S[curName] := IntToHex(curFormID, 8);
 				end;
 				continue;
 			end;
@@ -703,30 +953,39 @@ unit ImportHqRoom;
 				curScript := getScript(curRec, 'SimSettlementsV2:HQ:Library:MiscObjects:HQRoomFunctionality');
 				if(assigned(curScript)) then begin
 					curName := GetElementEditValues(curRec, 'FULL');
-					listRoomFuncs.addObject(curName, curRec);
+					addObjectDupIgnore(listRoomFuncs, curName, curRec);
 				end;
 				// SimSettlementsV2:HQ:Library:MiscObjects:HQRoomFunctionality
 			end;
 
 
 			if(strStartsWithSS2(edid, 'HQResourceToken_WorkEnergy_')) then begin
-				listRoomResources.addObject(GetElementEditValues(curRec, 'FULL'), curRec);
+				addObjectDupIgnore(listRoomResources, GetElementEditValues(curRec, 'FULL'), curRec);
 			end;
 			updateProgress(i);
 		end;
 		endProgress();
 	end;
 
+	procedure loadHQDependentFormsFromFile(fromFile: IInterface);
+	begin
+		loadHqDepartments(fromFile);
+	end;
+
 	procedure loadFormsFromFile(fromFile: IInterface);
 	begin
-		startProgress('', 3);
+		AddMessage('Loading forms from file '+GetFileName(fromFile));
+		startProgress('', 4);
 		updateProgress(0);
+		loadHQsFromFile(fromFile);
+		updateProgress(1);
 		loadKeywordsFromFile(fromFile);
 		// loadActivatorsFromFile(fromFile);
-		updateProgress(1);
-		loadMiscsFromFile(fromFile);
 		updateProgress(2);
-		loadQuestsFromFile(fromFile);
+		loadMiscsFromFile(fromFile);
+		updateProgress(3);
+		loadHQDependentFormsFromFile(fromFile);
+		// loadQuestsFromFile(fromFile);
 		endProgress();
 	end;
 
@@ -766,7 +1025,31 @@ unit ImportHqRoom;
 				curSubJson.S['Text'] := sourceList[i];
 			end;
 		end;
+	end;
 
+	procedure writeObjectListToCacheFile(sourceList: TStringList; jsonKey: string);
+	var
+		i: integer;
+		curText, curFileName: string;
+		curObj, curFile: IInterface;
+		curFormId: cardinal;
+	begin
+
+		for i:=0 to sourceList.count-1 do begin
+			curText := sourceList[i];
+			curObj := ObjectToElement(sourceList.Objects[i]);
+
+			curFile := GetFile(curObj);
+			curFileName := GetFileName(curFile);
+
+			curFormId := getElementLocalFormId(curObj);
+
+			//AddMessage('writing '+curText+' -> ');
+			currentCacheFile.O['files'].O[curFileName].O[jsonKey].S[curText] := IntToHex(curFormId, 8);
+			//AddMessage('What '+currentCacheFile.O['files'].O[curFileName].O[jsonKey].O[curText].toString());
+		end;
+
+		// okay, what
 	end;
 
 	procedure writeStringList(sourceList: TStringList; targetJson: TJsonArray);
@@ -781,72 +1064,58 @@ unit ImportHqRoom;
 		end;
 	end;
 
-	procedure saveListsToCache();
+	function getTargetHqKey(): string;
+	begin
+		Result := FormToAbsStr(targetHq);
+	end;
+
+	procedure saveListsToCache(masterList: TStringList);
 	var
 		fileContents: TStringList;
-		i: integer;
-
-		//cacheJson: TJsonObject;
-
+		i, realFileAge: integer;
+		hqKey, curFileName: string;
+		filesEntry, filesEntries: TJsonObject;
 	begin
 		//cacheJson := TJsonObject.create();
 		if(not assigned(currentCacheFile)) then begin
 			currentCacheFile := TJsonObject.create;
 		end;
 
-		writeObjectList(listHQRefs, currentCacheFile.O['HQs']);
-		writeObjectList(listRoomShapes, currentCacheFile.O['RoomShapes']);
-		writeObjectList(listDepartmentObjects, currentCacheFile.O['Departments']);
-		writeObjectList(listActionGroups, currentCacheFile.O['ActionGroups']);
-		writeObjectList(listRoomConfigs, currentCacheFile.O['RoomConfigs']);
-		writeObjectList(listRoomFuncs, currentCacheFile.O['RoomFuncs']);
-		writeObjectList(listHqManagers, currentCacheFile.O['HqManagers']);
-		writeObjectList(listRoomResources, currentCacheFile.O['RoomResources']);
+		// hqKey := getTargetHqKey(); // we might not have targetHQ here
+		//filesEntry := currentCacheFile.O['files'];
+		//for i:=0 to currentCacheFile.O['files']
 
-		writeStringList(listModels, currentCacheFile.A['ActivatorModels']);
-		writeStringList(listModelsMisc, currentCacheFile.A['MiscModels']);
+
+		currentCacheFile.S['DefaultHQ'] := FormToAbsStr(SS2_HQ_WorkshopRef_GNN);
+		// simple stuff
+		writeObjectListToCacheFile(listRoomShapes, 'RoomShapes');
+		// writeObjectListToCacheFile(listRoomConfigs, 'RoomConfigs');
+		writeObjectListToCacheFile(listRoomFuncs, 'RoomFuncs');
+		writeObjectListToCacheFile(listRoomResources, 'RoomResources');
+
+		// update file timestamp
+
+		for i:=0 to masterList.count-1 do begin
+			curFileName := masterList[i];
+			if(FileExists(DataPath+curFileName)) then begin
+				realFileAge := FileAge(DataPath+curFileName);
+				currentCacheFile.O['files'].O[curFileName].I['timestamp'] := realFileAge;
+			end;
+		end;
+
+		// this stays
+		writeStringList(listModels, 	currentCacheFile.O['assets'].A['ActivatorModels']);
+		writeStringList(listModelsMisc, currentCacheFile.O['assets'].A['MiscModels']);
 
 		fileContents := TStringList.create;
+
+		//TEMP := currentCacheFile.toString();
+
 		fileContents.add(currentCacheFile.toString());
 		fileContents.saveToFile(cacheFile);
 		fileContents.free();
 		// cacheJson.free();
 
-
-		{
-		fileContents := TStringList.create;
-		fileContents.add('[HQs]');
-		appendObjectLists(fileContents, listHQRefs);
-
-		fileContents.add('[RoomShapes]');
-		appendObjectLists(fileContents, listRoomShapes);
-
-		fileContents.add('[Departments]');
-		appendObjectLists(fileContents, listDepartmentObjects);
-
-		fileContents.add('[ActionGroups]');
-		appendObjectLists(fileContents, listActionGroups);
-
-		fileContents.add('[RoomConfigs]');
-		appendObjectLists(fileContents, listRoomConfigs);
-
-		fileContents.add('[RoomFuncs]');
-		appendObjectLists(fileContents, listRoomFuncs);
-
-		fileContents.add('[HqManagers]');
-		appendObjectLists(fileContents, listHqManagers);
-
-		fileContents.add('[RoomResources]');
-		appendObjectLists(fileContents, listRoomResources);
-
-		listRoomResources: TStringList;
-		//
-
-		// fileContents.add(cacheFile
-
-		fileContents.saveToFile(cacheFileLists);
-		fileContents.free();
-		}
 	end;
 
 	function concatLines(l: TStringList): string;
@@ -862,12 +1131,10 @@ unit ImportHqRoom;
 
 	procedure readObjectList(targetList: TStringList; sourceJson: TJsonObject);
 	var
-		i, j, k: integer;
-		curObj, curFile: IInterface;
-		curFileName, curHexId, curCaption: string;
-		curFormId: cardinal;
+		i: integer;
+		curFile: IInterface;
+		curFileName: string;
 		curSubJson: TJsonArray;
-		objectEntry: TJsonObject;
 	begin
 		for i:=0 to sourceJson.count-1 do begin
 			curFileName := sourceJson.names[i];
@@ -877,18 +1144,27 @@ unit ImportHqRoom;
 				continue;
 			end;
 			curSubJson := sourceJson.A[curFileName];
+			readFileDependentObjectList(curFile, targetList, curSubJson);
+		end;
+	end;
 
-			for j := 0 to curSubJson.count-1 do begin
-				objectEntry := curSubJson.O[j];
+	procedure readFileDependentObjectList(forFile: IInterface; targetList: TStringList; sourceJson: TJsonObject);
+	var
+		j: integer;
+		curObj: IInterface;
+		curHexId, curCaption: string;
+		curFormId: cardinal;
+		objectEntry: TJsonObject;
+	begin
 
-				curHexId := objectEntry.S['FormID'];
-				curCaption := objectEntry.S['Text'];
+		for j := 0 to sourceJson.count-1 do begin
+			curCaption := sourceJson.names[j];
+			curHexId := sourceJson[curCaption];
 
-				curFormId := StrToInt('$' + curHexId);
-				curObj := getFormByFileAndFormID(curFile, curFormId);
-				if(assigned(curObj)) then begin
-					targetList.addObject(curCaption, curObj);
-				end;
+			curFormId := StrToInt('$' + curHexId);
+			curObj := getFormByFileAndFormID(forFile, curFormId);
+			if(assigned(curObj)) then begin
+				addObjectDupIgnore(targetList, curCaption, curObj);
 			end;
 		end;
 	end;
@@ -905,154 +1181,270 @@ unit ImportHqRoom;
 		end;
 	end;
 
-	procedure loadListsFromCache();
+	{
+		Loads stuff from the cache file which requires a certain HQ into the relevant stringlists
+	}
+	procedure loadHqDependentFormsIntoLists(forFiles: TStringList; hq: IInterface);
 	var
 		listData: TStringList;
-		sectionState: integer;
-		{
-			0 = HQs
-			1 = RoomShapes
-			2 = Departments
-			3 = ActionGroups
-			4 = RoomConfigs
-			5 = RoomFuncs
-			6 = HqManagers
-			7 = RoomResources
-		}
-		i, eqPos: integer;
-		curStr, formIdPart, fileNamePart: string;
+
+		i, j, eqPos: integer;
+		curStr, formIdPart, fileNamePart, hqKey, curFileName: string;
 		curFormId: cardinal;
-		curObj, base: IInterface;
+		curObj, base, curFileObj: IInterface;
+		hqContainer, currentHqObj, filesContainer, fileContainer, fileHqContainer: TJsonObject;
+		realFileAge: integer;
 	begin
+		hqKey := FormToAbsStr(hq);//hqRef
+
+		filesContainer := currentCacheFile.O['files'];
+		for i:=0 to forFiles.count-1 do begin
+			curFileName := forFiles[i];
+			curFileObj  := ObjectToElement(forFiles.Objects[i]);
+
+			// this shouldn't actually be possible
+			if(not FileExists(DataPath+curFileName)) then begin
+				AddMessage('=== ERRROR: it seems that file '+curFileName+' doesn''t actually exist, despite being loaded???');
+				continue;
+			end;
+
+			fileContainer := filesContainer.O[curFileName];
+
+			// complex stuff
+			fileHqContainer := fileContainer.O['HQData'];
+			currentHqObj := fileHqContainer.O[hqKey];
+
+			readFileDependentObjectList(curFileObj, listDepartmentObjects, currentHqObj.O['Departments']);
+			readFileDependentObjectList(curFileObj, listActionGroups, 	   currentHqObj.O['ActionGroups']);
+			readFileDependentObjectList(curFileObj, listRoomConfigs, 	   currentHqObj.O['RoomConfigs']);
+
+		end;
+	end;
+
+	{
+		This ensures that currentCacheFile exists, and attempts to fill it
+	}
+	function loadListsFromCache(forFiles: TStringList): TJsonObject;
+	var
+		listData: TStringList;
+
+		i, j, eqPos: integer;
+		curStr, formIdPart, fileNamePart, hqKey, curFileName: string;
+		curFormId: cardinal;
+		curObj, base, curFileObj, hqRef: IInterface;
+		hqContainer, currentHqObj, filesContainer, fileContainer, fileHqContainer: TJsonObject;
+		realFileAge: integer;
+	begin
+		Result := TJsonObject.create;
+		Result.B['needModels'] := true;
+		// Result.A['filesToReload']; // fill this with files which changed since the last time
+		//currentCacheFile := TJsonObject.create();
+
+		if(not FileExists(cacheFile)) then begin
+			currentCacheFile := TJsonObject.create;
+
+			// put all the masters in
+			for i:=0 to forFiles.count-1 do begin
+				curFileName := forFiles[i];
+				Result.A['filesToReload'].add(curFileName);
+			end;
+			exit;
+		end;
+
 		AddMessage('Loading cache '+cacheFile);
 		listData := TStringList.create;
 		listData.loadFromFile(cacheFile);
 
-		currentCacheFile := TJsonObject.create();
-		currentCacheFile := currentCacheFile.parse(concatLines(listData));
-
-		// now read
-		readObjectList(listHQRefs, currentCacheFile.O['HQs']);
-		readObjectList(listRoomShapes, currentCacheFile.O['RoomShapes']);
-		readObjectList(listDepartmentObjects, currentCacheFile.O['Departments']);
-		readObjectList(listActionGroups, currentCacheFile.O['ActionGroups']);
-		readObjectList(listRoomConfigs, currentCacheFile.O['RoomConfigs']);
-		readObjectList(listRoomFuncs, currentCacheFile.O['RoomFuncs']);
-		readObjectList(listHqManagers, currentCacheFile.O['HqManagers']);
-		readObjectList(listRoomResources, currentCacheFile.O['RoomResources']);
-
-		readStringList(listModels, currentCacheFile.A['ActivatorModels']);
-		readStringList(listModelsMisc, currentCacheFile.A['MiscModels']);
-
-		listData.free();
-		AddMessage('Cache loaded');
-		{
-
-		AddMessage('Loading cache '+cacheFileLists);
-		listData := TStringList.create;
-		listData.loadFromFile(cacheFileLists);
-
-		startProgress('Loading cache', listData.count-1);
-
-		for i:=0 to listData.count-1 do begin
-			updateProgress(i);
-			curStr := listData[i];
-			if(curStr[1] = '[') then begin
-				if(curStr = '[HQs]') then begin
-					sectionState := 0;
-				end else if(curStr = '[RoomShapes]') then begin
-					sectionState := 1;
-				end else if(curStr = '[Departments]') then begin
-					sectionState := 2;
-				end else if(curStr = '[ActionGroups]') then begin
-					sectionState := 3;
-				end else if(curStr = '[RoomConfigs]') then begin
-					sectionState := 4;
-				end else if(curStr = '[RoomFuncs]') then begin
-					sectionState := 5;
-				end else if(curStr = '[HqManagers]') then begin
-					sectionState := 6;
-				end else if(curStr = '[RoomResources]') then begin
-					sectionState := 7;
-				end;
-			end else begin
-				eqPos := pos('=', curStr);
-				formIdPart := copy(curStr, 1, eqPos-1);
-				fileNamePart := copy(curStr, eqPos+1, Length(curStr)-eqPos+1);
-				//AddMessage('THIS: '+formIdPart+' -> '+fileNamePart);
-				curFormId := StrToInt('$'+formIdPart);
-				curObj := getFormByFilenameAndFormID(fileNamePart, curFormId);
-				if(assigned(curObj)) then begin
-					if(sectionState = 0) then begin
-						// fileContents.add('[HQs]');
-						listHQRefs.addObject(findHqName(curObj), curObj);
-					end else if(sectionState = 1) then begin
-						// fileContents.add('[RoomShapes]');
-						listRoomShapes.addObject(EditorID(curObj), curObj);
-					end else if(sectionState = 2) then begin
-						// listDepartmentObjects
-						base := PathLinksTo(curObj, 'NAME');
-						listDepartmentObjects.addObject(GetElementEditValues(base, 'FULL'), curObj);
-					end else if(sectionState = 3) then begin
-						// listActionGroups
-						listActionGroups.addObject(EditorID(curObj), curObj);
-					end else if(sectionState = 4) then begin
-						// listRoomConfigs
-						listRoomConfigs.addObject(getRoomConfigName(curObj), curObj);
-					end else if(sectionState = 5) then begin
-						// listRoomFuncs
-						listRoomFuncs.addObject(GetElementEditValues(curObj, 'FULL'), curObj);
-					end else if(sectionState = 6) then begin
-						// listHqManagers
-						listHqManagers.addObject(EditorID(curObj), curObj);
-					end else if(sectionState = 7) then begin
-						// listRoomResources
-						listRoomResources.addObject(GetElementEditValues(curObj, 'FULL'), curObj);
-					end;
-
-				end;
-			end;
+		currentCacheFile := TJsonObject.parse(concatLines(listData));
+		if(currentCacheFile = nil) then begin
+			currentCacheFile := TJsonObject.create;
 		end;
-
-		AddMessage('Cache loaded');
-		endProgress();
 		listData.free();
+
+
+		{
+			Okay, try the structure like this now:
+			(php-like syntax because curly braces are comment signs in pascal)
+			$currentCacheFile = [
+				'files' => [
+					'somefile.esp' => [
+						'timestamp' => // last time the file was changed
+						'HQData' => [
+							// HQ-dependent data goes here
+							$hqKey => [
+								'Departments' => // objectlist
+								'ActionGroups' => // objectlist
+							],
+						],
+						'HQs' => [
+							FormToAbsStr(ref) => FormToAbsStr(manager),
+						],
+						'RoomShapes' // objectlist of roomshapes
+						... etc
+
+					],
+				],
+
+				'assets' => [
+					// model arrays go here
+				],
+			];
 
 		}
+
+		if(currentCacheFile.S['DefaultHQ'] <> '') then begin
+
+			SS2_HQ_WorkshopRef_GNN := AbsStrToForm(currentCacheFile.S['DefaultHQ']);
+		end;
+
+
+
+		filesContainer := currentCacheFile.O['files'];
+		for i:=0 to forFiles.count-1 do begin
+			curFileName := forFiles[i];
+			curFileObj  := ObjectToElement(forFiles.Objects[i]);
+
+			AddMessage('Checking '+curFileName);
+
+			// this shouldn't actually be possible
+			if(not FileExists(DataPath+curFileName)) then begin
+				AddMessage('=== ERRROR: it seems that file '+curFileName+' doesn''t actually exist, despite being loaded???');
+				continue;
+			end;
+
+			fileContainer := filesContainer.O[curFileName];
+
+			realFileAge := FileAge(DataPath+curFileName);
+
+			if(realFileAge > fileContainer.I['timestamp']) then begin
+				// file changed since
+				AddMessage('File '+curFileName+' will be reloaded.');
+				Result.A['filesToReload'].add(curFileName);
+				// reset the object (or try to)
+				filesContainer.clear();
+			end else begin
+
+				// simple stuff
+				// readFileDependentObjectList(curFileObj, listHQRefs, 		fileContainer.O['HQs']);
+				readFileDependentObjectList(curFileObj, listRoomShapes, 	fileContainer.O['RoomShapes']);
+				//readFileDependentObjectList(curFileObj, listRoomConfigs, 	fileContainer.O['RoomConfigs']);
+				readFileDependentObjectList(curFileObj, listRoomFuncs, 		fileContainer.O['RoomFuncs']);
+				//readFileDependentObjectList(curFileObj, listHqManagers, 	fileContainer.O['HqManagers']);
+				readFileDependentObjectList(curFileObj, listRoomResources, 	fileContainer.O['RoomResources']);
+
+
+			end;
+
+		end;
+
+		readStringList(listModels, 	   currentCacheFile.O['assets'].A['ActivatorModels']);
+		readStringList(listModelsMisc, currentCacheFile.O['assets'].A['MiscModels']);
+
+		if (listModels.count > 0) or (listModelsMisc.count > 0) then begin
+			// seems we have enough models
+			Result.B['needModels'] := false;
+		end;
+
+
+		AddMessage('Cache loaded');
+	end;
+
+	function getMasterList(theFile: IInterface): TStringList;
+	var
+		curFile: IInterface;
+		curFileName: string;
+		i: integer;
+	begin
+		Result := TStringList.create();
+
+		for i:=0 to MasterCount(targetFile)-1 do begin
+			curFile := MasterByIndex(targetFile, i);
+			curFileName := GetFileName(curFile);
+			Result.addObject(curFileName, curFile);
+		end;
 	end;
 
 	procedure loadForms();
 	var
 		i, numData: integer;
 		curFile: IInterface;
+		hasFormData, hasModelData: boolean;
+		masterList: TStringList;
+		cacheResult: TJsonObject;
+		curFileName: string;
+		filesToReload: TJsonArray;
 	begin
-		AddMessage('Loading data for HQ '+findHqName(targetHQ)+'...');
+		//AddMessage('Loading data for HQ '+findHqName(targetHQ)+'...');
 
-		if(FileExists(cacheFile)) then begin
-			startProgress('Loading data...', 2);
-			updateProgress(0);
-			loadListsFromCache();
-			updateProgress(1);
-			loadFormsFromFile(targetFile);
-			endProgress();
-		end else begin;
-			AddMessage('No cache found, reloading data from masters');
-			numData := MasterCount(targetFile);
+		masterList := getMasterList(targetFile);
+		cacheResult := loadListsFromCache(masterList);
 
-			startProgress('Loading data...', numData+1);
-			for i:=0 to numData-1 do begin
+
+
+		filesToReload := cacheResult.A['filesToReload'];
+
+
+		startProgress('Loading data...', filesToReload.count+1);
+		if(filesToReload.count > 0) then begin
+			for i:=0 to filesToReload.count-1 do begin
 				updateProgress(i);
-				curFile := MasterByIndex(targetFile, i);
-				loadFormsFromFile(curFile);
+				curFileName := filesToReload.S[i];
+				AddMessage('Reloading data from '+curFileName);
+				loadFormsFromFile(FindFile(curFileName));
 			end;
-			updateProgress(numData);
-			loadFormsFromFile(targetFile);
-			loadHqDepartments();
-			endProgress();
+		end;
 
+		loadFormsFromFile(targetFile);
+
+		endProgress();
+
+		if(cacheResult.B['needModels']) then begin
 			loadModels();
-			AddMessage('Data loaded.');
-			saveListsToCache();
+		end;
+
+		saveListsToCache(masterList);
+		masterList.free();
+		AddMessage('Data loaded.');
+		cacheResult.free();
+
+		listHQRefs := getHqList();
+	end;
+
+	procedure loadFormsForHq(hq: IInterface);
+	var
+		masterList: TStringList;
+	begin
+		masterList := getMasterList(targetFile);
+		masterList.addObject(GetFileName(targetFile), targetFile);
+		// for this, the cachefile should exist, and it should load the data for the specified HQ into the stringlists
+		loadHqDependentFormsIntoLists(masterList, hq);
+
+		masterList.free();
+	end;
+
+	function getHqList(): TStringList;
+	var
+		i, j: integer;
+		filesEntry, hqList: TJsonObject;
+		curFileName, curHqStr, hqName: string;
+		hqRef: IInterface;
+	begin
+		Result := TStringList.create;
+
+		filesEntry := currentCacheFile.O['files'];
+
+		for i:=0 to filesEntry.count-1 do begin
+			curFileName := filesEntry.names[i];
+			hqList := filesEntry.O[curFileName].O['HQs'];
+
+			for j:=0 to hqList.count-1 do begin
+				curHqStr := hqList.names[j];
+
+				hqRef := AbsStrToForm(curHqStr);
+				hqName := findHqName(hqRef);
+
+				Result.addObject(hqName, hqRef);
+			end;
 		end;
 	end;
 
@@ -1113,12 +1505,12 @@ unit ImportHqRoom;
 
 		progressBarStack := TJsonArray.create;
 
-		listHQRefs := TStringList.create;
+		listHQRefs := nil;
 		listRoomShapes := TStringList.create;
 		listDepartmentObjects := TStringList.create;
 		listActionGroups := TStringList.create;
 		listRoomFuncs := TStringList.create;
-		listHqManagers := TStringList.create;
+		//listHqManagers := TStringList.create;
 		listModels := TStringList.create;
 		listModelsMisc := TStringList.create;
 		listRoomResources := TStringList.create;
@@ -1133,6 +1525,17 @@ unit ImportHqRoom;
 		listModels.Sorted := true;
 		listModelsMisc.Sorted := true;
 		listRoomConfigs.Sorted := true;
+
+		//listHQRefs.Duplicates := dupIgnore;
+		listRoomShapes.Duplicates := dupIgnore;
+		listDepartmentObjects.Duplicates := dupIgnore;
+		listActionGroups.Duplicates := dupIgnore;
+		listRoomConfigs.Duplicates := dupIgnore;
+		listRoomFuncs.Duplicates := dupIgnore;
+		//listHqManagers.Duplicates := dupIgnore;
+		listModels.Duplicates := dupIgnore;
+		listModelsMisc.Duplicates := dupIgnore;
+		listRoomResources.Duplicates := dupIgnore;
     end;
 
     // called for every record selected in xEdit
@@ -1430,7 +1833,7 @@ unit ImportHqRoom;
 
 			slotName := GetRoomSlotName(curSlot);
 
-			Result.addObject(slotName, curSlot);
+			addObjectDupIgnore(Result, slotName, curSlot);
 		end;
 
 	end;
@@ -1443,7 +1846,7 @@ unit ImportHqRoom;
 		Result.add(title);
 
 		for i:=0 to list.count-1 do begin
-			Result.addObject(list[i], list.Objects[i]);
+			addObjectDupIgnore(Result, list[i], list.Objects[i]);
 		end;
 	end;
 
@@ -2026,13 +2429,13 @@ unit ImportHqRoom;
 		selectUpgradeSlot.Name := 'selectUpgradeSlot';
 		selectUpgradeSlot.onChange := showRoomUpradeDialog2UpdateOk;
 
-
+{
 		CreateLabel(frm, secondRowOffset+10, 10+curY, 'HQ Manager: ');
 		selectHQManager := CreateComboBox(frm, secondRowOffset+100, 8+curY, 200, listHqManagers);
 		selectHQManager.Style := csDropDownList;
 		selectHQManager.Name := 'selectHQManager';
 		selectHQManager.ItemIndex := 0;
-
+}
 
 
 		// selectUpgradeSlot.onChange := updateRoomUpgrade1OkBtn;
@@ -2207,7 +2610,8 @@ unit ImportHqRoom;
 				actionGroup
 			);
 
-			roomUpgradeActi := createRoomUpgradeActivator(roomUpgradeMisc, targetHQ, ObjectToElement(listHqManagers.Objects[selectHQManager.ItemIndex]), upgradeName, modelStr);
+
+			roomUpgradeActi := createRoomUpgradeActivator(roomUpgradeMisc, targetHQ, upgradeName, modelStr);
 
 			createRoomUpgradeCOBJs(roomUpgradeActi, targetHQ, getActionAvailableGlobal(roomUpgradeMisc), upgradeName, resourceBox.Items, upgradeDuration);
 
@@ -2230,7 +2634,7 @@ unit ImportHqRoom;
 		frm.free();
 	end;
 
-	function createRoomLayout(layoutName, csvPath, upgradeNameSpaceless, slotNameSpaceless: string; upgradeSlot: IInterface): IInterface;
+	function createRoomLayout(hq: IInterface; layoutName, csvPath, upgradeNameSpaceless, slotNameSpaceless: string; upgradeSlot: IInterface): IInterface;
 	var
 		resultEdid, layoutNameSpaceless, curLine, curEditorId, curFileName: string;
 		spawnData: TJsonObject;
@@ -2263,6 +2667,7 @@ unit ImportHqRoom;
 		slotKw := getScriptProp(slotScript, 'UpgradeSlotKeyword');
 
 		setScriptProp(resultScript, 'TagKeyword', slotKw);
+		setScriptProp(resultScript, 'workshopRef', hq);
 
 		// now, the hard part
 		spawnData := TJsonObject.create();
@@ -2594,11 +2999,15 @@ unit ImportHqRoom;
 		cobj3 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti, availableGlobal, resources);
 	end;
 
-	function createRoomUpgradeActivator(roomUpgradeMisc, forHq, hqManager: IInterface; upgradeName, modelStr: string): IInterface;
+	function createRoomUpgradeActivator(roomUpgradeMisc, forHq: IInterface; upgradeName, modelStr: string): IInterface;
 	var
 		upgradeNameSpaceless, edid: string;
-		script: IInterface;
+		hqManager, script: IInterface;
 	begin
+		hqManager := getManagerForHq(forHq);
+		if(not assigned(hqManager)) then begin
+			AddMessage('=== ERROR: failed to find manager for HQ');
+		end;
 		upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
 		edid := 'SS2_HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
 		// SS2_HQBuildableAction_Template
@@ -2736,7 +3145,7 @@ unit ImportHqRoom;
 			selectedSlotStr := resourceJson.S['slot'];
 			upgradeSlotLayout := StrToForm(selectedSlotStr);
 
-			curLayout := createRoomLayout(curLayoutName, curLayoutPath, upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout);
+			curLayout := createRoomLayout(targetHq, curLayoutName, curLayoutPath, upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout);
 
 			appendObjectToProperty(RoomLayouts, curLayout);
 		end;
@@ -2968,10 +3377,8 @@ unit ImportHqRoom;
 		btnOk, btnCancel: TButton;
 		resultCode, selectedIndex, selectedHQIndex, curY: integer;
 		modeRGroup: TRadioGroup;
+
 	begin
-		AddMessage('Loading HQs...');
-		loadHQs();
-		AddMessage('HQs Loaded.');
 
 		frm := CreateDialog('HQ Room Script', 420, 200);
 
@@ -2980,6 +3387,8 @@ unit ImportHqRoom;
 		CreateLabel(frm, 10, curY+10, 'No record selected. What do you want to generate?');
 		curY := curY+24;
 		CreateLabel(frm, 10, curY+10, 'Target HQ:');
+
+
 
 		selectHq := CreateComboBox(frm, 150, curY+8, 250, listHQRefs);
 		selectHq.Style := csDropDownList;
@@ -3013,7 +3422,8 @@ unit ImportHqRoom;
 
 		if(resultCode = mrYes) then begin
 			targetHQ := ObjectToElement(listHQRefs.Objects[selectedHQIndex]);
-			loadForms();
+			// loadForms();
+			loadFormsForHq(targetHQ);
 			if(selectedIndex = 0) then begin
 				showRoomConfigDialog(nil);
 			end else begin
@@ -3021,13 +3431,16 @@ unit ImportHqRoom;
 				showRoomUpgradeDialog(nil);
 			end;
 		end;
+
 	end;
 
-	function getHqFromRoomActionGroup(actGrp: IInterface): IInterface;
+	function getHqFromRoomActionGroup(actGrp, actGrpScript: IInterface): IInterface;
 	var
-		actGrpScript, curHq: IInterface;
+		curHq: IInterface;
 	begin
-		actGrpScript := getScript(actGrp, 'SimSettlementsV2:HQ:Library:MiscObjects:HQActionGroup');
+		if(not assigned(actGrpScript)) then begin
+			actGrpScript := findScriptInElementByName(actGrp, 'SimSettlementsV2:HQ:Library:MiscObjects:HQActionGroup');
+		end;
 
 		curHq := getScriptProp(actGrpScript, 'HQRef');
 		if(not assigned(curHq)) then begin
@@ -3044,7 +3457,7 @@ unit ImportHqRoom;
 	begin
 		actGrp := getScriptProp(configScript, 'ActionGroup');
 
-		Result := getHqFromRoomActionGroup(actGrp);
+		Result := getHqFromRoomActionGroup(actGrp, nil);
 	end;
 
 	procedure showRelevantDialog();
@@ -3055,9 +3468,10 @@ unit ImportHqRoom;
 		configScript := getScript(targetElem, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
 		if(assigned(configScript)) then begin
 			AddMessage('Updating '+EditorID(targetElem));
-			loadHQs();
+			// loadHQs();
 			targetHQ := getHqFromRoomConfig(configScript);
-			loadForms();
+			loadFormsForHq(targetHQ);
+			// loadForms();
 			showRoomConfigDialog(targetElem);
 			// a room config
 			exit;
@@ -3069,13 +3483,15 @@ unit ImportHqRoom;
 	procedure cleanUp();
 	begin
 		cleanupSS2Lib();
-		listHQRefs.free();
+		if(listHQRefs <> nil) then begin
+			listHQRefs.free();
+		end;
 		listRoomShapes.free();
 		listDepartmentObjects.free();
 		listActionGroups.free();
 		listRoomConfigs.free();
 		listRoomFuncs.free();
-		listHqManagers.free();
+		//listHqManagers.free();
 		listModels.free();
 		listModelsMisc.free();
 		listRoomResources.free();
@@ -3086,6 +3502,7 @@ unit ImportHqRoom;
 		edidLookupCache.free();
 		resourceLookupTable.free();
 		progressBarStack.free();
+		pexCleanUp();
 	end;
 
     // Called after processing
@@ -3099,6 +3516,7 @@ unit ImportHqRoom;
 		end;
 
 		// otherwise do all the stuff
+		loadForms();
 
 		showRelevantDialog();
 
