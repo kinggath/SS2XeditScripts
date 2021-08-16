@@ -2931,7 +2931,7 @@ unit ImportHqRoom;
 			end;
 
 			resourceStr := FormToStr(realResource);
-			Result.I[resourceStr] := Result.I[resourceStr] + 1;
+			Result.I[resourceStr] := Result.I[resourceStr] + count;
 		end;
 	end;
 
@@ -2968,7 +2968,6 @@ unit ImportHqRoom;
 
 			//component := Add(fvpa, 'Component', true);
 			component := ElementAssign(fvpa, HighInteger, nil, False);
-
 
 			setPathLinksTo(component, 'Component', StrToForm(curName));
 			SetElementEditValues(component, 'Count', IntToStr(count));
@@ -3081,7 +3080,7 @@ unit ImportHqRoom;
 		setScriptProp(script, 'bUseDefaultConstructionMarkers', defaultMarkers);
 		setScriptProp(script, 'RealTimeTimer', realTime);
 
-		//roomCfgScript := getScript(targetRoomConfig, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
+		roomCfgScript := getScript(targetRoomConfig, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
 		//actionGroup := getScriptProp(roomCfgScript, 'ActionGroup');
 
 		setScriptProp(script, 'DepartmentHQActionGroup', actionGroup);
