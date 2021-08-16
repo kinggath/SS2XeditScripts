@@ -1565,20 +1565,21 @@ unit ImportHqRoom;
 
 	procedure updateRoomConfigOkBtn(sender: TObject);
 	var
-		inputName: TEdit;
+		inputName, inputPrefix: TEdit;
 		btnOk: TButton;
 		selectMainDep, selectRoomShape, selectActionGroup: TComboBox;
 		frm: TForm;
     begin
 		frm := sender.parent;
         inputName := TEdit(frm.FindComponent('inputName'));
+        inputPrefix := TEdit(frm.FindComponent('inputPrefix'));
         selectMainDep := TComboBox(frm.FindComponent('selectMainDep'));
         selectRoomShape := TComboBox(frm.FindComponent('selectRoomShape'));
         selectActionGroup := TComboBox(frm.FindComponent('selectActionGroup'));
 
 		btnOk := TButton(frm.FindComponent('btnOk'));
 
-		if (trim(inputName.text) <> '') and (selectMainDep.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and ((selectRoomShape.ItemIndex >= 0) or (trim(selectRoomShape.text) <> '')) then begin
+		if (trim(inputName.text) <> '') and (trim(inputPrefix.text) <> '') and (selectMainDep.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and ((selectRoomShape.ItemIndex >= 0) or (trim(selectRoomShape.text) <> '')) then begin
 			btnOk.enabled := true;
 		end else begin
 			btnOk.enabled := false;
@@ -2309,7 +2310,7 @@ unit ImportHqRoom;
 	procedure showRoomUpradeDialog2UpdateOk(Sender: TObject);
 	var
 		btnOk: TButton;
-		inputName, inputDuration: TEdit;
+		inputName, inputDuration, inputPrefix: TEdit;
 		selectUpgradeSlot, selectActionGroup: TComboBox;
 		resourceBox, roomFuncsBox, layoutsBox: TListBox;
 		durationNr: float;
@@ -2318,6 +2319,7 @@ unit ImportHqRoom;
 		btnOk := TButton(sender.parent.FindComponent('btnOk'));
 
 		inputName := TEdit(sender.parent.FindComponent('inputName'));
+		inputPrefix := TEdit(sender.parent.FindComponent('inputPrefix'));
 		inputDuration := TEdit(sender.parent.FindComponent('inputDuration'));
 
 		selectUpgradeSlot := TComboBox(sender.parent.FindComponent('selectUpgradeSlot'));
@@ -2338,7 +2340,7 @@ unit ImportHqRoom;
 
 		durationNr := tryToParseFloat(trim(inputDuration.Text));
 
-		btnOk.enabled := (trim(inputName.Text) <> '') and (durationNr > 0) and (selectUpgradeSlot.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and (layoutsBox.Items.count > 0) and (resourceBox.Items.count > 0);
+		btnOk.enabled := (trim(inputName.Text) <> '') and (trim(inputPrefix.Text) <> '') and (durationNr > 0) and (selectUpgradeSlot.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and (layoutsBox.Items.count > 0) and (resourceBox.Items.count > 0);
 
 	end;
 
@@ -2348,11 +2350,11 @@ unit ImportHqRoom;
 		btnOk, btnCancel: TButton;
 		resultCode, curY, secondRowOffset: integer;
 		// roomSlots: TStringList;
-		selectUpgradeSlot, selectDepartment, selectModel, selectMiscModel, selectHqManager, selectActionGroup: TComboBox;
+		selectUpgradeSlot, selectDepartment, selectModel, selectMiscModel, selectActionGroup: TComboBox;
 		assignDepAtEnd, assignDepAtStart, disableClutter, disableGarbarge, defaultConstMarkers, realTimeTimer: TCheckBox;
 		doRegisterCb: TCheckBox;
 		departmentList, modelList, modelListMisc: TStringList;
-		inputName, inputDuration: TEdit; ///Duration: Float - default to 24
+		inputName, inputPrefix, inputDuration: TEdit; ///Duration: Float - default to 24
 
 		resourceGroup: TGroupBox;
 		resourceBox: TListBox;
@@ -2395,6 +2397,14 @@ unit ImportHqRoom;
 		inputName.Text := '';
 		inputName.width := 200;
 		inputName.onChange := showRoomUpradeDialog2UpdateOk;
+
+		CreateLabel(frm, secondRowOffset+10, 10+curY, 'EditorID Prefix:');
+		inputPrefix := CreateInput(frm, secondRowOffset+100, 8+curY, '');
+		inputPrefix.Name := 'inputPrefix';
+		inputPrefix.Text := '';
+		inputPrefix.width := 200;
+		inputPrefix.onChange := showRoomUpradeDialog2UpdateOk;
+
 
 		curY := curY + 24;
 
@@ -2560,6 +2570,8 @@ unit ImportHqRoom;
 		showRoomUpradeDialog2UpdateOk(btnOk);
 		resultCode := frm.ShowModal();
 		if(resultCode = mrYes) then begin
+			globalNewFormPrefix := trim(inputPrefix.text);
+
 			// get all the data
 			modelStr :=  '';
 			if(selectModel.ItemIndex > 0) then begin
@@ -3213,8 +3225,8 @@ unit ImportHqRoom;
 	var
         frm: TForm;
 		selectRoomShape, selectMainDep, selectActionGroup: TComboBox;
-		curY, resultCode: integer;
-		inputName: TEdit;
+		curY, resultCode, secondRowOffset: integer;
+		inputName, inputPrefix: TEdit;
 		listSlots: TListBox;
 		btnAddSlot, btnRemSlot, btnOk, btnCancel: TButton;
 
@@ -3238,32 +3250,42 @@ unit ImportHqRoom;
 		CreateLabel(frm, 10, 10, 'Target HQ: '+findHqName(targetHQ));
 
 		curY := 24;
+		secondRowOffset := 300;
 
 		CreateLabel(frm, 10, 10+curY, 'Room Name:');
-		inputName := CreateInput(frm, 150, 8+curY, '');
+		inputName := CreateInput(frm, 120, 8+curY, '');
 		inputName.width := 200;
 		inputName.Name := 'inputName';
 		inputName.Text := '';
 		inputName.onChange := updateRoomConfigOkBtn;
 
+		CreateLabel(frm, secondRowOffset+30, 10+curY, 'EditorID Prefix:');
+		inputPrefix := CreateInput(frm, secondRowOffset+120, 8+curY, '');
+		inputPrefix.Name := 'inputPrefix';
+		inputPrefix.Text := '';
+		inputPrefix.width := 130;
+		inputPrefix.onChange := updateRoomConfigOkBtn;
+
+
+
 		curY := curY + 24;
 		CreateLabel(frm, 10, 10+curY, 'Room Shape:');
 
-		selectRoomShape := CreateComboBox(frm, 150, 8+curY, 400, listRoomShapes);
+		selectRoomShape := CreateComboBox(frm, 120, 8+curY, 430, listRoomShapes);
 		selectRoomShape.Name := 'selectRoomShape';
 		selectRoomShape.Text := '';
 		selectRoomShape.onChange := updateRoomConfigOkBtn;
 
 		curY := curY + 24;
 		CreateLabel(frm, 10, 10+curY, 'Action Group:');
-		selectActionGroup := CreateComboBox(frm, 150, 8+curY, 400, listActionGroups);
+		selectActionGroup := CreateComboBox(frm, 120, 8+curY, 430, listActionGroups);
 		selectActionGroup.Style := csDropDownList;
 		selectActionGroup.Name := 'selectActionGroup';
 		selectActionGroup.onChange := updateRoomConfigOkBtn;
 
 		curY := curY + 24;
 		CreateLabel(frm, 10, 10+curY, 'Primary Department:');
-		selectMainDep := CreateComboBox(frm, 150, 8+curY, 400, listDepartmentObjects);
+		selectMainDep := CreateComboBox(frm, 120, 8+curY, 430, listDepartmentObjects);
 		selectMainDep.Style := csDropDownList;
 		selectMainDep.Name := 'selectMainDep';
 		selectMainDep.onChange := updateRoomConfigOkBtn;
@@ -3345,6 +3367,8 @@ unit ImportHqRoom;
 
 		resultCode := frm.ShowModal();
 		if(resultCode = mrYes) then begin
+			globalNewFormPrefix := trim(inputPrefix.Text);
+
 			// do stuff
 			roomName := trim(inputName.Text);
 			roomShapeKw := nil;
