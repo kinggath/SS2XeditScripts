@@ -58,6 +58,7 @@ unit ImportHqRoom;
 		SS2_VirtualResourceCategory_OrganicMaterials: IInterface;
 		SS2_VirtualResourceCategory_MachineParts: IInterface;
 		SS2_VirtualResourceCategory_BuildingMaterials: IInterface;
+		SS2_c_HQ_DailyLimiter_Scrap: IInterface;
 		// templates
 		SS2_HQGNN_Action_AssignRoomConfig_Template: IInterface;
 		SS2_HQ_RoomSlot_Template_GNN: IInterface;
@@ -462,6 +463,7 @@ unit ImportHqRoom;
 
 	procedure loadForRoomUpgade();
 	begin
+
 		loadResources();
 
 		loadResourceGroups();
@@ -955,10 +957,11 @@ unit ImportHqRoom;
 					curName := GetElementEditValues(curRec, 'FULL');
 					addObjectDupIgnore(listRoomFuncs, curName, curRec);
 				end;
+                continue;
 				// SimSettlementsV2:HQ:Library:MiscObjects:HQRoomFunctionality
 			end;
 
-
+//SS2_HQResourceToken_WorkEnergy_Engineering
 			if(strStartsWithSS2(edid, 'HQResourceToken_WorkEnergy_')) then begin
 				addObjectDupIgnore(listRoomResources, GetElementEditValues(curRec, 'FULL'), curRec);
 			end;
@@ -1491,6 +1494,8 @@ unit ImportHqRoom;
 		SS2_VirtualResourceCategory_OrganicMaterials  := FindObjectByEdidWithError('SS2_VirtualResourceCategory_OrganicMaterials');
 		SS2_VirtualResourceCategory_MachineParts 	  := FindObjectByEdidWithError('SS2_VirtualResourceCategory_MachineParts');
 		SS2_VirtualResourceCategory_BuildingMaterials := FindObjectByEdidWithError('SS2_VirtualResourceCategory_BuildingMaterials');
+
+		SS2_c_HQ_DailyLimiter_Scrap := FindObjectByEdidWithError('SS2_c_HQ_DailyLimiter_Scrap');
 
 		if(hasFindObjectError) then begin
 			Result := 1;
@@ -2451,6 +2456,7 @@ unit ImportHqRoom;
 		// selectUpgradeSlot.onChange := updateRoomUpgrade1OkBtn;
 		curY := curY + 42;
 		assignDepAtStart := CreateCheckbox(frm, 10, curY, 'Assign department to room at start');
+        assignDepAtStart.Checked := true;
 		//curY := curY + 16;
 		assignDepAtEnd := CreateCheckbox(frm, 10, curY + 16, 'Assign department to room at end');
 		defaultConstMarkers := CreateCheckbox(frm, 10, curY + 32, 'Use default construction markers');
@@ -2819,12 +2825,6 @@ unit ImportHqRoom;
 				arrayToUse := nonResObjArray;
 			end;
 
-			{
-			curSpawnObj := TJSONObject.Create();
-			curSpawnObj.S['Form'] 		:= spawnObj.S['Form'];
-			curSpawnObj.S['extFormId'] 	:= spawnObj.S['extFormId'];
-			curSpawnObj.S['extFileName']:= spawnObj.S['extFileName'];
-			}
 			if(bRelativePositioning) then begin
 				itemPosVector := newVector(spawnObj.O['pos'].F['x'], spawnObj.O['pos'].F['y'], spawnObj.O['pos'].F['z']);
 				itemRotVector := newVector(spawnObj.O['rot'].F['x'], spawnObj.O['rot'].F['y'], spawnObj.O['rot'].F['z']);
@@ -2842,15 +2842,6 @@ unit ImportHqRoom;
 				rotatedData.free();
 				itemRotVector.free();
 				itemPosVector.free();
-			{end else begin
-				curSpawnObj.F['posX'] := spawnObj.O['pos'].F['x'];
-				curSpawnObj.F['posY'] := spawnObj.O['pos'].F['y'];
-				curSpawnObj.F['posZ'] := spawnObj.O['pos'].F['z'];
-				curSpawnObj.F['rotX'] := spawnObj.O['rot'].F['x'];
-				curSpawnObj.F['rotY'] := spawnObj.O['rot'].F['y'];
-				curSpawnObj.F['rotZ'] := spawnObj.O['rot'].F['z'];
-				curSpawnObj.F['scale']:= spawnObj.F['scale
-				}
 			end;
 			appendSpawn(spawnObj, arrayToUse);
 		end;
@@ -2910,11 +2901,12 @@ unit ImportHqRoom;
 
 	function getResourcesGrouped(resources: TStringList; resourceComplexity: integer): TJsonObject;
 	var
-		i, resIndex, count: integer;
+		i, resIndex, count, numScrap: integer;
 		resourceData: TJsonObject;
 		curResource, realResource: IInterface;
-		sig, resourceStr: string;
+		sig, resourceStr, inputResourceId: string;
 	begin
+        numScrap := 0;
 		Result := TJsonObject.create();
 		for i:=0 to resources.count-1 do begin
 			resourceData := TJsonObject(resources.Objects[i]);
@@ -2923,6 +2915,11 @@ unit ImportHqRoom;
 
 			resIndex := resourceData.I['index'];
 			curResource := ObjectToElement(listRoomResources.Objects[resIndex]);
+            
+            inputResourceId := EditorID(curResource);
+            
+            
+
 
 			sig := Signature(curResource);
 
@@ -2941,16 +2938,27 @@ unit ImportHqRoom;
 			end else begin
 				realResource := curResource;
 			end;
+            
+            if(inputResourceId <> 'SS2_VirtualResource_Caps') then begin
+                if(strStartsWith(inputResourceId, 'SS2_VirtualResource_')) then begin
+                    numScrap := numScrap + count;
+                end;
+            end;
 
 			resourceStr := FormToStr(realResource);
 			Result.I[resourceStr] := Result.I[resourceStr] + count;
 		end;
+        
+        if(numScrap > 0) then begin
+            resourceStr := FormToStr(SS2_c_HQ_DailyLimiter_Scrap);
+			Result.I[resourceStr] := numScrap;
+        end;
 	end;
 
 	function createRoomUpgradeCOBJ(edidBase, descriptionText: string; resourceComplexity: integer; acti, availableGlobal: IInterface; resources: TStringList): IInterface;
 	var
 		edid, curName: string;
-		i, count: integer;
+		i, count, totalCount: integer;
 		availCondition, complexityCondition, fvpa, component, conditions: IInterface;
 		cobjResources: TJsonObject;
 	begin
@@ -2973,6 +2981,8 @@ unit ImportHqRoom;
 		cobjResources := getResourcesGrouped(resources, resourceComplexity);
 		RemoveElement(Result, 'FVPA');
 		fvpa := ensurePath(Result, 'FVPA');
+
+        // SS2_c_HQ_DailyLimiter_Scrap
 
 		for i:=0 to cobjResources.count-1 do begin
 			curName := cobjResources.names[i];
@@ -3008,6 +3018,13 @@ unit ImportHqRoom;
 		cobj1 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti, availableGlobal, resources);
 		cobj2 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti, availableGlobal, resources);
 		cobj3 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti, availableGlobal, resources);
+
+        {
+        Still haven't had a chance to do the xref sheets yet, but I do have a minor tweak to COBJ costs.
+For the full complexity and category complexity, can you add the combined total of any Scrap costs as an additional cost of: SS2_c_HQ_DailyLimiter_Scrap
+
+So for example, if the cost is 500 caps, 500 wood, 500 steel, it should also add an SS2_c_HQ_DailyLimiter_Scrap cost of 1000 (500 wood + 500 steel).
+        }
 	end;
 
 	function createRoomUpgradeActivator(roomUpgradeMisc, forHq: IInterface; upgradeName, modelStr: string): IInterface;
