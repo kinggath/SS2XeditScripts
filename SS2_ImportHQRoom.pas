@@ -908,10 +908,9 @@ unit ImportHqRoom;
 			curRec := ElementByIndex(group, i);
 			edid := EditorID(curRec);
 
-			if(strStartsWithSS2(edid, 'HQ_ActionGroup_')) then begin
+			if(pos('HQ_ActionGroup_', edid) > 0) then begin
 
 				if(edid <> 'SS2_HQ_ActionGroup_Template') then begin
-					AddMessage('Should have it '+edid);
 					//SimSettlementsV2:HQ:Library:MiscObjects:ActionGroupTypes:DepartmentHQActionGroup
 					curScript := findScriptInElementByName(curRec, 'SimSettlementsV2:HQ:Library:MiscObjects:HQActionGroup');
 					if(assigned(curScript)) then begin
@@ -961,7 +960,6 @@ unit ImportHqRoom;
 				// SimSettlementsV2:HQ:Library:MiscObjects:HQRoomFunctionality
 			end;
 
-//SS2_HQResourceToken_WorkEnergy_Engineering
 			if(strStartsWithSS2(edid, 'HQResourceToken_WorkEnergy_')) then begin
 				addObjectDupIgnore(listRoomResources, GetElementEditValues(curRec, 'FULL'), curRec);
 			end;
@@ -1645,8 +1643,8 @@ unit ImportHqRoom;
 		edidMisc, edidKw: string;
 		slotMisc, slotKw, miscScript: IInterface;
 	begin
-		edidMisc := 'SS2_HQ_RoomSlot_'+roomShape+'_'+roomName+'_'+slotName;
-		edidKw   := 'SS2_Tag_RoomSlot_'+roomShape+'_'+roomName+'_'+slotName;
+		edidMisc := globalNewFormPrefix+'HQ_RoomSlot_'+roomShape+'_'+roomName+'_'+slotName;
+		edidKw   := globalNewFormPrefix+'Tag_RoomSlot_'+roomShape+'_'+roomName+'_'+slotName;
 		// MISC: SS2_HQ_RoomSlot_GNNLowerSouthwestNookShape_CommonArea_Base
 		//       SS2_HQ_RoomSlot_<room shape>_<room name>_<slot name>
 
@@ -1702,11 +1700,11 @@ unit ImportHqRoom;
 		end;
 
 		if(not assigned(existingElem)) then begin
-			configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
+			configMiscEdid := globalNewFormPrefix+'HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
 			configMisc := getCopyOfTemplate(targetFile, SS2_HQGNN_Action_AssignRoomConfig_Template, configMiscEdid);
 			addKeywordByPath(configMisc, roomShapeKw, 'KWDA');
 
-			roomConfigKeywordEdid := 'SS2_Tag_RoomConfig_'+kwBase+'_'+roomNameSpaceless;//<RoomShapeKeywordName>_<Name Entered Above>
+			roomConfigKeywordEdid := globalNewFormPrefix+'Tag_RoomConfig_'+kwBase+'_'+roomNameSpaceless;//<RoomShapeKeywordName>_<Name Entered Above>
 			roomConfigKeyword := getCopyOfTemplate(targetFile, keywordTemplate, roomConfigKeywordEdid);
 		end else begin
 			configMisc := existingElem;
@@ -1724,7 +1722,7 @@ unit ImportHqRoom;
 		setScriptProp(configMiscScript, 'ActionGroup', actionGroup);
 		setScriptProp(configMiscScript, 'PrimaryDepartment', primaryDepartment);
 
-		roomConfigKw := getCopyOfTemplate(targetFile, keywordTemplate, 'SS2_Tag_RoomConfig_'+kwBase+'_'+roomNameSpaceless);//SS2_Tag_RoomConfig_<RoomShapeKeywordName>_<Name Entered Above>
+		roomConfigKw := getCopyOfTemplate(targetFile, keywordTemplate, globalNewFormPrefix+'Tag_RoomConfig_'+kwBase+'_'+roomNameSpaceless);
 
 		setScriptProp(configMiscScript, 'RoomShapeKeyword', roomShapeKw);
 
@@ -2670,7 +2668,7 @@ unit ImportHqRoom;
 		slotKw, slotScript: IInterface;
 	begin
 		layoutNameSpaceless := cleanStringForEditorID(layoutName);
-		resultEdid := 'SS2_HQRoomLayout_'+upgradeNameSpaceless+'_'+slotNameSpaceless+'_'+layoutNameSpaceless;
+		resultEdid := globalNewFormPrefix+'HQRoomLayout_'+upgradeNameSpaceless+'_'+slotNameSpaceless+'_'+layoutNameSpaceless;
 		Result := getCopyOfTemplate(targetFile, SS2_HQRoomLayout_Template, resultEdid);
 
 		resultScript := getScript(Result, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
@@ -3014,17 +3012,11 @@ unit ImportHqRoom;
 			descriptionText := descriptionText + FloatToStr(numDays) + ' Days';
 		end;
 
-		edidBase := 'SS2_HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
+		edidBase := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
 		cobj1 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti, availableGlobal, resources);
 		cobj2 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti, availableGlobal, resources);
 		cobj3 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti, availableGlobal, resources);
 
-        {
-        Still haven't had a chance to do the xref sheets yet, but I do have a minor tweak to COBJ costs.
-For the full complexity and category complexity, can you add the combined total of any Scrap costs as an additional cost of: SS2_c_HQ_DailyLimiter_Scrap
-
-So for example, if the cost is 500 caps, 500 wood, 500 steel, it should also add an SS2_c_HQ_DailyLimiter_Scrap cost of 1000 (500 wood + 500 steel).
-        }
 	end;
 
 	function createRoomUpgradeActivator(roomUpgradeMisc, forHq: IInterface; upgradeName, modelStr: string): IInterface;
@@ -3037,7 +3029,7 @@ So for example, if the cost is 500 caps, 500 wood, 500 steel, it should also add
 			AddMessage('=== ERROR: failed to find manager for HQ');
 		end;
 		upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
-		edid := 'SS2_HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
+		edid := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
 		// SS2_HQBuildableAction_Template
 		Result := getCopyOfTemplate(targetFile, SS2_HQBuildableAction_Template, edid);
 
@@ -3088,7 +3080,7 @@ So for example, if the cost is 500 caps, 500 wood, 500 steel, it should also add
 
 		upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
 		//AddMessage(upgradeName+', '+modelStr+', '+EditorID(upgradeSlot));
-		upgradeEdid := 'SS2_HQ'+HqName+'_Action_RoomUpgrade_' + upgradeNameSpaceless; //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
+		upgradeEdid := globalNewFormPrefix+'HQ'+HqName+'_Action_RoomUpgrade_' + upgradeNameSpaceless; //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
 		upgradeResult := getCopyOfTemplate(targetFile, SS2_HQ_Action_RoomUpgrade_Template, upgradeEdid);
 
 		if(modelStr <> '') then begin
@@ -3126,7 +3118,7 @@ So for example, if the cost is 500 caps, 500 wood, 500 steel, it should also add
 		end;
 
 		// make ActionAvailableGlobal
-		ActionAvailableGlobalEdid := 'SS2_HQActionAvailable_'+HqName+'_'+upgradeNameSpaceless;
+		ActionAvailableGlobalEdid := globalNewFormPrefix+'HQActionAvailable_'+HqName+'_'+upgradeNameSpaceless;
 		ActionAvailableGlobal := getCopyOfTemplate(targetFile, versionGlobalTemplate, ActionAvailableGlobalEdid);
 		// how do I remove the CONST flag?
 		SetElementEditValues(ActionAvailableGlobal, 'Record Header\Record Flags\Constant', '0');
