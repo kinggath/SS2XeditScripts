@@ -533,7 +533,7 @@ begin
         exit;
     end;
 
-    if(Pos(EditorID(elem), 'RIDP') > 0) then begin
+    if(Pos('RIDP', EditorID(elem)) > 0) then begin
         Result := true;
         exit;
     end;
