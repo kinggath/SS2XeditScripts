@@ -2533,10 +2533,10 @@ unit ImportHqRoom;
 
 		frm := CreateDialog(windowCaption, 620, 580);// x=+30 y=+20
 		curY := 0;
-		if(not assigned(existingElem)) then begin
-			CreateLabel(frm, 10, 10+curY, 'HQ: '+EditorID(targetHQ)+'.');
-			CreateLabel(frm, 10, 28+curY, 'Room Shape: '+EditorID(targetRoomConfig));
-		end;
+		//if(not assigned(existingElem)) then begin
+        CreateLabel(frm, 10, 10+curY, 'HQ: '+EditorID(targetHQ)+'.');
+        CreateLabel(frm, 10, 28+curY, 'Room Shape: '+EditorID(targetRoomConfig));
+		//end;
 		curY := curY + 42;
 		CreateLabel(frm, 10, 10+curY, 'Name:');
 		inputName := CreateInput(frm, 100, 8+curY, '');
@@ -3144,6 +3144,23 @@ unit ImportHqRoom;
 			Result.I[resourceStr] := numScrap;
         end;
 	end;
+    
+    function getCobjConditionValue(conditions: IInterface): integer;
+    var
+        i: integer;
+        cond: IInterface;
+    begin
+        for i:=0 to ElementCount(conditions)-1 do begin
+            cond := ElementByIndex(conditions, i);
+            glob := PathLinksTo(cond, 'CTDA\Global');//SS2_Settings_ResourceComplexity [GLOB:03020B07]
+            if(EditorID(glob) = 'SS2_Settings_ResourceComplexity') then begin
+                Result := PathLinksTo(complexityCondition, 'CTDA\Comparison Value');
+                exit;
+            end;
+        end;
+        
+        Result := -1;
+    end;
 
     function findRoomUpgradeCOBJ(resourceComplexity: integer; acti: IInterface): IInterface;
     var
@@ -3156,16 +3173,8 @@ unit ImportHqRoom;
                 if(equals(PathLinksTo(curRef, 'CNAM'), acti)) then begin
                     // now check which complexity we have
                     conditions := ElementByPath(Result, 'Conditions');
-                    complexityCondition := ElementByIndex(conditions, 1);
-
-                    glob := PathLinksTo(complexityCondition, 'CTDA\Global');//SS2_Settings_ResourceComplexity [GLOB:03020B07]
-                    if(EditorID(glob) = 'SS2_Settings_ResourceComplexity') then begin
-                        curComplexity := PathLinksTo(complexityCondition, 'CTDA\Comparison Value');
-                        if(curComplexity = resourceComplexity) then begin
-                            AddMessage('For '+EditorID(acti)+' complexity '+EditorID(resourceComplexity)+' found '+EditorID(curRef));
-                            Result := curRef;
-                            exit;
-                        end;
+                    if(getCobjConditionValue(conditions) = resourceComplexity) then begin
+                        Result := curRef;
                     end;
                 end;
             end;
