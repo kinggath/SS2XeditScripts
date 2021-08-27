@@ -4,6 +4,7 @@
 	TODO:
 	- Allow not selecting slot for a layout. generate a new KW then
 	DONE:
+    - Added direct layer updating
     - Use the unique part of the shape keyword instead of the full EDID for EDID generation
     - Use that unique part for model lookup:
             Misc Model = SS2C2\Interface\GNNRoomShapes\<Unique Portion of Room Shape Keyword>.nif
@@ -4142,6 +4143,118 @@ unit ImportHqRoom;
 		Result := getHqFromRoomActionGroup(actGrp, nil);
 	end;
 
+    function getHqFromLayout(layoutScr: IInterface): IInterface;
+    var
+        script: IInterface;
+    begin
+        script := getScript(layout, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
+        Result := getScriptProp(script, 'workshopRef');
+    end;
+
+    procedure showLayoutUpgradeDialog(layer: IInterface);
+    var
+        script, targetHQ, slotKeyword: IInterface;
+        frm: TForm;
+		btnOk, btnCancel, btnBrowse: TButton;
+		inputName, inputPath: TEdit;
+		title, layoutName, layoutPath, layoutDisplayName, selectedSlotStr, csvPath: string;
+		resultCode: integer;
+		layoutData: TJsonObject;
+		yOffset: integer;
+		selectUpgradeSlot: TComboBox;
+		roomSlotsOptional: TStringList;
+		selectedSlot: IInterface;
+        oldFormLabel: TLabel;
+        targetRoomConfig, slotMisc: IInterface;
+    begin
+        script := getScript(layer, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
+
+        targetRoomConfig := findRoomConfigFromLayout(layer);
+        currentListOfUpgradeSlots := getRoomUpgradeSlots(targetRoomConfig);
+
+        targetHQ := getScriptProp(script, 'workshopRef');
+        slotMisc := findSlotMiscFromLayout(layer);
+
+        layoutName := getElementEditValues(layer, 'FULL');
+
+
+
+		frm := CreateDialog('Edit Room Layout', 400, 190);
+
+		yOffset := 0;
+
+		oldFormLabel := CreateLabel(frm, 10, yOffset+10, 'Layout Name:');
+        oldFormLabel.Name := 'oldFormLabel';
+		inputName := CreateInput(frm, 150, yOffset+8, '');
+		inputName.Name := 'inputName';
+		inputName.Text := layoutName;
+		inputName.onchange := layoutBrowseUpdateOk;
+		inputName.Width := 150;
+
+		// TODO: add a "custom" entry or such, which would generate a new KW from scratch
+		//roomSlotsOptional := prependDummyEntry(currentListOfUpgradeSlots, '- DEFAULT -');
+		// TODO: limit the list by which are filled already
+		roomSlotsOptional := currentListOfUpgradeSlots;
+
+		yOffset := yOffset + 24;
+		CreateLabel(frm, 10, yOffset+10, 'Upgrade Slot:');
+		selectUpgradeSlot := CreateComboBox(frm, 150, yOffset+8, 150, roomSlotsOptional);
+		selectUpgradeSlot.Style := csDropDownList;
+		selectUpgradeSlot.Name := 'selectUpgradeSlot';
+		selectUpgradeSlot.ItemIndex := 0;
+
+        setItemIndexByForm(selectUpgradeSlot, slotMisc);
+
+		yOffset := yOffset + 24;
+
+        oldFormLabel := CreateLabel(frm, 10, yOffset+10, '');
+
+		yOffset := yOffset + 32;
+		CreateLabel(frm, 10, yOffset, 'Layout Spawns File:');
+		inputPath := CreateInput(frm, 10, 20+yOffset, '');
+		inputPath.Width := 320;
+		inputPath.Name := 'inputPath';
+		inputPath.Text := '';
+		inputPath.onchange := layoutBrowseUpdateOk;
+
+		btnBrowse := CreateButton(frm, 340, 18+yOffset, '...');
+		btnBrowse.onclick := layoutBrowseHandler;
+
+		yOffset := yOffset + 48;
+		btnOk := CreateButton(frm, 100, yOffset, 'OK');
+		btnOk.ModalResult := mrYes;
+		btnOk.Name := 'btnOk';
+		btnOk.Default := true;
+
+		btnCancel := CreateButton(frm, 200, yOffset, 'Cancel');
+		btnCancel.ModalResult := mrCancel;
+
+		btnOk.Width := 75;
+		btnCancel.Width := 75;
+
+        resultCode := frm.showModal();
+        if(resultCode = mrYes) then begin
+            csvPath := trim(inputPath.Text);
+            layoutName := trim(inputName.Text);
+            
+            slotMisc := ObjectToElement(roomSlotsOptional.Objects[selectUpgradeSlot.ItemIndex]);
+            
+            createRoomLayout(layer, targetHQ, layoutName, csvPath, '', '', slotMisc);
+        end;
+        frm.free();
+
+
+
+
+        // need
+        // layoutName
+        // upgradeNameSpaceless := '';
+        // slotNameSpaceless := ''
+
+        // function createRoomLayout(existingElem, hq: IInterface; layoutName, csvPath, upgradeNameSpaceless, slotNameSpaceless: string; upgradeSlot: IInterface): IInterface;
+
+    end;
+
 	procedure showRelevantDialog();
 	var
 		configScript: IInterface;
@@ -4178,6 +4291,9 @@ unit ImportHqRoom;
         configScript := getScript(targetElem, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
         if(assigned(configScript)) then begin
             AddMessage('Updating Room Layout '+EditorID(targetElem));
+			targetHQ := getScriptProp(configScript, 'workshopRef');
+            loadFormsForHq(targetHQ);
+            showLayoutUpgradeDialog(targetElem);
             exit;
         end;
 
