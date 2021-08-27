@@ -1467,7 +1467,7 @@ unit PraUtil;
 
         // otherwise append
         Result := ElementAssign(scripts, HighInteger, nil, False);//Add(propRoot, 'Property', true);
-        seev(Result, 'scriptName', scriptName);
+        SetElementEditValues(Result, 'scriptName', scriptName);
     end;
 
     {
@@ -1632,7 +1632,7 @@ unit PraUtil;
         // if still alive, somehow append
         Result := ElementAssign(propRoot, HighInteger, nil, False);//Add(propRoot, 'Property', true);
 
-        seev(Result, 'propertyName', propName);
+        SetElementEditValues(Result, 'propertyName', propName);
     end;
 
     {
@@ -1693,7 +1693,7 @@ unit PraUtil;
         // if still alive, somehow append
         Result := ElementAssign(struct, HighInteger, nil, False);
 
-        seev(Result, 'memberName', memberName);
+        SetElementEditValues(Result, 'memberName', memberName);
     end;
 
     {
@@ -1722,14 +1722,14 @@ unit PraUtil;
     begin
         Result := createRawScriptProp(script, propName);
 
-        seev(Result, 'Type', propType);
+        SetElementEditValues(Result, 'Type', propType);
     end;
 
     function getOrCreateScriptPropStruct(script: IInterface; propName: String): IInterface;
     begin
         Result := createRawScriptProp(script, propName);
 
-        seev(Result, 'Type', 'Struct');
+        SetElementEditValues(Result, 'Type', 'Struct');
 
         Result := ElementByPath(Result, 'Value\Struct');
     end;
@@ -1738,7 +1738,7 @@ unit PraUtil;
     begin
         Result := createRawScriptProp(script, propName);
 
-        seev(Result, 'Type', 'Array of Object');
+        SetElementEditValues(Result, 'Type', 'Array of Object');
 
         Result := ElementByPath(Result, 'Value\Array of Object');
     end;
@@ -1747,7 +1747,7 @@ unit PraUtil;
     begin
         Result := createRawScriptProp(script, propName);
 
-        seev(Result, 'Type', 'Array of Struct');
+        SetElementEditValues(Result, 'Type', 'Array of Struct');
 
         Result := ElementByPath(Result, 'Value\Array of Struct');
     end;
@@ -1764,7 +1764,7 @@ unit PraUtil;
 
         if (variantType = 277) or (variantType = varNull) then begin// No idea if this constant exists
             // consider nil to be an empty form
-            seev(propElem, 'Type', 'Object');
+            SetElementEditValues(propElem, 'Type', 'Object');
 
             SetLinksTo(ElementByPath(propElem, 'Value\Object Union\Object v2\FormID'), nil);
             exit;
@@ -1774,23 +1774,23 @@ unit PraUtil;
             // etMainRecord -> object, do a linksTo
             iinterfaceTypeString := ElementTypeString(value);
             if(iinterfaceTypeString = 'etMainRecord') then begin
-                seev(propElem, 'Type', 'Object');
+                SetElementEditValues(propElem, 'Type', 'Object');
 
                 SetLinksTo(ElementByPath(propElem, 'Value\Object Union\Object v2\FormID'), value);
             end; // else maybe struct?
         end else if (variantType = varInteger) or (variantType = 20) then begin
             // 20 is cardinal, no idea if there's a constant for that
-            seev(propElem, 'Type', 'Int32');
-            seev(propElem, 'Int32', IntToStr(value));
+            SetElementEditValues(propElem, 'Type', 'Int32');
+            SetElementEditValues(propElem, 'Int32', IntToStr(value));
         end else if(variantType = varDouble) then begin
-            seev(propElem, 'Type', 'Float');
-            seev(propElem, 'Float', FloatToStr(value));
+            SetElementEditValues(propElem, 'Type', 'Float');
+            SetElementEditValues(propElem, 'Float', FloatToStr(value));
         end else if(variantType = 258) or (variantType =varString) then begin
-            seev(propElem, 'Type', 'String');
-            seev(propElem, 'String', value);
+            SetElementEditValues(propElem, 'Type', 'String');
+            SetElementEditValues(propElem, 'String', value);
         end else if(variantType = varBoolean) then begin
-            seev(propElem, 'Type', 'Bool');
-            seev(propElem, 'Bool', BoolToStr(value));
+            SetElementEditValues(propElem, 'Type', 'Bool');
+            SetElementEditValues(propElem, 'Bool', BoolToStr(value));
         end else begin
             AddMessage('Unknown type in setPropertyValue! '+IntToStr(variantType));
         end;
@@ -1885,12 +1885,30 @@ unit PraUtil;
         typeStr: string;
     begin
         typeStr := geevt(prop, 'Type');
+        
+        if(typeStr = '') then begin
+            // assume it's an array
+            clearArrayProperty(prop);
+        end;
 
         // "If it's stupid, but works, ..."
-        seev(prop, 'Type', 'Bool');
-        seev(prop, 'Bool', 'False');
-        seev(prop, 'Type', typeStr);
-
+        SetElementEditValues(prop, 'Type', 'Bool');
+        SetElementEditValues(prop, 'Bool', 'False');
+        SetElementEditValues(prop, 'Type', typeStr);
+    end;
+    
+    {
+        For when the prop is Value\Array of x already
+    }
+    procedure clearArrayProperty(prop: IInterface);
+    var
+        i, num: integer;
+        
+    begin
+        num := ElementCount(prop);
+        for i:=0 to num-1 do begin
+            RemoveElement(prop, 0);
+        end;
     end;
 
     {

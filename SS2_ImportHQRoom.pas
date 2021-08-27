@@ -2767,7 +2767,7 @@ unit ImportHqRoom;
             assignDepAtStart.Checked    := getScriptPropDefault(existingMiscScript, 'bAssignDepartmentToRoomAtStart', assignDepAtStart.Checked);
             assignDepAtEnd.Checked      := getScriptPropDefault(existingMiscScript, 'bAssignDepartmentToRoomAtEnd', assignDepAtEnd.Checked);
             disableClutter.Checked      := getScriptPropDefault(existingMiscScript, 'bDisableClutter_OnCompletion', disableClutter.Checked);
-            disableGarbarge.Checked     := getScriptPropDefault(existingMiscScript, 'bDisableGarbage_OnComplete', disableGarbarge.Checked);
+            disableGarbarge.Checked     := getScriptPropDefault(existingMiscScript, 'bDisableGarbage_OnCompletion', disableGarbarge.Checked);
             defaultConstMarkers.Checked := getScriptPropDefault(existingMiscScript, 'bUseDefaultConstructionMarkers', defaultConstMarkers.Checked);
             realTimeTimer.Checked       := getScriptPropDefault(existingMiscScript, 'RealTimeTimer', realTimeTimer.Checked);
 
@@ -3436,9 +3436,11 @@ unit ImportHqRoom;
 		setScriptProp(script, 'bAssignDepartmentToRoomAtStart', assignAtStart);
 		setScriptProp(script, 'bAssignDepartmentToRoomAtEnd', assignAtEnd);
 		setScriptProp(script, 'bDisableClutter_OnCompletion', disableClutter);
-		setScriptProp(script, 'bDisableGarbage_OnComplete', disableGarbage);
+		setScriptProp(script, 'bDisableGarbage_OnCompletion', disableGarbage);
 		setScriptProp(script, 'bUseDefaultConstructionMarkers', defaultMarkers);
 		setScriptProp(script, 'RealTimeTimer', realTime);
+        // autofixing old fail
+		deleteScriptProp(script, 'bDisableGarbage_OnComplete');
 
 		setScriptProp(script, 'Duration', duration);
 
@@ -3490,7 +3492,7 @@ unit ImportHqRoom;
             oldUpgradeSlotKw := findSlotKeywordFromSlotMisc(oldUpgradeSlot);
             removeKeywordByPath(upgradeResult, oldUpgradeSlotKw, 'KWDA');
         end;
-        
+
         upgradeSlotKw := findSlotKeywordFromSlotMisc(upgradeSlot);
 
         ensureKeywordByPath(upgradeResult, upgradeSlotKw, 'KWDA');
