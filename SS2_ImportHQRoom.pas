@@ -3,13 +3,13 @@
 
 	TODO:
 	- Allow not selecting slot for a layout. generate a new KW then
+	DONE:
     - Use the unique part of the shape keyword instead of the full EDID for EDID generation
-    - Use that unique part for model lookup: 
+    - Use that unique part for model lookup:
             Misc Model = SS2C2\Interface\GNNRoomShapes\<Unique Portion of Room Shape Keyword>.nif
             COBJ Art Object = SS2C2_AO_RoomShape_<Unique Portion of Room Shape Keyword>
-    TESTING:
+    - put RoomShape keyword and the UpgradeSlot keyword onto upgrade MISC
 	- Allow updating of existing room updates
-	DONE:
 	- check what a script extends, not just the base
 	- The RoomUpgrade action should be pointing at either SS2C2_HQ_ActionGroup_RoomBuildBaseUpgrades_GNN or SS2C2_HQ_ActionGroup_RoomUpgrade_GNN for its DepartmentHQActionGroup, depending on whether its targeting the Base slot or not.
 	  For other HQs this might be different, so might be easier to just put a dropdown of all action groups for that HQ.
@@ -82,6 +82,40 @@ unit ImportHqRoom;
 		currentListOfUpgradeSlots: TStringList;
 
 		currentCacheFile: TJsonObject;
+
+    function getStringAfter(str, separator: string): string;
+    var
+
+        p: integer;
+    begin
+
+        p := Pos(separator, str);
+        if(p <= 0) then begin
+            Result := str;
+            exit;
+        end;
+
+        p := p + length(separator);
+
+        Result := copy(str, p, length(str)-p+1);
+    end;
+
+    function getRoomShapeKeywordFromConfig(roomConfig: IInterface): IInterface;
+    var
+        configScript: IInterface;
+    begin
+        configScript := getScript(roomConfig, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
+        // -> SS2C2_HQGNN_Action_AssignRoomConfig_GNN256BoxShape_Bathroom "Bathroom" [MISC:0401F0BE]
+        Result := getScriptProp(configScript, 'RoomShapeKeyword');
+    end;
+
+    function getRoomShapeUniquePart(str: string): string;
+    var
+        edid: string;
+        p: integer;
+    begin
+        Result := getStringAfter(str, '_Tag_RoomShape_');
+    end;
 
 	function StringRepeat(str: string; len: integer): string;
 	var
@@ -1701,7 +1735,7 @@ unit ImportHqRoom;
 			roomShapeKw := getCopyOfTemplate(targetFile, keywordTemplate, roomShapeKwEdid);
 		end;
 
-		kwBase := stripPrefix('SS2_Tag_RoomShape_', roomShapeKwEdid);//regexExtract(roomShapeKwEdid, '_([^_]+)$', 1);
+		kwBase := getRoomShapeUniquePart(roomShapeKwEdid);
 		if(kwBase = '') then begin
 			kwBase := roomShapeKwEdid;
 		end;
@@ -1810,13 +1844,8 @@ unit ImportHqRoom;
 		Result := GetElementEditValues(slotMisc, 'FULL');
 		if(Result <> '') then exit;
 
-		miscScript := getScript(slotMisc, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot_GNN');
-		if(not assigned(miscScript)) then begin
-			miscScript := getScript(slotMisc, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot');
-		end;
-
-		slotKw := getScriptProp(miscScript, 'UpgradeSlotKeyword');
-		Result := GetElementEditValues(slotMisc, 'FULL');
+		slotKw := findSlotKeywordFromSlotMisc(slotMisc);
+		Result := GetElementEditValues(slotKw, 'FULL');
 		if(Result <> '') then exit;
 
 		// otherwise, mh
@@ -2503,16 +2532,18 @@ unit ImportHqRoom;
 		layoutsBox: TListBox;
 		layoutsAddBtn, layoutsRemBtn, layoutsEdtBtn: TButton;
 
-		modelStr, modelStrMisc, upgradeName, windowCaption: string;
+		modelStr, modelStrMisc, upgradeName, windowCaption, shapeKeywordBase, MiscModelFilename, artObjEdid: string;
 		targetDepartment: IInterface;
 
 		roomUpgradeMisc, roomUpgradeActi: IInterface;
 		upgradeDuration: float;
 
-		upgradeSlot, actionGroup: IInterface;
+		roomShapeKeyword, upgradeSlot, actionGroup: IInterface;
 
         // existing stuff
         existingMiscScript, existingActi, existingActiScript: IInterface;
+
+        modelIndex: integer;
 	begin
 		// load the slots for what we have
         currentListOfUpgradeSlots := getRoomUpgradeSlots(targetRoomConfig);
@@ -2531,11 +2562,17 @@ unit ImportHqRoom;
             existingActiScript := getScript(existingActi, 'SimSettlementsV2:HQ:Library:ObjectRefs:HQWorkshopItemActionTrigger');
         end;
 
+        roomShapeKeyword := getRoomShapeKeywordFromConfig(targetRoomConfig);
+        shapeKeywordBase := getRoomShapeUniquePart(EditorID(roomShapeKeyword));
+
+        MiscModelFilename := shapeKeywordBase+'.nif';//SS2C2\Interface\GNNRoomShapes\<Unique Portion of Room Shape Keyword>.nif
+        ArtObjEdid := 'SS2C2_AO_RoomShape_'+shapeKeywordBase;
+
 		frm := CreateDialog(windowCaption, 620, 580);// x=+30 y=+20
 		curY := 0;
 		//if(not assigned(existingElem)) then begin
         CreateLabel(frm, 10, 10+curY, 'HQ: '+EditorID(targetHQ)+'.');
-        CreateLabel(frm, 10, 28+curY, 'Room Shape: '+EditorID(targetRoomConfig));
+        CreateLabel(frm, 10, 28+curY, 'Room Config: '+EditorID(targetRoomConfig));
 		//end;
 		curY := curY + 42;
 		CreateLabel(frm, 10, 10+curY, 'Name:');
@@ -2578,6 +2615,17 @@ unit ImportHqRoom;
 		selectModel.Style := csDropDownList;
 		selectModel.Name := 'selectModel';
 		selectModel.ItemIndex := 0;
+
+        //Stand_Hammer_Vertical.nif
+        modelIndex := modelList.indexOf('Stand_Hammer_Vertical.nif');
+        if(modelIndex > -1) then begin
+            selectModel.ItemIndex := modelIndex;
+        end;
+
+        modelIndex := modelListMisc.indexOf(MiscModelFilename);
+        if(modelIndex > -1) then begin
+            selectMiscModel.ItemIndex := modelIndex;
+        end;
 
 		curY := curY + 24;
 		CreateLabel(frm, 10, 10+curY, 'Upgrade slot:');
@@ -2804,10 +2852,9 @@ unit ImportHqRoom;
 				actionGroup
 			);
 
-
 			roomUpgradeActi := createRoomUpgradeActivator(existingActi, roomUpgradeMisc, targetHQ, upgradeName, modelStr);
 
-			createRoomUpgradeCOBJs(roomUpgradeActi, targetHQ, getActionAvailableGlobal(roomUpgradeMisc), upgradeName, resourceBox.Items, upgradeDuration);
+			createRoomUpgradeCOBJs(roomUpgradeActi, targetHQ, getActionAvailableGlobal(roomUpgradeMisc), upgradeName, resourceBox.Items, upgradeDuration, ArtObjEdid);
 
 			if(doRegisterCb.checked) then begin
 				// register
@@ -2858,11 +2905,7 @@ unit ImportHqRoom;
 		SetElementEditValues(Result, 'FULL', layoutName);
 
 		// put in the slot KW
-		slotScript := getScript(upgradeSlot, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot_GNN');
-		if(not assigned(slotScript)) then begin
-			slotScript := getScript(upgradeSlot, 'simsettlementsv2:hq:library:miscobjects:requirementtypes:hqroomupgradeslot');
-		end;
-		slotKw := getScriptProp(slotScript, 'UpgradeSlotKeyword');
+		slotKw := findSlotKeywordFromSlotMisc(upgradeSlot);
 
 		setScriptProp(resultScript, 'TagKeyword', slotKw);
 		setScriptProp(resultScript, 'workshopRef', hq);
@@ -3144,7 +3187,7 @@ unit ImportHqRoom;
 			Result.I[resourceStr] := numScrap;
         end;
 	end;
-    
+
     function getCobjConditionValue(conditions: IInterface): integer;
     var
         i: integer;
@@ -3158,7 +3201,7 @@ unit ImportHqRoom;
                 exit;
             end;
         end;
-        
+
         Result := -1;
     end;
 
@@ -3183,7 +3226,7 @@ unit ImportHqRoom;
         Result := nil;
     end;
 
-	function createRoomUpgradeCOBJ(edidBase, descriptionText: string; resourceComplexity: integer; acti, availableGlobal: IInterface; resources: TStringList): IInterface;
+	function createRoomUpgradeCOBJ(edidBase, descriptionText: string; resourceComplexity: integer; acti, availableGlobal: IInterface; resources: TStringList; artObject: IInterface): IInterface;
 	var
 		edid, curName: string;
 		i, count, totalCount: integer;
@@ -3215,6 +3258,11 @@ unit ImportHqRoom;
 		RemoveElement(Result, 'FVPA');
 		fvpa := ensurePath(Result, 'FVPA');
 
+        // art object
+        if(assigned(artObject)) then begin
+            setPathLinksTo(Result, 'ANAM', artObject);
+        end;
+
         // SS2_c_HQ_DailyLimiter_Scrap
 
 		for i:=0 to cobjResources.count-1 do begin
@@ -3231,9 +3279,9 @@ unit ImportHqRoom;
 		cobjResources.free();
 	end;
 
-	procedure createRoomUpgradeCOBJs(acti, forHq, availableGlobal: IInterface; upgradeName: string; resources: TStringList; completionTime: float);
+	procedure createRoomUpgradeCOBJs(acti, forHq, availableGlobal: IInterface; upgradeName: string; resources: TStringList; completionTime: float; ArtObjEdid: string);
 	var
-		cobj1, cobj2, cobj3: IInterface;
+		cobj1, cobj2, cobj3, artObject: IInterface;
 		edidBase, descriptionText, upgradeNameSpaceless: string;
 		numDays: float;
 	begin
@@ -3247,12 +3295,18 @@ unit ImportHqRoom;
 			descriptionText := descriptionText + FloatToStr(numDays) + ' Days';
 		end;
 
+        artObject := nil;
+
+        if(ArtObjEdid <> '') then begin
+            artObject := findObjectByEdid(ArtObjEdid);
+        end;
+
         // now, we could have these 3 cobjs already
 
 		edidBase := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
-		cobj1 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti, availableGlobal, resources);
-		cobj2 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti, availableGlobal, resources);
-		cobj3 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti, availableGlobal, resources);
+		cobj1 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti, availableGlobal, resources, artObject);
+		cobj2 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti, availableGlobal, resources, artObject);
+		cobj3 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti, availableGlobal, resources, artObject);
 
 	end;
 
@@ -3286,7 +3340,7 @@ unit ImportHqRoom;
 			ensurePath(Result, 'Model\MODL');
 			SetElementEditValues(Result, 'Model\MODL', modelStr);
 		end;
-	end;
+    end;
 
     function findRoomUpgradeActivator(roomUpgradeMisc: IInterface): IInterface;
 	var
@@ -3354,7 +3408,7 @@ unit ImportHqRoom;
 		resourceJson: TJsonObject;
 		curLayout: IInterface;
 		curLayoutName, curLayoutPath, selectedSlotStr: string;
-		upgradeSlotLayout: IInterface;
+		upgradeSlotLayout, roomShapeKeyword, upgradeSlotKw, oldUpgradeSlotKw, oldUpgradeSlot: IInterface;
 	begin
 		HqName := findHqNameShort(targetHq);
 		slotNameSpaceless := cleanStringForEditorID(getElementEditValues(upgradeSlot, 'FULL'));
@@ -3425,6 +3479,23 @@ unit ImportHqRoom;
 
             setScriptProp(script, 'ActionAvailableGlobal', ActionAvailableGlobal);
         end;
+
+        roomShapeKeyword := getRoomShapeKeywordFromConfig(targetRoomConfig);
+
+        ensureKeywordByPath(upgradeResult, roomShapeKeyword, 'KWDA');
+
+        oldUpgradeSlot := getScriptProp(script, 'TargetUpgradeSlot');
+        if(assigned(oldUpgradeSlot)) then begin
+            // upgradeSlotKw, oldUpgradeSlotKw, oldUpgradeSlot
+            oldUpgradeSlotKw := findSlotKeywordFromSlotMisc(oldUpgradeSlot);
+            removeKeywordByPath(upgradeResult, oldUpgradeSlotKw, 'KWDA');
+        end;
+        
+        upgradeSlotKw := findSlotKeywordFromSlotMisc(upgradeSlot);
+
+        ensureKeywordByPath(upgradeResult, upgradeSlotKw, 'KWDA');
+        // put upgradeSlot onto the misc
+        // for existing, read TargetUpgradeSlot, remove it from misc
 
 		setScriptProp(script, 'TargetUpgradeSlot', upgradeSlot);
 
@@ -3626,9 +3697,25 @@ unit ImportHqRoom;
         end;
     end;
 
+    function findSlotKeywordFromSlotMisc(slotMisc: IInterface): IInterface;
+    var
+        curScript: IInterface;
+    begin
+        Result := nil;
+
+        curScript := getScript(slotMisc, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot_GNN');
+        if(not assigned(curScript)) then begin
+            curScript := getScript(slotMisc, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot');
+        end;
+
+        if(assigned(curScript)) then begin
+            Result := getScriptProp(curScript, 'UpgradeSlotKeyword');
+        end;
+    end;
+
     function findSlotMiscFromLayout(layout: IInterface): IInterface;
     var
-        layoutScript, TagKeyword, curRef, curScript, UpgradeSlotKeyword: IInterface;
+        layoutScript, TagKeyword, curRef, UpgradeSlotKeyword: IInterface;
         i: integer;
     begin
         layoutScript := getScript(layout, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
@@ -3637,18 +3724,13 @@ unit ImportHqRoom;
         for i:=0 to ReferencedByCount(TagKeyword)-1 do begin
             curRef := ReferencedByIndex(TagKeyword, i);
             if(signature(curRef) = 'MISC') then begin
-                curScript := getScript(curRef, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot_GNN');
-                if(not assigned(curScript)) then begin
-                    curScript := getScript(curRef, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot');
+                UpgradeSlotKeyword := findSlotKeywordFromSlotMisc(curRef);
+
+                if(equals(UpgradeSlotKeyword, TagKeyword)) then begin
+                    Result := curRef;
+                    exit;
                 end;
 
-                if(assigned(curScript)) then begin
-                    UpgradeSlotKeyword := getScriptProp(curScript, 'UpgradeSlotKeyword');
-                    if(equals(UpgradeSlotKeyword, TagKeyword)) then begin
-                        Result := curRef;
-                        exit;
-                    end;
-                end;
             end;
         end;
 

@@ -941,6 +941,13 @@ unit PraUtil;
             end
         end;
     end;
+    
+    procedure ensureKeywordByPath(toElem: IInterface; kw: IInterface; targetSig: string);
+    begin
+        if(not hasKeywordByPath(toElem, kw, targetSig)) then begin
+            addKeywordByPath(toElem, kw, targetSig);
+        end;
+    end;
 
     procedure removeKeywordByPath(e: IInterface; kw: variant; signature: String);
     var
