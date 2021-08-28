@@ -1,9 +1,33 @@
 {
     Run on Room Config to update. Run on anything else to generate a new
 
+
+
 	TODO:
+    - 1. When no Provided functionality is set, the property should be skipped - currently creates an empty property
+
+    - 2. There's a common pattern I'm using that we didn't account for, wondering if you can support this. Building upgrades can add new slots, this is done with the AdditionalUpgradeSlots property,
+            which holds an array of upgrade slot misc objects.
+    -   - 2a. Ability to add slots to an upgrade, the same way you can to a room config - presumably can just copy that interface over and store them as AdditionalUpgradeSlots on the upgrade misc.
+    -   - 2b. When displaying available slots for an upgrade, in addition to showing those from the room config as selectable options, also show any slots that are in the AdditionalUpgradeSlots
+            property of other upgrades using the same room config. This lets us setup a system of "levels" where building one thing opens up the door for another, which can open up the door for another, etc.
+            (example: library adds Shelving slot, shelving upgrade uses shelving slot and adds a books slot, so now books upgrade can be built)
+
+    - 4. QoL Feature Request (ie lower priority) - ability to copy resource costs from another upgrade record. There will be a lot of similar upgrades and it would save having to write down all the details.
+
+    - 5. I'm realizing there's a confusion of terms among the designers, so I'm going to call initial construction RoomConstruction, and anything that adds on top of a base upgrade a RoomUpgrade.
+            To start, I'm going to rename two things the cobj template: SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template to SS2C2_co_HQBuildableAction_GNN_RoomConstruction_Template and the action group
+            SS2C2_HQ_ActionGroup_RoomBuildBaseUpgrades_GNN to SS2C2_HQ_ActionGroup_RoomConstruction_GNN.
+            I'm also adding a DIFFERENT cobj template, for upgrades - those that use the ActionGroup SS2C2_HQ_ActionGroup_RoomUpgrade_GNN should now use SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template
+            (you can see why I needed to do the rename)
+
+    - 6. The script created new cobj records for my existing actions, but did not detect the previous ones I had created manually for some reason.
+
 	- Allow not selecting slot for a layout. generate a new KW then
 	DONE:
+
+    - 3. If you attempt to update a record again without saving, the layouts don't load. Even if they are layouts that existed before you ran the update.
+        - Oh jeez - looks like #3 is actually the layouts are just being removed from the properties of the action on an update! Explains why they don't show up on a repeat update attempt lol
     - Added direct layer updating
     - Use the unique part of the shape keyword instead of the full EDID for EDID generation
     - Use that unique part for model lookup:
@@ -712,7 +736,6 @@ unit ImportHqRoom;
 			if(assigned(script)) then begin
 				// found!
 				departmentName := GetElementEditValues(base, 'FULL');
-				AddMessage('Found '+FullPath(curRef));
 				//addObjectDupIgnore(listDepartmentObjects, departmentName, curRef);
 				curFormID := getElementLocalFormId(curRef);
 
@@ -924,7 +947,6 @@ unit ImportHqRoom;
 				HQLocation := getScriptProp(curSlotScript, 'HQLocation');
 				Result := findHqByLocation(HQLocation);
 				if(assigned(Result)) then begin
-					AddMessage('Found '+EditorID(AddMessage)+' in upgrade');
 					exit;
 				end;
 			end;
@@ -1345,8 +1367,6 @@ unit ImportHqRoom;
 		for i:=0 to forFiles.count-1 do begin
 			curFileName := forFiles[i];
 			curFileObj  := ObjectToElement(forFiles.Objects[i]);
-
-			AddMessage('Checking '+curFileName);
 
 			// this shouldn't actually be possible
 			if(not FileExists(DataPath+curFileName)) then begin
@@ -2418,7 +2438,6 @@ unit ImportHqRoom;
         i: integer;
     begin
         for i:=0 to modelArray.count-1 do begin
-            AddMessage('checking '+modelArray[i]+' in '+str);
             if(strEndsWithCI(str, modelArray[i])) then begin
                 Result := i;
                 exit;
@@ -2453,7 +2472,6 @@ unit ImportHqRoom;
 
             // now find the index
             resIndex := indexOfElement(listRoomResources, curResObject);
-            // AddMessage('Found '+editorID(curREsObject)+' index '+IntToStr(resIndex));
 
             addResourceToList(resIndex, resCount, resourceBox);
         end;
@@ -3542,8 +3560,6 @@ unit ImportHqRoom;
 
         RoomLayouts := getOrCreateScriptPropArrayOfObject(script, 'RoomLayouts');
         if(assigned(existingElem)) then begin
-            clearProperty(RoomLayouts);
-
             updateExistingLayouts(targetHq, RoomLayouts, layouts, upgradeNameSpaceless, slotNameSpaceless);
 
         end else begin
@@ -3636,6 +3652,7 @@ unit ImportHqRoom;
                 AddMessage('Updating '+EditorID(curLayout));
                 newLayout := createRoomLayout(curLayout, targetHq, curJsonData.S['name'], curJsonData.S['path'], upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout);
 
+                newLayouts.addObject(EditorID(newLayout), newLayout);
             end else begin
                 // creating new
                 // do we have some to recycle?
@@ -3646,7 +3663,7 @@ unit ImportHqRoom;
                 if(curJsonData.S['path'] <> '') then begin
                     AddMessage('Generating layout. Using recycled? '+BoolToStr(curLayout));
                     newLayout := createRoomLayout(curLayout, targetHq, curJsonData.S['name'], curJsonData.S['path'], upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout);
-                    newLayouts.addObject(EditorID(newLayout), newLayouts);
+                    newLayouts.addObject(EditorID(newLayout), newLayout);
                 end;
             end;
         end;
@@ -3692,7 +3709,6 @@ unit ImportHqRoom;
             if(assigned(refScript)) then begin
                 RoomUpgradeSlots := getScriptProp(refScript, 'RoomUpgradeSlots');
                 if(hasObjectInProperty(RoomUpgradeSlots, slot)) then begin
-                    AddMessage('Found '+EditorID(curRef));
                     Result := curRef;
                     exit;
                 end;
@@ -3747,7 +3763,6 @@ unit ImportHqRoom;
         slotMisc := findSlotMiscFromLayout(layout);
         Result := findRoomConfigFromSlotMisc(slotMisc);
         if(assigned(Result)) then begin
-            AddMessage('Found '+EditorID(Result)+' in layout');
             exit;
         end;
 
@@ -3861,7 +3876,6 @@ unit ImportHqRoom;
         edid := EditorID(existingElem);
 
         underscorePos := pos('_', edid);
-        AddMessage('found '+edid+' '+IntToStr(underscorePos));
         if(underscorePos < 1) then begin
             exit;
         end;
@@ -4236,9 +4250,9 @@ unit ImportHqRoom;
         if(resultCode = mrYes) then begin
             csvPath := trim(inputPath.Text);
             layoutName := trim(inputName.Text);
-            
+
             slotMisc := ObjectToElement(roomSlotsOptional.Objects[selectUpgradeSlot.ItemIndex]);
-            
+
             createRoomLayout(layer, targetHQ, layoutName, csvPath, '', '', slotMisc);
         end;
         frm.free();
