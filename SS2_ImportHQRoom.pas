@@ -4,7 +4,8 @@
 
 
 	TODO:
-    - 1. When no Provided functionality is set, the property should be skipped - currently creates an empty property
+    
+    - Add a "RoomConstruction"/"RoomUpgrade" distinction
 
     - 2. There's a common pattern I'm using that we didn't account for, wondering if you can support this. Building upgrades can add new slots, this is done with the AdditionalUpgradeSlots property,
             which holds an array of upgrade slot misc objects.
@@ -13,7 +14,6 @@
             property of other upgrades using the same room config. This lets us setup a system of "levels" where building one thing opens up the door for another, which can open up the door for another, etc.
             (example: library adds Shelving slot, shelving upgrade uses shelving slot and adds a books slot, so now books upgrade can be built)
 
-    - 4. QoL Feature Request (ie lower priority) - ability to copy resource costs from another upgrade record. There will be a lot of similar upgrades and it would save having to write down all the details.
 
     - 5. I'm realizing there's a confusion of terms among the designers, so I'm going to call initial construction RoomConstruction, and anything that adds on top of a base upgrade a RoomUpgrade.
             To start, I'm going to rename two things the cobj template: SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template to SS2C2_co_HQBuildableAction_GNN_RoomConstruction_Template and the action group
@@ -22,12 +22,17 @@
             (you can see why I needed to do the rename)
 
     - 6. The script created new cobj records for my existing actions, but did not detect the previous ones I had created manually for some reason.
+        For point 6 in the next alpha, I'm leaving in the extra COBJ records I had created manually, SS2C2_co_HQBuildableAction_Build_GNNUpperEntryway_Lounge_StaffBar 
+        and SS2C2_co_HQBuildableAction_Build_GNNUpperEntryway_Lounge_StaffLounge. The new ones the script made are SS2C2_HQGNN_BuildableAction_ClassyStaffBar_1/2/3 and 
+        SS2C2_HQGNN_BuildableAction_ClassyStaffLounge_1/2/3.
 
+    - 4. QoL Feature Request (ie lower priority) - ability to copy resource costs from another upgrade record. There will be a lot of similar upgrades and it would save having to write down all the details.
 	- Allow not selecting slot for a layout. generate a new KW then
 	DONE:
-
+    - 1. When no Provided functionality is set, the property should be skipped - currently creates an empty property
     - 3. If you attempt to update a record again without saving, the layouts don't load. Even if they are layouts that existed before you ran the update.
         - Oh jeez - looks like #3 is actually the layouts are just being removed from the properties of the action on an update! Explains why they don't show up on a repeat update attempt lol
+    - 7. Layouts need to be an optional field as well. You can also rig up upgrades that just toggle enable parents to make things appear.
     - Added direct layer updating
     - Use the unique part of the shape keyword instead of the full EDID for EDID generation
     - Use that unique part for model lookup:
@@ -2401,7 +2406,7 @@ unit ImportHqRoom;
 		btnOk: TButton;
 		inputName, inputDuration, inputPrefix: TEdit;
 		selectUpgradeSlot, selectActionGroup: TComboBox;
-		resourceBox, roomFuncsBox, layoutsBox: TListBox;
+		resourceBox, roomFuncsBox: TListBox;
 		durationNr: float;
 		layoutsGroup, resourceGroup: TGroupBox;
 	begin
@@ -2420,16 +2425,18 @@ unit ImportHqRoom;
 			resourceBox := TListBox(resourceGroup.FindComponent('resourceBox'));
 		end;
 
+        {
 		// roomFuncsBox := TListBox(sender.parent.FindComponent('roomFuncsBox'));
 		layoutsBox := TListBox(sender.parent.FindComponent('layoutsBox'));
 		if(layoutsBox = nil) then begin
 			layoutsGroup := TGroupBox (sender.parent.FindComponent('layoutsGroup'));
 			layoutsBox := TListBox(layoutsGroup.FindComponent('layoutsBox'));
 		end;
+        }
 
 		durationNr := tryToParseFloat(trim(inputDuration.Text));
 
-		btnOk.enabled := (trim(inputName.Text) <> '') and (trim(inputPrefix.Text) <> '') and (durationNr > 0) and (selectUpgradeSlot.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and (layoutsBox.Items.count > 0) and (resourceBox.Items.count > 0);
+		btnOk.enabled := (trim(inputName.Text) <> '') and (trim(inputPrefix.Text) <> '') and (durationNr > 0) and (selectUpgradeSlot.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and (resourceBox.Items.count > 0);
 
 	end;
 
@@ -3543,47 +3550,84 @@ unit ImportHqRoom;
 			setStructMember(newStruct, 'iCount', resCount);
 		end;
 
-		ProvidedFunctionality := getOrCreateScriptPropArrayOfObject(script, 'ProvidedFunctionality');
+        if(roomFuncs.count > 0) then begin
+            ProvidedFunctionality := getOrCreateScriptPropArrayOfObject(script, 'ProvidedFunctionality');
+            // clear the property if we're updating
+            if(assigned(existingElem)) then begin
+                clearProperty(ProvidedFunctionality);
+            end;
 
-        // clear the property if we're updating
-        if(assigned(existingElem)) then begin
-            clearProperty(ProvidedFunctionality);
+            for i:=0 to roomFuncs.count-1 do begin
+                curRoomFunc := ObjectToElement(roomFuncs.Objects[i]);
+                appendObjectToProperty(ProvidedFunctionality, curRoomFunc);
+            end;
+		end else begin
+            // delete it if it exists
+            if(assigned(existingElem)) then begin
+                deleteScriptProp(script, 'ProvidedFunctionality');
+            end;
         end;
-
-		for i:=0 to roomFuncs.count-1 do begin
-			curRoomFunc := ObjectToElement(roomFuncs.Objects[i]);
-			appendObjectToProperty(ProvidedFunctionality, curRoomFunc);
-		end;
 
 		hasRelativeCoordinateLayout   := false;
 		hasNonRelativeCoordinateLayout:= false;
 
-        RoomLayouts := getOrCreateScriptPropArrayOfObject(script, 'RoomLayouts');
-        if(assigned(existingElem)) then begin
-            updateExistingLayouts(targetHq, RoomLayouts, layouts, upgradeNameSpaceless, slotNameSpaceless);
+        if(layouts.count > 0) then begin
 
-        end else begin
-            // create layouts from scratch
-            for i:=0 to layouts.count-1 do begin
-                resourceJson := TJsonObject(layouts.Objects[i]);
+            RoomLayouts := getOrCreateScriptPropArrayOfObject(script, 'RoomLayouts');
+            if(assigned(existingElem)) then begin
+                updateExistingLayouts(targetHq, RoomLayouts, layouts, upgradeNameSpaceless, slotNameSpaceless);
 
-                curLayoutName := resourceJson.S['name'];
-                curLayoutPath := resourceJson.S['path'];
-                selectedSlotStr := resourceJson.S['slot'];
-                upgradeSlotLayout := StrToForm(selectedSlotStr);
+            end else begin
+                // create layouts from scratch
+                for i:=0 to layouts.count-1 do begin
+                    resourceJson := TJsonObject(layouts.Objects[i]);
 
-                curLayout := createRoomLayout(nil, targetHq, curLayoutName, curLayoutPath, upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout);
+                    curLayoutName := resourceJson.S['name'];
+                    curLayoutPath := resourceJson.S['path'];
+                    selectedSlotStr := resourceJson.S['slot'];
+                    upgradeSlotLayout := StrToForm(selectedSlotStr);
 
-                appendObjectToProperty(RoomLayouts, curLayout);
+                    curLayout := createRoomLayout(nil, targetHq, curLayoutName, curLayoutPath, upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout);
+
+                    appendObjectToProperty(RoomLayouts, curLayout);
+                end;
+
+                if(hasRelativeCoordinateLayout and hasNonRelativeCoordinateLayout) then begin
+                    AddMessage('=== WARNING: some but not all layouts have a RoomExportHelper. This is probably a mistake, they should either all have it, or none should.');
+                end;
             end;
-		end;
-
-		if(hasRelativeCoordinateLayout and hasNonRelativeCoordinateLayout) then begin
-			AddMessage('=== WARNING: some but not all layouts have a RoomExportHelper. This is probably a mistake, they should either all have it, or none should.');
+        end else begin
+            // delete it if it exists
+            if(assigned(existingElem)) then begin
+                RoomLayouts := getScriptProp(script, 'RoomLayouts');
+                for i:=0 to ElementCount(RoomLayouts)-1 do begin
+                    recycleLayout(ElementByIndex(RoomLayouts, i), i);
+                end;
+                deleteScriptProp(script, 'RoomLayouts');
+            end;
 		end;
 
 		Result := upgradeResult;
 	end;
+
+    procedure recycleLayout(layout: IInterface; i: integer);
+    begin
+        AddMessage('RECYCLING '+EditorID(layout));
+        deleteScriptProps(layout);
+        SetElementEditValues(layout, 'FULL', 'Deleted Layout #'+IntToStr(i));
+    end;
+
+    procedure removeExistingLayouts(layouts: TStringList);
+    var
+        i: integer;
+        curLayout: IInterface;
+    begin
+        // at least remove the data from the leftovers, if we have them
+        for i:=0 to layouts.count-1 do begin
+            curLayout := ObjectToElement(layouts.Objects[i]);
+            recycleLayout(curLayout);
+        end;
+    end;
 
     procedure updateExistingLayouts(targetHq, RoomLayouts: IInterface; layouts: TStringList; upgradeNameSpaceless, slotNameSpaceless: string);
     var
@@ -3677,12 +3721,7 @@ unit ImportHqRoom;
         end;
 
         // at least remove the data from the leftovers, if we have them
-        for i:=0 to recycleLayouts.count-1 do begin
-            AddMessage('RECYCLING '+recycleLayouts[i]);
-            curLayout := ObjectToElement(recycleLayouts.Objects[i]);
-            deleteScriptProps(curLayout);
-            SetElementEditValues(curLayout, 'FULL', 'Deleted Layout #'+IntToStr(i));
-        end;
+        removeExistingLayouts(recycleLayouts);
 
         prevLayouts.free();
         recycleLayouts.free();
