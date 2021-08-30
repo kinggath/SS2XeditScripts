@@ -4,8 +4,6 @@
 
 
 	TODO:
-    
-    - Add a "RoomConstruction"/"RoomUpgrade" distinction
 
     - 2. There's a common pattern I'm using that we didn't account for, wondering if you can support this. Building upgrades can add new slots, this is done with the AdditionalUpgradeSlots property,
             which holds an array of upgrade slot misc objects.
@@ -15,20 +13,31 @@
             (example: library adds Shelving slot, shelving upgrade uses shelving slot and adds a books slot, so now books upgrade can be built)
 
 
-    - 5. I'm realizing there's a confusion of terms among the designers, so I'm going to call initial construction RoomConstruction, and anything that adds on top of a base upgrade a RoomUpgrade.
-            To start, I'm going to rename two things the cobj template: SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template to SS2C2_co_HQBuildableAction_GNN_RoomConstruction_Template and the action group
-            SS2C2_HQ_ActionGroup_RoomBuildBaseUpgrades_GNN to SS2C2_HQ_ActionGroup_RoomConstruction_GNN.
-            I'm also adding a DIFFERENT cobj template, for upgrades - those that use the ActionGroup SS2C2_HQ_ActionGroup_RoomUpgrade_GNN should now use SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template
-            (you can see why I needed to do the rename)
 
-    - 6. The script created new cobj records for my existing actions, but did not detect the previous ones I had created manually for some reason.
-        For point 6 in the next alpha, I'm leaving in the extra COBJ records I had created manually, SS2C2_co_HQBuildableAction_Build_GNNUpperEntryway_Lounge_StaffBar 
-        and SS2C2_co_HQBuildableAction_Build_GNNUpperEntryway_Lounge_StaffLounge. The new ones the script made are SS2C2_HQGNN_BuildableAction_ClassyStaffBar_1/2/3 and 
-        SS2C2_HQGNN_BuildableAction_ClassyStaffLounge_1/2/3.
 
     - 4. QoL Feature Request (ie lower priority) - ability to copy resource costs from another upgrade record. There will be a lot of similar upgrades and it would save having to write down all the details.
 	- Allow not selecting slot for a layout. generate a new KW then
 	DONE:
+
+    - Add a "RoomConstruction"/"RoomUpgrade" distinction
+    -   - COBJ: either SS2C2_co_HQBuildableAction_GNN_RoomConstruction_Template or SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template
+    -   -   - difference is just the sound and the KW, copy over from correct template if necessary
+    -   - MISC: on SpecificManager quest, there are RoomConstructionActionGroup and RoomUpgradesActionGroup props. use one or the other.
+
+    - 5. I'm realizing there's a confusion of terms among the designers, so I'm going to call initial construction RoomConstruction, and anything that adds on top of a base upgrade a RoomUpgrade.
+            To start, I'm going to rename two things the cobj template:
+            SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template to SS2C2_co_HQBuildableAction_GNN_RoomConstruction_Template
+            and the action group
+            SS2C2_HQ_ActionGroup_RoomBuildBaseUpgrades_GNN to SS2C2_HQ_ActionGroup_RoomConstruction_GNN.
+
+            I'm also adding a DIFFERENT cobj template, for upgrades - those that use the ActionGroup SS2C2_HQ_ActionGroup_RoomUpgrade_GNN should now use SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template
+            (you can see why I needed to do the rename)
+    
+    - 6. The script created new cobj records for my existing actions, but did not detect the previous ones I had created manually for some reason.
+        For point 6 in the next alpha, I'm leaving in the extra COBJ records I had created manually, SS2C2_co_HQBuildableAction_Build_GNNUpperEntryway_Lounge_StaffBar
+        and SS2C2_co_HQBuildableAction_Build_GNNUpperEntryway_Lounge_StaffLounge. The new ones the script made are SS2C2_HQGNN_BuildableAction_ClassyStaffBar_1/2/3 and
+        SS2C2_HQGNN_BuildableAction_ClassyStaffLounge_1/2/3.
+    
     - 1. When no Provided functionality is set, the property should be skipped - currently creates an empty property
     - 3. If you attempt to update a record again without saving, the layouts don't load. Even if they are layouts that existed before you ran the update.
         - Oh jeez - looks like #3 is actually the layouts are just being removed from the properties of the action on an update! Explains why they don't show up on a repeat update attempt lol
@@ -87,7 +96,8 @@ unit ImportHqRoom;
 		SS2_TF_HologramGNNWorkshopTiny: IInterface;
 		SS2_HQ_Action_RoomUpgrade_Template: IInterface;
 		SS2_HQRoomLayout_Template: IInterface;
-		SS2_co_HQBuildableAction_GNN_RoomUpgrade_Template: IInterface;
+		CobjRoomUpgrade_Template: IInterface;
+		CobjRoomConstruction_Template: IInterface;
 		SS2_VirtualResourceCategory_Scrap: IInterface;
 		SS2_VirtualResourceCategory_RareMaterials: IInterface;
 		SS2_VirtualResourceCategory_OrganicMaterials: IInterface;
@@ -1544,7 +1554,12 @@ unit ImportHqRoom;
 		SS2_TF_HologramGNNWorkshopTiny := FindObjectByEdidWithError('SS2C2_TF_HologramGNNWorkshopTiny');
 		SS2_HQ_Action_RoomUpgrade_Template := FindObjectByEdidWithError('SS2_HQ_Action_RoomUpgrade_Template');
 		SS2_HQRoomLayout_Template := FindObjectByEdidWithError('SS2_HQRoomLayout_Template');
-		SS2_co_HQBuildableAction_GNN_RoomUpgrade_Template := FindObjectByEdidWithError('SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template');
+
+        CobjRoomConstruction_Template := FindObjectByEdidWithError('SS2C2_co_HQBuildableAction_GNN_RoomConstruction_Template');
+        CobjRoomUpgrade_Template      := FindObjectByEdidWithError('SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template');
+        // SS2C2_co_HQBuildableAction_GNN_RoomConstruction_Template or SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template
+
+
 		WorkshopItemKeyword := FindObjectByEdidWithError('WorkshopItemKeyword');
 		SS2_HQGNN_Action_AssignRoomConfig_Template := FindObjectByEdidWithError('SS2C2_HQGNN_Action_AssignRoomConfig_Template');
 		SS2_HQ_RoomSlot_Template := FindObjectByEdidWithError('SS2_HQ_RoomSlot_Template');
@@ -1847,9 +1862,14 @@ unit ImportHqRoom;
 
 	procedure setItemIndexByForm(dropDown: TComboBox; form: IInterface);
 	var
-		i, index: integer;
+		i, index, prevIndex: integer;
 		curForm: IInterface;
 	begin
+        if(not assigned(form)) then begin
+            exit;
+        end;
+        prevIndex := dropDown.ItemIndex;
+
 		for i:=0 to dropDown.Items.count-1 do begin
 			if(dropDown.Items.Objects[i] <> nil) then begin
 				curForm := ObjectToElement(dropDown.Items.Objects[i]);
@@ -1860,7 +1880,7 @@ unit ImportHqRoom;
 			end;
 		end;
 
-		dropDown.ItemIndex := -1;
+		dropDown.ItemIndex := prevIndex;
 	end;
 
 	function GetRoomSlotName(slotMisc: IInterface): string;
@@ -2534,6 +2554,23 @@ unit ImportHqRoom;
         end;
     end;
 
+    procedure fillObjectTypeActionGroups(hq: IInterface; dropdownBox: TComboBox);
+    var
+        hqManager, hqManagerScript: IInterface;
+        constructionGroup, upgradeGroup: IInterface;
+    begin
+        hqManager := getManagerForHq(hq);
+
+        hqManagerScript := getHqManagerScript(hqManager);
+        constructionGroup := getScriptProp(hqManagerScript, 'RoomConstructionActionGroup');
+        upgradeGroup := getScriptProp(hqManagerScript, 'RoomUpgradesActionGroup');
+
+        // 0 = construction
+        // 1 = upgrade
+        dropdownBox.Items.AddObject('Construction', constructionGroup);
+        dropdownBox.Items.AddObject('Upgrade', upgradeGroup);
+    end;
+
 	procedure showRoomUpgradeDialog2(targetRoomConfig, existingElem: IInterface);
 	var
         frm: TForm;
@@ -2586,21 +2623,24 @@ unit ImportHqRoom;
             existingActi := findRoomUpgradeActivator(existingElem);
             AddMessage('Found corresponiding acti '+editorID(existingActi));
             existingActiScript := getScript(existingActi, 'SimSettlementsV2:HQ:Library:ObjectRefs:HQWorkshopItemActionTrigger');
+
         end;
 
         roomShapeKeyword := getRoomShapeKeywordFromConfig(targetRoomConfig);
         shapeKeywordBase := getRoomShapeUniquePart(EditorID(roomShapeKeyword));
 
-        MiscModelFilename := shapeKeywordBase+'.nif';//SS2C2\Interface\GNNRoomShapes\<Unique Portion of Room Shape Keyword>.nif
+        MiscModelFilename := shapeKeywordBase+'.nif';
         ArtObjEdid := 'SS2C2_AO_RoomShape_'+shapeKeywordBase;
 
-		frm := CreateDialog(windowCaption, 620, 580);// x=+30 y=+20
+		frm := CreateDialog(windowCaption, 620, 600);// x=+30 y=+20
 		curY := 0;
 		//if(not assigned(existingElem)) then begin
         CreateLabel(frm, 10, 10+curY, 'HQ: '+EditorID(targetHQ)+'.');
         CreateLabel(frm, 10, 28+curY, 'Room Config: '+EditorID(targetRoomConfig));
 		//end;
-		curY := curY + 42;
+
+		curY := curY + 46;
+
 		CreateLabel(frm, 10, 10+curY, 'Name:');
 		inputName := CreateInput(frm, 100, 8+curY, '');
 		inputName.Name := 'inputName';
@@ -2621,12 +2661,17 @@ unit ImportHqRoom;
 		modelListMisc := prependNoneEntry(listModelsMisc);
 		modelList := prependNoneEntry(listModels);
 		//selectActionGroup
-		CreateLabel(frm, 10, 10+curY, 'Action Group:');
-		selectActionGroup := CreateComboBox(frm, 100, 8+curY, 500, listActionGroups);
+        // this is different now
+		CreateLabel(frm, 10, 10+curY, 'Object Type:');
+
+		selectActionGroup := CreateComboBox(frm, 100, 8+curY, 500, nil);
 		selectActionGroup.Style := csDropDownList;
 		selectActionGroup.Name := 'selectActionGroup';
 		selectActionGroup.ItemIndex := -1;
+        fillObjectTypeActionGroups(targetHQ, selectActionGroup);
 		selectActionGroup.onChange := showRoomUpradeDialog2UpdateOk;
+
+
 
 		curY := curY + 24;
 		CreateLabel(frm, 10, 10+curY, 'Misc Model:');
@@ -2670,13 +2715,20 @@ unit ImportHqRoom;
 		defaultConstMarkers := CreateCheckbox(frm, 10, curY + 32, 'Use default construction markers');
 		defaultConstMarkers.Checked := true;
 		//curY := curY + 16;
-		disableClutter := CreateCheckbox(frm, 250, curY, 'Disable clutter on completion');
+		disableClutter := CreateCheckbox(frm, 240, curY, 'Disable clutter on completion');
 		disableClutter.Checked := true;
-		disableGarbarge:= CreateCheckbox(frm, 250, curY +16, 'Disable garbage on completion');
+		disableGarbarge:= CreateCheckbox(frm, 240, curY +16, 'Disable garbage on completion');
 		disableGarbarge.Checked := true;
-		realTimeTimer:= CreateCheckbox(frm, 250, curY +32, 'Real-Time Timer');
+		realTimeTimer:= CreateCheckbox(frm, 240, curY +32, 'Real-Time Timer');
 		realTimeTimer.Checked := false;
-
+{
+        //curY := curY + 40;
+        modeRGroup := CreateRadioGroup(frm, 440, curY-4, 140, 60, 'Object Type', nil);//590
+		modeRGroup.Items.add('Room Construction');
+		modeRGroup.Items.add('Room Upgrade');
+		modeRGroup.ItemIndex := 0;
+		//modeRGroup.Columns := 2;
+}
 		curY := curY + 50;
 
 		CreateLabel(frm, 10, 10+curY, 'Duration (hours):');
@@ -2800,14 +2852,14 @@ unit ImportHqRoom;
             inputDuration.Text := floatToStr(getScriptPropDefault(existingMiscScript, 'Duration', 24.0));
 
             actionGroup := getScriptProp(existingMiscScript, 'DepartmentHQActionGroup');
-            selectActionGroup.ItemIndex := indexOfElement(listActionGroups, actionGroup);
+            setItemIndexByForm(selectActionGroup, actionGroup);
 
             upgradeSlot := getScriptProp(existingMiscScript, 'TargetUpgradeSlot');
-            selectUpgradeSlot.ItemIndex := indexOfElement(currentListOfUpgradeSlots, upgradeSlot);
+            setItemIndexByForm(selectUpgradeSlot, upgradeSlot);
 
             targetDepartment := getScriptProp(existingMiscScript, 'NewDepartmentOnCompletion');
             if(assigned(targetDepartment)) then begin
-                selectDepartment.ItemIndex := indexOfElement(selectDepartment.Items, targetDepartment);
+                setItemIndexByForm(selectDepartment, targetDepartment);
             end;
             //setScriptProp(script, 'NewDepartmentOnCompletion', targetDepartment);
             {existingActi := findRoomUpgradeActivator(existingElem);
@@ -2826,6 +2878,7 @@ unit ImportHqRoom;
 		showRoomUpradeDialog2UpdateOk(btnOk);
 		resultCode := frm.ShowModal();
 		if(resultCode = mrYes) then begin
+
 			globalNewFormPrefix := trim(inputPrefix.text);
 
 			// get all the data
@@ -2880,7 +2933,16 @@ unit ImportHqRoom;
 
 			roomUpgradeActi := createRoomUpgradeActivator(existingActi, roomUpgradeMisc, targetHQ, upgradeName, modelStr);
 
-			createRoomUpgradeCOBJs(roomUpgradeActi, targetHQ, getActionAvailableGlobal(roomUpgradeMisc), upgradeName, resourceBox.Items, upgradeDuration, ArtObjEdid);
+			createRoomUpgradeCOBJs(
+                roomUpgradeActi,
+                targetHQ,
+                getActionAvailableGlobal(roomUpgradeMisc),
+                upgradeName,
+                resourceBox.Items,
+                upgradeDuration,
+                ArtObjEdid,
+                selectActionGroup.ItemIndex
+            );
 
 			if(doRegisterCb.checked) then begin
 				// register
@@ -3217,13 +3279,13 @@ unit ImportHqRoom;
     function getCobjConditionValue(conditions: IInterface): integer;
     var
         i: integer;
-        cond: IInterface;
+        cond, glob: IInterface;
     begin
         for i:=0 to ElementCount(conditions)-1 do begin
             cond := ElementByIndex(conditions, i);
             glob := PathLinksTo(cond, 'CTDA\Global');//SS2_Settings_ResourceComplexity [GLOB:03020B07]
             if(EditorID(glob) = 'SS2_Settings_ResourceComplexity') then begin
-                Result := PathLinksTo(complexityCondition, 'CTDA\Comparison Value');
+                Result := trunc(StrToFloat(GetElementEditValues(cond, 'CTDA\Comparison Value')));
                 exit;
             end;
         end;
@@ -3241,9 +3303,10 @@ unit ImportHqRoom;
             if(Signature(curRef) = 'COBJ') then begin
                 if(equals(PathLinksTo(curRef, 'CNAM'), acti)) then begin
                     // now check which complexity we have
-                    conditions := ElementByPath(Result, 'Conditions');
+                    conditions := ElementByPath(curRef, 'Conditions');
                     if(getCobjConditionValue(conditions) = resourceComplexity) then begin
                         Result := curRef;
+                        exit;
                     end;
                 end;
             end;
@@ -3252,19 +3315,61 @@ unit ImportHqRoom;
         Result := nil;
     end;
 
-	function createRoomUpgradeCOBJ(edidBase, descriptionText: string; resourceComplexity: integer; acti, availableGlobal: IInterface; resources: TStringList; artObject: IInterface): IInterface;
+	function createRoomUpgradeCOBJ(
+        edidBase, descriptionText: string;
+        resourceComplexity: integer;
+        acti, availableGlobal: IInterface;
+        resources: TStringList;
+        artObject: IInterface;
+        roomMode: integer
+    ): IInterface;
 	var
 		edid, curName: string;
 		i, count, totalCount: integer;
 		availCondition, complexityCondition, fvpa, component, conditions: IInterface;
 		cobjResources: TJsonObject;
+        sourceTemplate, srcFnam, dstFnam, kwHolder: IInterface;
+
 	begin
+        // roomMode is:
+        // 0 = construction
+        // 1 = upgrade
         // try to find the cobj
         Result := findRoomUpgradeCOBJ(resourceComplexity, acti);
 
+        if(roomMode = 0) then begin
+            sourceTemplate := CobjRoomConstruction_Template;
+        end else begin
+            sourceTemplate := CobjRoomUpgrade_Template;
+        end;
+
+
         if(not assigned(Result)) then begin
             edid := edidBase + '_' + IntToStr(resourceComplexity);
-            Result := getCopyOfTemplate(targetFile, SS2_co_HQBuildableAction_GNN_RoomUpgrade_Template, edid);
+
+            Result := getCopyOfTemplate(targetFile, sourceTemplate, edid);
+        end else begin
+            // apply some things from the template
+            // set the put down sound
+
+            setPathLinksTo(Result, 'ZNAM', pathLinksTo(sourceTemplate, 'ZNAM'));
+            // set the category
+            srcFnam := ElementByPath(sourceTemplate, 'FNAM');
+            dstFnam := ElementByPath(Result, 'FNAM');
+            // clear the prev
+            for i:=0 to ElementCount(dstFnam)-1 do begin
+                RemoveElement(dstFnam, 0);
+                // this won't remove element #0
+            end;
+
+            // add the new
+            for i:=0 to ElementCount(srcFnam)-1 do begin
+                if(i = 0) then begin
+                    SetLinksTo(ElementByIndex(dstFnam, 0), LinksTo(ElementByIndex(srcFnam, 0)));
+                end else begin
+                    ElementAssign(dstFnam, HighInteger, ElementByIndex(srcFnam, i), false);
+                end;
+            end;
         end;
 
 		SetElementEditValues(Result, 'DESC', descriptionText);
@@ -3305,7 +3410,14 @@ unit ImportHqRoom;
 		cobjResources.free();
 	end;
 
-	procedure createRoomUpgradeCOBJs(acti, forHq, availableGlobal: IInterface; upgradeName: string; resources: TStringList; completionTime: float; ArtObjEdid: string);
+	procedure createRoomUpgradeCOBJs(
+        acti, forHq, availableGlobal: IInterface;
+        upgradeName: string;
+        resources: TStringList;
+        completionTime: float;
+        ArtObjEdid: string;
+        roomMode: integer
+    );
 	var
 		cobj1, cobj2, cobj3, artObject: IInterface;
 		edidBase, descriptionText, upgradeNameSpaceless: string;
@@ -3330,9 +3442,9 @@ unit ImportHqRoom;
         // now, we could have these 3 cobjs already
 
 		edidBase := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
-		cobj1 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti, availableGlobal, resources, artObject);
-		cobj2 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti, availableGlobal, resources, artObject);
-		cobj3 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti, availableGlobal, resources, artObject);
+		cobj1 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti, availableGlobal, resources, artObject, roomMode);
+		cobj2 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti, availableGlobal, resources, artObject, roomMode);
+		cobj3 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti, availableGlobal, resources, artObject, roomMode);
 
 	end;
 
@@ -4125,7 +4237,7 @@ unit ImportHqRoom;
 
 		modeRGroup := CreateRadioGroup(frm, 10, curY + 8, 390, 70, 'Object to generate', nil);
 		modeRGroup.Items.add('Room Config');
-		modeRGroup.Items.add('Room Upgrade');
+		modeRGroup.Items.add('Room Construction/Upgrade');
 		modeRGroup.ItemIndex := 0;
 
 		curY := curY + 80;
