@@ -2909,7 +2909,7 @@ unit ImportHqRoom;
 			upgradeDuration := tryToParseFloat(inputDuration.Text);
 			upgradeSlot := ObjectToElement(currentListOfUpgradeSlots.Objects[selectUpgradeSlot.ItemIndex]);
 
-			actionGroup := ObjectToElement(listActionGroups.Objects[selectActionGroup.ItemIndex]);
+			actionGroup := ObjectToElement(selectActionGroup.Items.Objects[selectActionGroup.ItemIndex]);
 
 			roomUpgradeMisc := createRoomUpgradeMisc(
 				existingElem,
