@@ -3082,12 +3082,12 @@ unit ImportHqRoom;
 				spawnObj.O['rot'] := newVector(StrToFloat(csvCols.Strings[4]), StrToFloat(csvCols.Strings[5]), StrToFloat(csvCols.Strings[6]));
 				spawnObj.F['scale'] := StrToFloat(csvCols.Strings[7]);
 
-				if(csvCols.count >= 8) then begin
+				if(csvCols.count > 8) then begin
 					if(csvCols.Strings[8] <> '') then begin
 						spawnObj.F['extraData'] := StrToFloat(csvCols.Strings[8]);
 					end;
 
-					if(csvCols.count >= 10) then begin
+					if(csvCols.count > 10) then begin
 						if (csvCols.Strings[9] <> '') and (csvCols.Strings[10] <> '') then begin
 							spawnObj.S['extFormId'] := csvCols.Strings[9];
 							spawnObj.S['extFileName'] := csvCols.Strings[10];
