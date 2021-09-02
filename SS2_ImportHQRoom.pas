@@ -32,12 +32,12 @@
 
             I'm also adding a DIFFERENT cobj template, for upgrades - those that use the ActionGroup SS2C2_HQ_ActionGroup_RoomUpgrade_GNN should now use SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template
             (you can see why I needed to do the rename)
-    
+
     - 6. The script created new cobj records for my existing actions, but did not detect the previous ones I had created manually for some reason.
         For point 6 in the next alpha, I'm leaving in the extra COBJ records I had created manually, SS2C2_co_HQBuildableAction_Build_GNNUpperEntryway_Lounge_StaffBar
         and SS2C2_co_HQBuildableAction_Build_GNNUpperEntryway_Lounge_StaffLounge. The new ones the script made are SS2C2_HQGNN_BuildableAction_ClassyStaffBar_1/2/3 and
         SS2C2_HQGNN_BuildableAction_ClassyStaffLounge_1/2/3.
-    
+
     - 1. When no Provided functionality is set, the property should be skipped - currently creates an empty property
     - 3. If you attempt to update a record again without saving, the layouts don't load. Even if they are layouts that existed before you ran the update.
         - Oh jeez - looks like #3 is actually the layouts are just being removed from the properties of the action on an update! Explains why they don't show up on a repeat update attempt lol
@@ -64,6 +64,7 @@ unit ImportHqRoom;
 
 	const
 		cacheFile = ProgramPath + 'Edit Scripts\SS2\HqRoomCache.json';
+        cacheFileVersion = 2;
 
 		progressBarChar = '|';
 		progressBarLength = 70;
@@ -94,10 +95,6 @@ unit ImportHqRoom;
 		SS2_HQ_WorkshopRef_GNN: IInterface;
 		WorkshopItemKeyword: IInterface;
 		SS2_TF_HologramGNNWorkshopTiny: IInterface;
-		SS2_HQ_Action_RoomUpgrade_Template: IInterface;
-		SS2_HQRoomLayout_Template: IInterface;
-		CobjRoomUpgrade_Template: IInterface;
-		CobjRoomConstruction_Template: IInterface;
 		SS2_VirtualResourceCategory_Scrap: IInterface;
 		SS2_VirtualResourceCategory_RareMaterials: IInterface;
 		SS2_VirtualResourceCategory_OrganicMaterials: IInterface;
@@ -105,7 +102,13 @@ unit ImportHqRoom;
 		SS2_VirtualResourceCategory_BuildingMaterials: IInterface;
 		SS2_c_HQ_DailyLimiter_Scrap: IInterface;
         SS2_Tag_HQ_RoomIsClean: IInterface;
+        SS2_Tag_HQ_ActionType_RoomConstruction: IInterface;
+        SS2_Tag_HQ_ActionType_RoomUpgrade: IInterface;
 		// templates
+		SS2_HQ_Action_RoomUpgrade_Template: IInterface;
+		SS2_HQRoomLayout_Template: IInterface;
+		CobjRoomUpgrade_Template: IInterface;
+		CobjRoomConstruction_Template: IInterface;
 		SS2_HQGNN_Action_AssignRoomConfig_Template: IInterface;
 		SS2_HQ_RoomSlot_Template_GNN: IInterface;
 		SS2_HQ_RoomSlot_Template: IInterface;
@@ -972,6 +975,99 @@ unit ImportHqRoom;
 		Result := SS2_HQ_WorkshopRef_GNN;
 	end;
 
+    procedure loadRoomUpgradeSlots(curFileName: string; roomUpgrade, roomUpgradeScript: IInterface);
+    var
+        AdditionalUpgradeSlots, curSlot, curHq, roomConfig: IInterface;
+        i: integer;
+        curHqKey: string;
+    begin
+
+        AdditionalUpgradeSlots := getScriptProp(roomUpgradeScript, 'AdditionalUpgradeSlots');
+        if(not assigned(AdditionalUpgradeSlots)) then begin
+            exit;
+        end;
+
+        curHq := getHqFromRoomUpdate(roomUpgradeScript);
+        if(not assigned(curHq)) then begin
+            curHq := SS2_HQ_WorkshopRef_GNN;
+        end;
+
+        roomConfig := findRoomConfigFromRoomUpgrade(roomUpgrade);
+
+        curHqKey := FormToAbsStr(curHq);
+
+        for i:=0 to ElementCount(AdditionalUpgradeSlots) do begin
+            curSlot := getObjectFromProperty(AdditionalUpgradeSlots, i);
+            addRoomConfigSlot(curFileName, curHqKey, roomConfig, curSlot);
+        end;
+
+    end;
+
+    procedure addRoomConfigSlot(curFileName, hqKey: string; roomConfig, slot: IInterface);
+    var
+        slotJson: TJsonObject;
+        slotName, slotNameBase, slotHexId, existingSlotHexId, roomConfigKey: string;
+        curFormID: cardinal;
+        i: integer;
+        canInsert: boolean;
+    begin
+        // first of all, index by roomconfig
+        roomConfigKey := FormToAbsStr(roomConfig);
+        slotJson := currentCacheFile.O['files'].O[curFileName].O['HQData'].O[hqKey].O['RoomConfigSlots'].O[roomConfigKey];
+
+        curFormID := getElementLocalFormId(slot);
+        slotNameBase := GetRoomSlotName(slot);
+        slotHexId := IntToHex(curFormID, 8);
+
+        slotName := slotNameBase;
+
+
+        i:=1;
+        canInsert := false;
+        while (not canInsert) do begin
+            existingSlotHexId := slotJson.S[slotName];
+            if ((existingSlotHexId = '') or (existingSlotHexId = slotHexId)) then begin
+                canInsert := true;
+            end else begin
+                i := i + 1;
+                slotName := slotNameBase + ' ' + IntToStr(i);
+            end;
+        end;
+
+        slotJson.S[slotName] := slotHexId;
+    end;
+
+
+
+    procedure loadRoomConfig(curFileName: string; roomConfig, roomConfigScript: IInterface);
+    var
+        curName, curHqKey, slotName, slotHexId, existingSlotHexId: string;
+        curFormID: cardinal;
+        curHq, RoomUpgradeSlots, curSlot: IInterface;
+        slotJson: TJsonObject;
+        i: integer;
+    begin
+        // yes
+        curName := getRoomConfigName(roomConfig);
+        // addObjectDupIgnore(listRoomConfigs, curName, curRec);
+        curFormID := getElementLocalFormId(roomConfig);
+        curHq := getHqForRoomConfig(roomConfig);
+        curHqKey := FormToAbsStr(curHq);
+
+        currentCacheFile.O['files'].O[curFileName].O['HQData'].O[curHqKey].O['RoomConfigs'].S[curName] := IntToHex(curFormID, 8);
+
+        // also slots
+        RoomUpgradeSlots := getScriptProp(roomConfigScript, 'RoomUpgradeSlots');
+
+        slotJson := currentCacheFile.O['files'].O[curFileName].O['HQData'].O[curHqKey].O['RoomConfigSlots'];
+
+		for i:=0 to ElementCount(RoomUpgradeSlots)-1 do begin
+			curSlot := getObjectFromProperty(RoomUpgradeSlots, i);
+
+            addRoomConfigSlot(curFileName, curHqKey, roomConfig, curSlot);
+		end;
+    end;
+
 	procedure loadMiscsFromFile(fromFile:  IInterface);
 	var i: integer;
 		curRec, group, curHq, curScript: IInterface;
@@ -1017,13 +1113,7 @@ unit ImportHqRoom;
 			if(pos('_Action_AssignRoomConfig_', edid) > 0) then begin
 				curScript := getScript(curRec, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
 				if(assigned(curScript)) then begin
-					// yes
-					curName := getRoomConfigName(curRec);
-					// addObjectDupIgnore(listRoomConfigs, curName, curRec);
-					curFormID := getElementLocalFormId(curRec);
-					curHq := getHqForRoomConfig(curRec);
-					curHqKey := FormToAbsStr(curHq);
-					currentCacheFile.O['files'].O[curFileName].O['HQData'].O[curHqKey].O['RoomConfigs'].S[curName] := IntToHex(curFormID, 8);
+                    loadRoomConfig(curFileName, curRec, curScript);
 				end;
 				continue;
 			end;
@@ -1040,7 +1130,18 @@ unit ImportHqRoom;
 
 			if(strStartsWithSS2(edid, 'HQResourceToken_WorkEnergy_')) then begin
 				addObjectDupIgnore(listRoomResources, GetElementEditValues(curRec, 'FULL'), curRec);
+                continue;
 			end;
+
+            // load room upgrades
+            if(pos('_Action_RoomUpgrade_', edid) > 0) then begin
+				curScript := getScript(curRec, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
+				if (assigned(curScript)) then begin
+                    loadRoomUpgradeSlots(curFileName, curRec, curScript);
+				end;
+				continue;
+			end;
+
 			updateProgress(i);
 		end;
 		endProgress();
@@ -1160,11 +1261,7 @@ unit ImportHqRoom;
 			currentCacheFile := TJsonObject.create;
 		end;
 
-		// hqKey := getTargetHqKey(); // we might not have targetHQ here
-		//filesEntry := currentCacheFile.O['files'];
-		//for i:=0 to currentCacheFile.O['files']
-
-
+        currentCacheFile.I['version'] := cacheFileVersion;
 		currentCacheFile.S['DefaultHQ'] := FormToAbsStr(SS2_HQ_WorkshopRef_GNN);
 		// simple stuff
 		writeObjectListToCacheFile(listRoomShapes, 'RoomShapes');
@@ -1300,6 +1397,20 @@ unit ImportHqRoom;
 		end;
 	end;
 
+    function getFullReloadResult(forFiles: TStringList): IInterface;
+    var
+        i: integer;
+        curFileName: string;
+    begin
+        Result := TJsonObject.create;
+		Result.B['needModels'] := true;
+        // put all the masters in
+        for i:=0 to forFiles.count-1 do begin
+            curFileName := forFiles[i];
+            Result.A['filesToReload'].add(curFileName);
+        end;
+    end;
+
 	{
 		This ensures that currentCacheFile exists, and attempts to fill it
 	}
@@ -1314,19 +1425,13 @@ unit ImportHqRoom;
 		hqContainer, currentHqObj, filesContainer, fileContainer, fileHqContainer: TJsonObject;
 		realFileAge: integer;
 	begin
-		Result := TJsonObject.create;
-		Result.B['needModels'] := true;
 		// Result.A['filesToReload']; // fill this with files which changed since the last time
 		//currentCacheFile := TJsonObject.create();
 
 		if(not FileExists(cacheFile)) then begin
 			currentCacheFile := TJsonObject.create;
 
-			// put all the masters in
-			for i:=0 to forFiles.count-1 do begin
-				curFileName := forFiles[i];
-				Result.A['filesToReload'].add(curFileName);
-			end;
+            Result := getFullReloadResult(forFiles);
 			exit;
 		end;
 
@@ -1335,10 +1440,26 @@ unit ImportHqRoom;
 		listData.loadFromFile(cacheFile);
 
 		currentCacheFile := TJsonObject.parse(concatLines(listData));
+
+		listData.free();
+
+
 		if(currentCacheFile = nil) then begin
 			currentCacheFile := TJsonObject.create;
+            Result := getFullReloadResult(forFiles);
+			exit;
 		end;
-		listData.free();
+
+        if(currentCacheFile.I['version'] < cacheFileVersion) then begin
+            // reset the file
+            AddMessage('Cache file is outdated, regenerating');
+            currentCacheFile.clear();
+            Result := getFullReloadResult(forFiles);
+            exit;
+        end;
+
+		Result := TJsonObject.create;
+		Result.B['needModels'] := true;
 
 
 		{
@@ -1372,7 +1493,6 @@ unit ImportHqRoom;
 		}
 
 		if(currentCacheFile.S['DefaultHQ'] <> '') then begin
-
 			SS2_HQ_WorkshopRef_GNN := AbsStrToForm(currentCacheFile.S['DefaultHQ']);
 		end;
 
@@ -1466,7 +1586,7 @@ unit ImportHqRoom;
 			for i:=0 to filesToReload.count-1 do begin
 				updateProgress(i);
 				curFileName := filesToReload.S[i];
-				AddMessage('Reloading data from '+curFileName);
+				// AddMessage('Reloading data from '+curFileName);
 				loadFormsFromFile(FindFile(curFileName));
 			end;
 		end;
@@ -1561,11 +1681,12 @@ unit ImportHqRoom;
 
 
 		WorkshopItemKeyword := FindObjectByEdidWithError('WorkshopItemKeyword');
-		SS2_HQGNN_Action_AssignRoomConfig_Template := FindObjectByEdidWithError('SS2C2_HQGNN_Action_AssignRoomConfig_Template');
+
+		SS2_HQGNN_Action_AssignRoomConfig_Template := FindObjectByEdidWithError('SS2_HQ_Action_RoomConfig_Template');
+
 		SS2_HQ_RoomSlot_Template := FindObjectByEdidWithError('SS2_HQ_RoomSlot_Template');
 		SS2_HQ_RoomSlot_Template_GNN := FindObjectByEdidWithError('SS2C2_HQ_RoomSlot_Template_GNN');
 		SS2_HQBuildableAction_Template := FindObjectByEdidWithError('SS2_HQBuildableAction_Template');
-
 		SS2_HQ_RoomSlot_Template_GNN := FindObjectByEdidWithError('SS2C2_HQ_RoomSlot_Template_GNN');
 
 		SS2_VirtualResourceCategory_Scrap 			  := FindObjectByEdidWithError('SS2_VirtualResourceCategory_Scrap');
@@ -1574,8 +1695,10 @@ unit ImportHqRoom;
 		SS2_VirtualResourceCategory_MachineParts 	  := FindObjectByEdidWithError('SS2_VirtualResourceCategory_MachineParts');
 		SS2_VirtualResourceCategory_BuildingMaterials := FindObjectByEdidWithError('SS2_VirtualResourceCategory_BuildingMaterials');
 
-		SS2_c_HQ_DailyLimiter_Scrap := FindObjectByEdidWithError('SS2_c_HQ_DailyLimiter_Scrap');
-		SS2_Tag_HQ_RoomIsClean := FindObjectByEdidWithError('SS2_Tag_HQ_RoomIsClean');
+		SS2_c_HQ_DailyLimiter_Scrap             := FindObjectByEdidWithError('SS2_c_HQ_DailyLimiter_Scrap');
+		SS2_Tag_HQ_RoomIsClean                  := FindObjectByEdidWithError('SS2_Tag_HQ_RoomIsClean');
+        SS2_Tag_HQ_ActionType_RoomConstruction  := FindObjectByEdidWithError('SS2_Tag_HQ_ActionType_RoomConstruction');
+        SS2_Tag_HQ_ActionType_RoomUpgrade       := FindObjectByEdidWithError('SS2_Tag_HQ_ActionType_RoomUpgrade');
 
 		if(hasFindObjectError) then begin
 			Result := 1;
@@ -1901,26 +2024,34 @@ unit ImportHqRoom;
 		Result := EditorID(slotMisc);
 	end;
 
-	function getRoomUpgradeSlots(roomConfig: IInterface): TStringList;
+	function getRoomUpgradeSlots(forHq, roomConfig: IInterface): TStringList;
 	var
 		configScript, RoomUpgradeSlots, curSlot: IInterface;
-		i: integer;
-		slotName: string;
+		i, j: integer;
+		slotName, curFileName, hqKey, roomConfigKey, formIdStr: string;
+        fileJson, slotJson: TJsonObject;
 	begin
-
 		Result := TStringList.create();
 
-		configScript := getScript(roomConfig, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
+        hqKey := FormToAbsStr(forHq);
+        roomConfigKey := FormToAbsStr(roomConfig);
 
-		RoomUpgradeSlots := getScriptProp(configScript, 'RoomUpgradeSlots');
-
-		for i:=0 to ElementCount(RoomUpgradeSlots)-1 do begin
-			curSlot := getObjectFromProperty(RoomUpgradeSlots, i);
-
-			slotName := GetRoomSlotName(curSlot);
-
-			addObjectDupIgnore(Result, slotName, curSlot);
-		end;
+        // load from cache
+        fileJson := currentCacheFile.O['files'];
+        for i:=0 to fileJson.count-1 do begin
+            curFileName := fileJson.names[i];
+            slotJson := fileJson.O[curFileName].O['HQData'].O[hqKey].O['RoomConfigSlots'].O[roomConfigKey];
+            
+            for j:=0 to slotJson.count-1 do begin
+                slotName := slotJson.names[j];
+                formIdStr := slotJson.S[slotName];
+                curSlot := getFormByFilenameAndFormID(curFileName, StrToInt('$'+formIdStr));
+                if(not assigned(curSlot)) then begin
+                    AddMEssage('AAA');
+                end;
+                addObjectDupIgnore(Result, slotName, curSlot);
+            end;
+        end;
 
 	end;
 
@@ -2609,7 +2740,7 @@ unit ImportHqRoom;
         modelIndex: integer;
 	begin
 		// load the slots for what we have
-        currentListOfUpgradeSlots := getRoomUpgradeSlots(targetRoomConfig);
+        currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHQ, targetRoomConfig);
 
 		secondRowOffset := 300;
 
@@ -2928,7 +3059,8 @@ unit ImportHqRoom;
 				resourceBox.Items,
 				roomFuncsBox.Items,
 				layoutsBox.Items,
-				actionGroup
+				actionGroup,
+                selectActionGroup.ItemIndex
 			);
 
 			roomUpgradeActi := createRoomUpgradeActivator(existingActi, roomUpgradeMisc, targetHQ, upgradeName, modelStr);
@@ -3536,7 +3668,8 @@ unit ImportHqRoom;
 		resources: TStringList;
 		roomFuncs: TStringList;
 		layouts: TStringList;
-		actionGroup: IInterface): IInterface;
+		actionGroup: IInterface;
+        roomMode: integer): IInterface;
 	var
 		upgradeResult: IInterface;
 		upgradeNameSpaceless, slotNameSpaceless, upgradeEdid, ActionAvailableGlobalEdid, HqName: string;
@@ -3558,6 +3691,21 @@ unit ImportHqRoom;
             upgradeResult := getCopyOfTemplate(targetFile, SS2_HQ_Action_RoomUpgrade_Template, upgradeEdid);
         end else begin
             upgradeResult := existingElem;
+        end;
+
+        // upgrade or construction?
+        // roomMode is:
+        // 0 = construction
+        // 1 = upgrade
+        // removeKeywordByPath
+        {SS2_Tag_HQ_ActionType_RoomConstruction
+        SS2_Tag_HQ_ActionType_RoomUpgrade}
+        if(roomMode = 0) then begin
+            removeKeywordByPath(upgradeResult, SS2_Tag_HQ_ActionType_RoomUpgrade, 'KWDA');
+            addKeywordByPath(upgradeResult, SS2_Tag_HQ_ActionType_RoomConstruction, 'KWDA');
+        end else begin
+            removeKeywordByPath(upgradeResult, SS2_Tag_HQ_ActionType_RoomConstruction, 'KWDA');
+            addKeywordByPath(upgradeResult, SS2_Tag_HQ_ActionType_RoomUpgrade, 'KWDA');
         end;
 
 		if(modelStr <> '') then begin
@@ -4335,7 +4483,7 @@ unit ImportHqRoom;
         script := getScript(layer, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
 
         targetRoomConfig := findRoomConfigFromLayout(layer);
-        currentListOfUpgradeSlots := getRoomUpgradeSlots(targetRoomConfig);
+        currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHq, targetRoomConfig);
 
         targetHQ := getScriptProp(script, 'workshopRef');
         slotMisc := findSlotMiscFromLayout(layer);
