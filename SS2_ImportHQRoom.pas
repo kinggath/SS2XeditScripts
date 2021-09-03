@@ -996,7 +996,7 @@ unit ImportHqRoom;
 
         curHqKey := FormToAbsStr(curHq);
 
-        for i:=0 to ElementCount(AdditionalUpgradeSlots) do begin
+        for i:=0 to ElementCount(AdditionalUpgradeSlots)-1 do begin
             curSlot := getObjectFromProperty(AdditionalUpgradeSlots, i);
             addRoomConfigSlot(curFileName, curHqKey, roomConfig, curSlot);
         end;
@@ -1800,10 +1800,23 @@ unit ImportHqRoom;
 		listSlots: TListBox;
 		frm: TForm;
 		newString: string;
+        slotsGroup: TGroupBox;
 	begin
 		frm := sender.parent;
         listSlots := TListBox(frm.FindComponent('listSlots'));
+{
+        if(listSlots = nil) then begin
+            slotsGroup := TGroupBox(sender.parent.parent.FindComponent('slotsGroup'));
+            if(slotsGroup = nil) then begin
+                AddMessage('fuck');
+            end;
+			listSlots := TListBox(slotsGroup.FindComponent('listSlots'));
+        end;
 
+        if(listSlots = nil) then begin
+            AddMessage('megafuck');
+        end;
+}
 		if(InputQuery('Room Config', 'Input upgrade slot name', newString)) then begin
 			newString := cleanStringForEditorID(trim(newString));
 			if(newString <> '') then begin
@@ -1822,7 +1835,14 @@ unit ImportHqRoom;
 	var
 		listSlots: TListBox;
 		frm: TForm;
+        slotsGroup: TGroupBox;
 	begin
+
+        if(listSlots = nil) then begin
+            slotsGroup := TGroupBox (sender.parent.FindComponent('slotsGroup'));
+			listSlots := TListBox(slotsGroup.FindComponent('listSlots'));
+        end;
+
 		frm := sender.parent;
         listSlots := TListBox(frm.FindComponent('listSlots'));
 
@@ -1882,7 +1902,16 @@ unit ImportHqRoom;
 		Result := slotMisc;
 	end;
 
-	function createHqRoomConfig(existingElem: IInterface; forHq: IInterface; roomName: string; roomShapeKw: IInterface; roomShapeKwEdid: string; actionGroup: IInterface; primaryDepartment: IInterface; UpgradeSlots: TStringList): IInterface;
+	function createHqRoomConfig(
+        existingElem: IInterface;
+        forHq: IInterface;
+        roomName: string;
+        roomShapeKw: IInterface;
+        roomShapeKwEdid: string;
+        actionGroup: IInterface;
+        primaryDepartment: IInterface;
+        UpgradeSlots: TStringList
+    ): IInterface;
 	var
 		configMisc, configMiscScript, roomConfigKw, roomUpgradeSlots, curSlotMisc: IInterface;
 		kwBase, curSlotName, configMiscEdid, roomNameSpaceless, roomConfigKeywordEdid: string;
@@ -2041,14 +2070,12 @@ unit ImportHqRoom;
         for i:=0 to fileJson.count-1 do begin
             curFileName := fileJson.names[i];
             slotJson := fileJson.O[curFileName].O['HQData'].O[hqKey].O['RoomConfigSlots'].O[roomConfigKey];
-            
+
             for j:=0 to slotJson.count-1 do begin
                 slotName := slotJson.names[j];
                 formIdStr := slotJson.S[slotName];
                 curSlot := getFormByFilenameAndFormID(curFileName, StrToInt('$'+formIdStr));
-                if(not assigned(curSlot)) then begin
-                    AddMEssage('AAA');
-                end;
+
                 addObjectDupIgnore(Result, slotName, curSlot);
             end;
         end;
@@ -2702,12 +2729,25 @@ unit ImportHqRoom;
         dropdownBox.Items.AddObject('Upgrade', upgradeGroup);
     end;
 
+    procedure fillSlotsFromExisting(itemList: TStringList; miscScript: IInterface);
+    var
+        AdditionalUpgradeSlots, curSlot: IInterface;
+        i: integer;
+    begin
+        AdditionalUpgradeSlots := getScriptProp(miscScript, 'AdditionalUpgradeSlots');
+
+        for i:=0 to ElementCount(AdditionalUpgradeSlots)-1 do begin
+            curSlot := getObjectFromProperty(AdditionalUpgradeSlots, i);
+            itemList.addObject(getElementEditValues(curSlot, 'FULL'), curSlot);
+        end;
+    end;
+
 	procedure showRoomUpgradeDialog2(targetRoomConfig, existingElem: IInterface);
 	var
         frm: TForm;
 		btnOk, btnCancel: TButton;
-		resultCode, curY, secondRowOffset: integer;
-		// roomSlots: TStringList;
+		resultCode, curY, secondRowOffset, thirdRowOffset: integer;
+
 		selectUpgradeSlot, selectDepartment, selectModel, selectMiscModel, selectActionGroup: TComboBox;
 		assignDepAtEnd, assignDepAtStart, disableClutter, disableGarbarge, defaultConstMarkers, realTimeTimer: TCheckBox;
 		doRegisterCb: TCheckBox;
@@ -2721,6 +2761,10 @@ unit ImportHqRoom;
 		roomFuncsGroup: TGroupBox;
 		roomFuncsBox: TListBox;
 		roomFuncAddBtn, roomFuncRemBtn: TButton;
+
+        extraSlotsGroup: TGroupBox;
+		extraSlotsBox: TListBox;
+		extraSlotsAddBtn, extraSlotsRemBtn: TButton;
 
 		layoutsGroup: TGroupBox;
 		layoutsBox: TListBox;
@@ -2837,46 +2881,61 @@ unit ImportHqRoom;
 		selectUpgradeSlot.onChange := showRoomUpradeDialog2UpdateOk;
 
 
+        secondRowOffset := 210;
+        thirdRowOffset := 400;
+
 		// selectUpgradeSlot.onChange := updateRoomUpgrade1OkBtn;
 		curY := curY + 42;
 		assignDepAtStart := CreateCheckbox(frm, 10, curY, 'Assign department to room at start');
         assignDepAtStart.Checked := true;
-		//curY := curY + 16;
 		assignDepAtEnd := CreateCheckbox(frm, 10, curY + 16, 'Assign department to room at end');
-		defaultConstMarkers := CreateCheckbox(frm, 10, curY + 32, 'Use default construction markers');
+
+		defaultConstMarkers := CreateCheckbox(frm, secondRowOffset+10, curY, 'Use default construction markers');
 		defaultConstMarkers.Checked := true;
-		//curY := curY + 16;
-		disableClutter := CreateCheckbox(frm, 240, curY, 'Disable clutter on completion');
+		disableClutter := CreateCheckbox(frm, secondRowOffset+10, curY + 16, 'Disable clutter on completion');
+
 		disableClutter.Checked := true;
-		disableGarbarge:= CreateCheckbox(frm, 240, curY +16, 'Disable garbage on completion');
+		disableGarbarge:= CreateCheckbox(frm, thirdRowOffset+10, curY, 'Disable garbage on completion');
 		disableGarbarge.Checked := true;
-		realTimeTimer:= CreateCheckbox(frm, 240, curY +32, 'Real-Time Timer');
+		realTimeTimer:= CreateCheckbox(frm, thirdRowOffset+10, curY + 16, 'Real-Time Timer');
 		realTimeTimer.Checked := false;
-{
-        //curY := curY + 40;
-        modeRGroup := CreateRadioGroup(frm, 440, curY-4, 140, 60, 'Object Type', nil);//590
-		modeRGroup.Items.add('Room Construction');
-		modeRGroup.Items.add('Room Upgrade');
-		modeRGroup.ItemIndex := 0;
-		//modeRGroup.Columns := 2;
-}
+
 		curY := curY + 50;
 
-		CreateLabel(frm, 10, 10+curY, 'Duration (hours):');
-		inputDuration := CreateInput(frm, 150, 8+curY, '24.0');
-		inputDuration.width := 200;
+        extraSlotsGroup := CreateGroup(frm, 10, curY, 290, 64, 'Extra Slots');
+        extraSlotsGroup.Name := 'slotsGroup';
+
+        extraSlotsBox   := CreateListBox(extraSlotsGroup, 8, 16, 200, 48, nil);
+		extraSlotsBox.Name := 'listSlots';
+
+		extraSlotsAddBtn := CreateButton(extraSlotsGroup, 210, 16, 'Add');
+        extraSlotsRemBtn := CreateButton(extraSlotsGroup, 210, 40, 'Remove');
+
+		extraSlotsAddBtn.Width := 60;
+        extraSlotsRemBtn.Width := 60;
+
+		extraSlotsAddBtn.onclick := addUpgradeSlotHandler;
+        extraSlotsRemBtn.onclick := remUpgradeSlotHandler;
+
+
+        secondRowOffset := 300;
+
+		CreateLabel(frm, secondRowOffset+10, 10+curY, 'Duration (hours):');
+		inputDuration := CreateInput(frm, secondRowOffset+150, 8+curY, '24.0');
+		inputDuration.width := 120;
 		inputDuration.Name := 'inputDuration';
 		inputDuration.Text := '24.0';
 		inputDuration.onChange := showRoomUpradeDialog2UpdateOk;
 
-		curY := curY + 32;
-		CreateLabel(frm, 10, curY+4, 'Give control to department:');
+		curY := curY + 38;
+		CreateLabel(frm, secondRowOffset+10, curY+4, 'Give control to department:');
 		departmentList := prependNoneEntry(listDepartmentObjects);
 
-		selectDepartment := CreateComboBox(frm, 150, curY, 200, departmentList);
+		selectDepartment := CreateComboBox(frm, secondRowOffset+150, curY, 200, departmentList);
 		selectDepartment.Style := csDropDownList;
 		selectDepartment.Name := 'selectDepartment';
 		selectDepartment.ItemIndex := 0;
+		selectDepartment.width := 120;
 		//selectMainDep.onChange := updateRoomConfigOkBtn;
 
 		curY := curY + 36;
@@ -2908,9 +2967,6 @@ unit ImportHqRoom;
 
 		roomFuncsBox := CreateListBox(roomFuncsGroup, 8, 16, 200, 72, nil);
 		roomFuncsBox.Name := 'roomFuncsBox';
-		//roomFuncsBox.onChange := showRoomUpradeDialog2UpdateOk;
-
-
 
 		roomFuncAddBtn := CreateButton(roomFuncsGroup, 210, 16, 'Add');
 		roomFuncRemBtn := CreateButton(roomFuncsGroup, 210, 40, 'Remove');
@@ -2971,8 +3027,6 @@ unit ImportHqRoom;
             modelStrMisc := GetElementEditValues(existingElem, 'Model\MODL');
             selectMiscModel.ItemIndex := getModelArrayIndex(modelStrMisc, selectMiscModel.Items);
 
-
-
             assignDepAtStart.Checked    := getScriptPropDefault(existingMiscScript, 'bAssignDepartmentToRoomAtStart', assignDepAtStart.Checked);
             assignDepAtEnd.Checked      := getScriptPropDefault(existingMiscScript, 'bAssignDepartmentToRoomAtEnd', assignDepAtEnd.Checked);
             disableClutter.Checked      := getScriptPropDefault(existingMiscScript, 'bDisableClutter_OnCompletion', disableClutter.Checked);
@@ -2992,6 +3046,9 @@ unit ImportHqRoom;
             if(assigned(targetDepartment)) then begin
                 setItemIndexByForm(selectDepartment, targetDepartment);
             end;
+
+            fillSlotsFromExisting(extraSlotsBox.Items, existingMiscScript);
+
             //setScriptProp(script, 'NewDepartmentOnCompletion', targetDepartment);
             {existingActi := findRoomUpgradeActivator(existingElem);
             existingActiScript := getScript(existingActi, 'SimSettlementsV2:HQ:Library:ObjectRefs:HQWorkshopItemActionTrigger');}
@@ -3060,7 +3117,8 @@ unit ImportHqRoom;
 				roomFuncsBox.Items,
 				layoutsBox.Items,
 				actionGroup,
-                selectActionGroup.ItemIndex
+                selectActionGroup.ItemIndex,
+                extraSlotsBox.Items
 			);
 
 			roomUpgradeActi := createRoomUpgradeActivator(existingActi, roomUpgradeMisc, targetHQ, upgradeName, modelStr);
@@ -3669,7 +3727,8 @@ unit ImportHqRoom;
 		roomFuncs: TStringList;
 		layouts: TStringList;
 		actionGroup: IInterface;
-        roomMode: integer): IInterface;
+        roomMode: integer;
+        slotLists: TStringList): IInterface;
 	var
 		upgradeResult: IInterface;
 		upgradeNameSpaceless, slotNameSpaceless, upgradeEdid, ActionAvailableGlobalEdid, HqName: string;
@@ -3678,8 +3737,8 @@ unit ImportHqRoom;
 		ResourceCost, ProvidedFunctionality, RoomLayouts, curResObject, curRoomFunc, newStruct, RoomRequiredKeywords, UpgradeSlotKeyword: IInterface;
 		resourceJson: TJsonObject;
 		curLayout: IInterface;
-		curLayoutName, curLayoutPath, selectedSlotStr: string;
-		upgradeSlotLayout, roomShapeKeyword, upgradeSlotKw, oldUpgradeSlotKw, oldUpgradeSlot: IInterface;
+		curLayoutName, curLayoutPath, selectedSlotStr, curSlotName, kwBase: string;
+		upgradeSlotLayout, roomShapeKeyword, upgradeSlotKw, oldUpgradeSlotKw, oldUpgradeSlot, AdditionalUpgradeSlots, curSlot, curSlotMisc: IInterface;
 	begin
 		HqName := findHqNameShort(targetHq);
 		slotNameSpaceless := cleanStringForEditorID(getElementEditValues(upgradeSlot, 'FULL'));
@@ -3830,6 +3889,25 @@ unit ImportHqRoom;
 
 		hasRelativeCoordinateLayout   := false;
 		hasNonRelativeCoordinateLayout:= false;
+
+        // slotLists
+        AdditionalUpgradeSlots := getOrCreateScriptPropArrayOfObject(script, 'AdditionalUpgradeSlots');
+        if(assigned(existingElem)) then begin
+            clearProperty(AdditionalUpgradeSlots);
+        end;
+
+
+        kwBase := getRoomShapeUniquePart(EditorID(roomShapeKeyword));
+        for i:=0 to slotLists.count-1 do begin
+            // curSlot := getObjectFromProperty(AdditionalUpgradeSlots, i);
+            curSlot := ObjectToElement(slotLists.Objects[i]);
+            curSlotName := slotLists[i];
+
+            curSlotMisc := getUpgradeSlot(curSlot, kwBase, upgradeNameSpaceless, curSlotName, targetHQ);
+
+            appendObjectToProperty(AdditionalUpgradeSlots, curSlotMisc);
+        end;
+
 
         if(layouts.count > 0) then begin
 
