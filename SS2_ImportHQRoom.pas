@@ -5,57 +5,15 @@
 
 	TODO:
 
-    - 2. There's a common pattern I'm using that we didn't account for, wondering if you can support this. Building upgrades can add new slots, this is done with the AdditionalUpgradeSlots property,
-            which holds an array of upgrade slot misc objects.
-    -   - 2a. Ability to add slots to an upgrade, the same way you can to a room config - presumably can just copy that interface over and store them as AdditionalUpgradeSlots on the upgrade misc.
-    -   - 2b. When displaying available slots for an upgrade, in addition to showing those from the room config as selectable options, also show any slots that are in the AdditionalUpgradeSlots
-            property of other upgrades using the same room config. This lets us setup a system of "levels" where building one thing opens up the door for another, which can open up the door for another, etc.
-            (example: library adds Shelving slot, shelving upgrade uses shelving slot and adds a books slot, so now books upgrade can be built)
-
-
-
-
-    - 4. QoL Feature Request (ie lower priority) - ability to copy resource costs from another upgrade record. There will be a lot of similar upgrades and it would save having to write down all the details.
+    - QoL Feature Request (ie lower priority) - ability to copy resource costs from another upgrade record. There will be a lot of similar upgrades and it would save having to write down all the details.
 	- Allow not selecting slot for a layout. generate a new KW then
+    - Maybe add config file, at least for prefix
 	DONE:
+    1. For the ActionType keyword, looks like it's adding it even if already there - had an action I updated with the keyword on the misc twice.
+    2. The newly created miscs are being called RoomUpgrade in their EDID, even when Construction. Let's call the construction ones RoomConstruction.
+    3. An empty array property of AdditionalUpgradeSlots is being added when we skip adding those.
+    4. bAssignDepartmentToRoomAtEnd and bAssignDepartmentToRoomAtStart properties are misnamed - should be: Both need "OfAction" added to the end of what you have. (My fault - I mistyped them in the script goals document)
 
-    - Add a "RoomConstruction"/"RoomUpgrade" distinction
-    -   - COBJ: either SS2C2_co_HQBuildableAction_GNN_RoomConstruction_Template or SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template
-    -   -   - difference is just the sound and the KW, copy over from correct template if necessary
-    -   - MISC: on SpecificManager quest, there are RoomConstructionActionGroup and RoomUpgradesActionGroup props. use one or the other.
-
-    - 5. I'm realizing there's a confusion of terms among the designers, so I'm going to call initial construction RoomConstruction, and anything that adds on top of a base upgrade a RoomUpgrade.
-            To start, I'm going to rename two things the cobj template:
-            SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template to SS2C2_co_HQBuildableAction_GNN_RoomConstruction_Template
-            and the action group
-            SS2C2_HQ_ActionGroup_RoomBuildBaseUpgrades_GNN to SS2C2_HQ_ActionGroup_RoomConstruction_GNN.
-
-            I'm also adding a DIFFERENT cobj template, for upgrades - those that use the ActionGroup SS2C2_HQ_ActionGroup_RoomUpgrade_GNN should now use SS2C2_co_HQBuildableAction_GNN_RoomUpgrade_Template
-            (you can see why I needed to do the rename)
-
-    - 6. The script created new cobj records for my existing actions, but did not detect the previous ones I had created manually for some reason.
-        For point 6 in the next alpha, I'm leaving in the extra COBJ records I had created manually, SS2C2_co_HQBuildableAction_Build_GNNUpperEntryway_Lounge_StaffBar
-        and SS2C2_co_HQBuildableAction_Build_GNNUpperEntryway_Lounge_StaffLounge. The new ones the script made are SS2C2_HQGNN_BuildableAction_ClassyStaffBar_1/2/3 and
-        SS2C2_HQGNN_BuildableAction_ClassyStaffLounge_1/2/3.
-
-    - 1. When no Provided functionality is set, the property should be skipped - currently creates an empty property
-    - 3. If you attempt to update a record again without saving, the layouts don't load. Even if they are layouts that existed before you ran the update.
-        - Oh jeez - looks like #3 is actually the layouts are just being removed from the properties of the action on an update! Explains why they don't show up on a repeat update attempt lol
-    - 7. Layouts need to be an optional field as well. You can also rig up upgrades that just toggle enable parents to make things appear.
-    - Added direct layer updating
-    - Use the unique part of the shape keyword instead of the full EDID for EDID generation
-    - Use that unique part for model lookup:
-            Misc Model = SS2C2\Interface\GNNRoomShapes\<Unique Portion of Room Shape Keyword>.nif
-            COBJ Art Object = SS2C2_AO_RoomShape_<Unique Portion of Room Shape Keyword>
-    - put RoomShape keyword and the UpgradeSlot keyword onto upgrade MISC
-	- Allow updating of existing room updates
-	- check what a script extends, not just the base
-	- The RoomUpgrade action should be pointing at either SS2C2_HQ_ActionGroup_RoomBuildBaseUpgrades_GNN or SS2C2_HQ_ActionGroup_RoomUpgrade_GNN for its DepartmentHQActionGroup, depending on whether its targeting the Base slot or not.
-	  For other HQs this might be different, so might be easier to just put a dropdown of all action groups for that HQ.
-	- Different model for upgrade MISCs: from under Meshes\SS2C2\Interface\GNNRoomShapes. also optional
-	- Probably shouldn't allow for no resources to be entered - as that will cause an unusable COBJ, and I believe an entry like this will cause the game to either crash or won't load the script properties of that object at all.
-	- When reusing the typed in name for parts of editor IDs, looks like you are stripping spaces, which is good - should also strip special characters like '
-	- Select Slot on layout-basis. Put the KW of the slot into TagKeyword
 }
 unit ImportHqRoom;
 	uses 'SS2\SS2Lib'; // uses praUtil
@@ -1134,7 +1092,7 @@ unit ImportHqRoom;
 			end;
 
             // load room upgrades
-            if(pos('_Action_RoomUpgrade_', edid) > 0) then begin
+            if (pos('_Action_RoomUpgrade_', edid) > 0) or (pos('_Action_RoomConstruction_', edid) > 0) then begin
 				curScript := getScript(curRec, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
 				if (assigned(curScript)) then begin
                     loadRoomUpgradeSlots(curFileName, curRec, curScript);
@@ -3027,8 +2985,8 @@ unit ImportHqRoom;
             modelStrMisc := GetElementEditValues(existingElem, 'Model\MODL');
             selectMiscModel.ItemIndex := getModelArrayIndex(modelStrMisc, selectMiscModel.Items);
 
-            assignDepAtStart.Checked    := getScriptPropDefault(existingMiscScript, 'bAssignDepartmentToRoomAtStart', assignDepAtStart.Checked);
-            assignDepAtEnd.Checked      := getScriptPropDefault(existingMiscScript, 'bAssignDepartmentToRoomAtEnd', assignDepAtEnd.Checked);
+            assignDepAtStart.Checked    := getScriptPropDefault(existingMiscScript, 'bAssignDepartmentToRoomAtStartOfAction', assignDepAtStart.Checked);
+            assignDepAtEnd.Checked      := getScriptPropDefault(existingMiscScript, 'bAssignDepartmentToRoomAtEndOfAction', assignDepAtEnd.Checked);
             disableClutter.Checked      := getScriptPropDefault(existingMiscScript, 'bDisableClutter_OnCompletion', disableClutter.Checked);
             disableGarbarge.Checked     := getScriptPropDefault(existingMiscScript, 'bDisableGarbage_OnCompletion', disableGarbarge.Checked);
             defaultConstMarkers.Checked := getScriptPropDefault(existingMiscScript, 'bUseDefaultConstructionMarkers', defaultConstMarkers.Checked);
@@ -3731,7 +3689,7 @@ unit ImportHqRoom;
         slotLists: TStringList): IInterface;
 	var
 		upgradeResult: IInterface;
-		upgradeNameSpaceless, slotNameSpaceless, upgradeEdid, ActionAvailableGlobalEdid, HqName: string;
+		upgradeNameSpaceless, slotNameSpaceless, upgradeEdid, upgradeEdidPart, ActionAvailableGlobalEdid, HqName: string;
 		script, roomCfgScript, ActionAvailableGlobal: IInterface;
 		i, resIndex, resCount: integer;
 		ResourceCost, ProvidedFunctionality, RoomLayouts, curResObject, curRoomFunc, newStruct, RoomRequiredKeywords, UpgradeSlotKeyword: IInterface;
@@ -3746,7 +3704,13 @@ unit ImportHqRoom;
 		upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
 
         if(not assigned(existingElem)) then begin
-            upgradeEdid := globalNewFormPrefix+'HQ'+HqName+'_Action_RoomUpgrade_' + upgradeNameSpaceless; //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
+            if(roomMode = 0) then begin
+                upgradeEdidPart := '_Action_RoomConstruction_';
+            end else begin
+                upgradeEdidPart := '_Action_RoomUpgrade_';
+            end;
+
+            upgradeEdid := globalNewFormPrefix+'HQ'+HqName + upgradeEdidPart + upgradeNameSpaceless; //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
             upgradeResult := getCopyOfTemplate(targetFile, SS2_HQ_Action_RoomUpgrade_Template, upgradeEdid);
         end else begin
             upgradeResult := existingElem;
@@ -3761,10 +3725,10 @@ unit ImportHqRoom;
         SS2_Tag_HQ_ActionType_RoomUpgrade}
         if(roomMode = 0) then begin
             removeKeywordByPath(upgradeResult, SS2_Tag_HQ_ActionType_RoomUpgrade, 'KWDA');
-            addKeywordByPath(upgradeResult, SS2_Tag_HQ_ActionType_RoomConstruction, 'KWDA');
+            ensureKeywordByPath(upgradeResult, SS2_Tag_HQ_ActionType_RoomConstruction, 'KWDA');
         end else begin
             removeKeywordByPath(upgradeResult, SS2_Tag_HQ_ActionType_RoomConstruction, 'KWDA');
-            addKeywordByPath(upgradeResult, SS2_Tag_HQ_ActionType_RoomUpgrade, 'KWDA');
+            ensureKeywordByPath(upgradeResult, SS2_Tag_HQ_ActionType_RoomUpgrade, 'KWDA');
         end;
 
 		if(modelStr <> '') then begin
@@ -3778,8 +3742,8 @@ unit ImportHqRoom;
 
 		script := getScript(upgradeResult, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
 
-		setScriptProp(script, 'bAssignDepartmentToRoomAtStart', assignAtStart);
-		setScriptProp(script, 'bAssignDepartmentToRoomAtEnd', assignAtEnd);
+		setScriptProp(script, 'bAssignDepartmentToRoomAtStartOfAction', assignAtStart);
+		setScriptProp(script, 'bAssignDepartmentToRoomAtEndOfAction', assignAtEnd);
 		setScriptProp(script, 'bDisableClutter_OnCompletion', disableClutter);
 		setScriptProp(script, 'bDisableGarbage_OnCompletion', disableGarbage);
 		setScriptProp(script, 'bUseDefaultConstructionMarkers', defaultMarkers);
@@ -3891,23 +3855,28 @@ unit ImportHqRoom;
 		hasNonRelativeCoordinateLayout:= false;
 
         // slotLists
-        AdditionalUpgradeSlots := getOrCreateScriptPropArrayOfObject(script, 'AdditionalUpgradeSlots');
-        if(assigned(existingElem)) then begin
-            clearProperty(AdditionalUpgradeSlots);
+        if(slotLists.count > 0) then begin
+
+            AdditionalUpgradeSlots := getOrCreateScriptPropArrayOfObject(script, 'AdditionalUpgradeSlots');
+            if(assigned(existingElem)) then begin
+                clearProperty(AdditionalUpgradeSlots);
+            end;
+
+            kwBase := getRoomShapeUniquePart(EditorID(roomShapeKeyword));
+            for i:=0 to slotLists.count-1 do begin
+                // curSlot := getObjectFromProperty(AdditionalUpgradeSlots, i);
+                curSlot := ObjectToElement(slotLists.Objects[i]);
+                curSlotName := slotLists[i];
+
+                curSlotMisc := getUpgradeSlot(curSlot, kwBase, upgradeNameSpaceless, curSlotName, targetHQ);
+
+                appendObjectToProperty(AdditionalUpgradeSlots, curSlotMisc);
+            end;
+        end else begin
+            if(assigned(existingElem)) then begin
+                deleteScriptProp(script, 'AdditionalUpgradeSlots');
+            end;
         end;
-
-
-        kwBase := getRoomShapeUniquePart(EditorID(roomShapeKeyword));
-        for i:=0 to slotLists.count-1 do begin
-            // curSlot := getObjectFromProperty(AdditionalUpgradeSlots, i);
-            curSlot := ObjectToElement(slotLists.Objects[i]);
-            curSlotName := slotLists[i];
-
-            curSlotMisc := getUpgradeSlot(curSlot, kwBase, upgradeNameSpaceless, curSlotName, targetHQ);
-
-            appendObjectToProperty(AdditionalUpgradeSlots, curSlotMisc);
-        end;
-
 
         if(layouts.count > 0) then begin
 

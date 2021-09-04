@@ -968,8 +968,7 @@ unit PraUtil;
         for i := 0 to ElementCount(kwda)-1 do begin
             kwdaEntry := ElementByIndex(kwda, i);
             curKW := LinksTo(kwdaEntry);
-            if EditorID(curKW) = kwEdid then begin
-                //RemoveElement(kwda, i);
+            if (EditorID(curKW) = kwEdid) then begin
                 // this seems to be more reliable than by index
                 RemoveElement(kwda, kwdaEntry);
                 exit;
