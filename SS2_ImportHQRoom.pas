@@ -23,6 +23,7 @@ unit ImportHqRoom;
 	const
 		cacheFile = ProgramPath + 'Edit Scripts\SS2\HqRoomCache.json';
         cacheFileVersion = 2;
+		fakeClipboardFile = ProgramPath + 'Edit Scripts\SS2\HqRoomClipboard.txt';
 
 		progressBarChar = '|';
 		progressBarLength = 70;
@@ -84,9 +85,11 @@ unit ImportHqRoom;
 
 		currentCacheFile: TJsonObject;
 
+        // hacks because xedit sux
+        currentOpenMenu: TPopupMenu;
+
     function getStringAfter(str, separator: string): string;
     var
-
         p: integer;
     begin
 
@@ -127,6 +130,36 @@ unit ImportHqRoom;
 			Result := Result + str;
 		end;
 	end;
+
+    function getFakeClipboardText(): string;
+    var
+        helper: TStringList;
+    begin
+        if(not FileExists(fakeClipboardFile)) then begin
+            Result := '';
+            exit;
+        end;
+
+        helper := TStringList.create();
+        helper.loadFromFile(fakeClipboardFile);
+
+        Result := concatLines(helper);
+
+        helper.free();
+    end;
+
+    procedure setFakeClipboardText(str: string);
+    var
+        helper: TStringList;
+    begin
+        helper := TStringList.create();
+
+        helper.add(str);
+
+        helper.saveToFile(fakeClipboardFile);
+
+        helper.free();
+    end;
 
 	procedure showProgressWindow();
 	var
@@ -887,7 +920,7 @@ unit ImportHqRoom;
 		curScript, primaryDepartment, linkedRefs, curKw, curRef, linkedEntry: IInterface;
 		RoomUpgradeSlots, curSlot, curSlotScript, HQLocation: IInterface;
 	begin
-		AddMessage('Searching HQ for '+EditorID(e));
+		//AddMessage('Searching HQ for '+EditorID(e));
 		curScript := getScript(e, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
 
 		primaryDepartment := getScriptProp(curScript, 'PrimaryDepartment');
@@ -901,7 +934,7 @@ unit ImportHqRoom;
 				curRef := PathLinksTo(linkedEntry, 'Ref');
 
 				if(EditorID(curKw) = 'WorkshopItemKeyword') then begin
-					AddMessage('Found HQ '+EditorID(curRef)+' via linked ref');
+					//AddMessage('Found HQ '+EditorID(curRef)+' via linked ref');
 					Result := curRef;
 					exit;
 				end;
@@ -1721,7 +1754,7 @@ unit ImportHqRoom;
 		btnOk: TButton;
 		selectRoomConfig: TComboBox;
 	begin
-		frm := sender.parent;
+		frm := findComponentParentWindow(sender);
 		btnOk := TButton(frm.FindComponent('btnOk'));
 
         selectRoomConfig := TComboBox(frm.FindComponent('selectRoomConfig'));
@@ -1736,7 +1769,7 @@ unit ImportHqRoom;
 		selectMainDep, selectRoomShape, selectActionGroup: TComboBox;
 		frm: TForm;
     begin
-		frm := sender.parent;
+		frm := findComponentParentWindow(sender);
         inputName := TEdit(frm.FindComponent('inputName'));
         inputPrefix := TEdit(frm.FindComponent('inputPrefix'));
         selectMainDep := TComboBox(frm.FindComponent('selectMainDep'));
@@ -1762,19 +1795,7 @@ unit ImportHqRoom;
 	begin
 		frm := sender.parent;
         listSlots := TListBox(frm.FindComponent('listSlots'));
-{
-        if(listSlots = nil) then begin
-            slotsGroup := TGroupBox(sender.parent.parent.FindComponent('slotsGroup'));
-            if(slotsGroup = nil) then begin
-                AddMessage('fuck');
-            end;
-			listSlots := TListBox(slotsGroup.FindComponent('listSlots'));
-        end;
 
-        if(listSlots = nil) then begin
-            AddMessage('megafuck');
-        end;
-}
 		if(InputQuery('Room Config', 'Input upgrade slot name', newString)) then begin
 			newString := cleanStringForEditorID(trim(newString));
 			if(newString <> '') then begin
@@ -1795,7 +1816,6 @@ unit ImportHqRoom;
 		frm: TForm;
         slotsGroup: TGroupBox;
 	begin
-
         if(listSlots = nil) then begin
             slotsGroup := TGroupBox (sender.parent.FindComponent('slotsGroup'));
 			listSlots := TListBox(slotsGroup.FindComponent('listSlots'));
@@ -1804,9 +1824,7 @@ unit ImportHqRoom;
 		frm := sender.parent;
         listSlots := TListBox(frm.FindComponent('listSlots'));
 
-		if(listSlots.ItemIndex >= 0) then begin
-			listSlots.Items.delete(listSlots.ItemIndex);
-		end;
+        deleteSelectedBoxItems(listSlots);
 	end;
 
 	function getRefLocation(ref: IInterface): IInterface;
@@ -2057,7 +2075,360 @@ unit ImportHqRoom;
 		Result := prependDummyEntry(list, '- NONE -');
 	end;
 
-	procedure addResourceToList(resIndex, cnt: Integer; box: TListBox);
+    procedure deserializeSlotJsonIntoList(jsonStr: string; list: TStringList);
+    var
+        jsonArray: TJsonArray;
+        jsonMain, jsonTemp, newEntry: TJsonObject;
+        i, count, index: integer;
+        slot: IInterface;
+        curName: string;
+    begin
+        //jsonArray := TJsonArray.create;
+        jsonMain := TJSONObject.Parse(jsonStr);
+        if(jsonMain = nil) then begin
+            exit;
+        end;
+
+        if(jsonMain.S['type'] <> 'slots') then begin
+            jsonMain.free();
+            exit;
+        end;
+
+        jsonArray := jsonMain.A['data'];
+        if(jsonArray = nil) then begin
+            AddMessage('failed parsing '+jsonStr);
+            exit;
+        end;
+
+        for i:=0 to jsonArray.count-1 do begin
+            jsonTemp := jsonArray.O[i];
+
+            curName := jsonTemp.S['name'];
+            if(jsonTemp.S['form'] <> '') then begin
+                slot := AbsStrToForm(jsonTemp.S['form']);
+            end;
+
+            if(list.indexOf(curName) < 0) then begin
+                if(assigned(slot)) then begin
+                    list.AddObject(curName, slot);
+                end else begin
+                    list.add(curName);
+                end;
+			end;
+        end;
+        jsonMain.free();
+    end;
+
+    function serializeSlotListToJson(list: TStringList): string;
+    var
+        jsonArr: TJsonArray;
+        jsonMain, jsonTemp, existingEntry: TJsonObject;
+        i, resIndex: integer;
+        slot: IInterface;
+    begin
+        jsonMain := TJsonObject.create();
+        jsonMain.S['type'] := 'slots';
+
+        jsonArr := jsonMain.A['data'];
+
+        for i:=0 to list.count-1 do begin
+            jsonTemp := jsonArr.addObject();
+            jsonTemp.S['name'] := list[i];
+
+            if(list.Objects[i] <> nil) then begin
+                slot := ObjectToElement(list.Objects[i]);
+                jsonTemp.S['form'] := FormToAbsStr(func);
+            end;
+        end;
+
+        Result := jsonMain.toString();
+        jsonMain.free();
+    end;
+
+
+    function serializeRoomFuncListToJson(list: TStringList): string;
+    var
+        jsonArr: TJsonArray;
+        jsonMain, jsonTemp, existingEntry: TJsonObject;
+        i, resIndex: integer;
+        func: IInterface;
+    begin
+        jsonMain := TJsonObject.create();
+        jsonMain.S['type'] := 'roomfuncs';
+
+        jsonArr := jsonMain.A['data'];
+
+        for i:=0 to list.count-1 do begin
+            func := ObjectToElement(list.Objects[i]);
+
+            jsonTemp := jsonArr.addObject();
+            jsonTemp.S['form'] := FormToAbsStr(func);
+        end;
+
+        Result := jsonMain.toString();
+        jsonMain.free();
+    end;
+
+    function hasLayout(layoutList: TStringList; newEntryDisplay: string; newEntryJson: TJsonObject): boolean;
+    var
+        j: integer;
+        checkEntry: TJsonObject;
+    begin
+        for j:=0 to layoutList.count-1 do begin
+            checkEntry := TJsonObject(layoutList.Objects[j]);
+            if (checkEntry.S['path'] <> '') and (checkEntry.S['path'] = newEntryJson.S['path']) then begin
+                Result := true;
+                exit;
+            end;
+
+            if (checkEntry.S['existing'] <> '') and (checkEntry.S['existing'] = newEntryJson.S['existing']) then begin
+                Result := true;
+                exit;
+            end;
+
+        end;
+
+        Result := false;
+    end;
+
+    procedure deserializeLayoutJsonIntoList(jsonStr: string; list: TStringList);
+    var
+        jsonArray: TJsonArray;
+        jsonMain, jsonTemp, newEntry, checkEntry: TJsonObject;
+        i, j, count, resIndex: integer;
+        slot, existing: IInterface;
+        displayName: string;
+        canInsert: boolean;
+    begin
+        //jsonArray := TJsonArray.create;
+        jsonMain := TJSONObject.Parse(jsonStr);
+        if(jsonMain = nil) then begin
+            exit;
+        end;
+
+        if(jsonMain.S['type'] <> 'layouts') then begin
+            jsonMain.free();
+            exit;
+        end;
+
+        jsonArray := jsonMain.A['data'];
+        if(jsonArray = nil) then begin
+            AddMessage('failed parsing '+jsonStr);
+            exit;
+        end;
+
+        for i:=0 to jsonArray.count-1 do begin
+            jsonTemp := jsonArray.O[i];
+            newEntry := TJsonObject.create;
+            newEntry.S['name'] := jsonTemp.S['name'];
+            newEntry.S['path'] := jsonTemp.S['path'];
+
+            existing := nil;
+            slot := AbsStrToForm(jsonTemp.S['slot']);
+            if(jsonTemp.S['existing'] <> '') then begin
+                existing := AbsStrToForm(jsonTemp.S['existing']);
+                newEntry.S['existing'] := FormToStr(existing);
+            end;
+
+            newEntry.S['slot'] := FormToStr(slot);
+            displayName := '';
+
+            // now, generate the name, and make sure it's not a duplicate
+            if(assigned(existing)) then begin
+                if(newEntry.S['path'] <> '') then begin
+                    displayName := getLayoutDisplayName(newEntry.S['name'], newEntry.S['path'], slot) + ' *';
+                end else begin
+                    displayName := getLayoutDisplayName(newEntry.S['name'], EditorID(existing), slot);
+                end;
+            end else begin
+                displayName := getLayoutDisplayName(newEntry.S['name'], newEntry.S['path'], slot);
+            end;
+
+            canInsert := not hasLayout(list, displayName, newEntry);
+
+            if(canInsert) then begin
+                list.addObject(displayName, newEntry);
+            end else begin
+                newEntry.free();
+            end;
+
+        end;
+        jsonMain.free();
+    end;
+
+    function serializeLayoutListToJson(list: TStringList): string;
+    var
+        jsonArr: TJsonArray;
+        jsonMain, jsonTemp, existingEntry: TJsonObject;
+        i, resIndex: integer;
+        slot, existing: IInterface;
+    begin
+        jsonMain := TJsonObject.create();
+        jsonMain.S['type'] := 'layouts';
+
+        jsonArr := jsonMain.A['data'];
+
+        for i:=0 to list.count-1 do begin
+            existingEntry := TJsonObject(list.Objects[i]);
+            //AddMessage('Serialize #'+IntToStr(i)+'');
+            slot := StrToForm(existingEntry.S['slot']);
+
+            jsonTemp := jsonArr.addObject();
+            jsonTemp.S['name'] := existingEntry.S['name'];
+            jsonTemp.S['path'] := existingEntry.S['path'];
+            jsonTemp.S['slot'] := FormToAbsStr(slot);
+
+            if(existingEntry.S['existing'] <> '') then begin
+                existing := StrToForm(existingEntry.S['existing']);
+                jsonTemp.S['existing'] := FormToAbsStr(existing);
+            end;
+        end;
+
+        Result := jsonMain.toString();
+        jsonMain.free();
+    end;
+
+    function serializeResourceListToJson(list: TStringList): string;
+    var
+        jsonArr: TJsonArray;
+        jsonMain, jsonTemp, existingEntry: TJsonObject;
+        i, resIndex: integer;
+        res: IInterface;
+    begin
+        jsonMain := TJsonObject.create();
+        jsonMain.S['type'] := 'resources';
+
+        jsonArr := jsonMain.A['data'];
+
+        // jsonArr := TJsonArray.create;
+
+        for i:=0 to list.count-1 do begin
+            existingEntry := TJsonObject(list.Objects[i]);
+
+            jsonTemp := jsonArr.addObject();
+            jsonTemp.I['count'] := existingEntry.I['count'];
+
+            resIndex  := existingEntry.I['index'];
+            res := ObjectToElement(listRoomResources.Objects[resIndex]);
+
+            jsonTemp.S['form'] := FormToAbsStr(res);
+            //resIndex := indexOfElement(listRoomResources, curResObject);
+        end;
+
+        Result := jsonMain.toString();
+        jsonMain.free();
+    end;
+
+    function hasClipboardData(dataKey: string): boolean;
+    var
+        jsonArray: TJsonArray;
+        jsonMain, jsonTemp, newEntry: TJsonObject;
+        i, count, resIndex: integer;
+        res: IInterface;
+        jsonStr, fuckWtf: string;
+    begin
+        //AddMessage('do we have? '+dataKey);
+        jsonStr := getFakeClipboardText();
+        if(jsonStr = '') then begin
+            exit;
+        end;
+        jsonMain := TJSONObject.Parse(jsonStr);
+        if(jsonMain = nil) then begin
+            Result := false;
+            jsonMain.free();
+            exit;
+        end;
+
+        if(jsonMain.S['type'] = dataKey) then begin
+            Result := true;
+        end else begin
+            Result := false;
+        end;
+        jsonMain.free();
+    end;
+
+    procedure deserializeRoomFuncsJsonIntoList(jsonStr: string; list: TStringList);
+    var
+        jsonArray: TJsonArray;
+        jsonMain, jsonTemp, newEntry: TJsonObject;
+        i, count, index: integer;
+        func: IInterface;
+        curName: string;
+    begin
+        //jsonArray := TJsonArray.create;
+        jsonMain := TJSONObject.Parse(jsonStr);
+        if(jsonMain = nil) then begin
+            exit;
+        end;
+
+        if(jsonMain.S['type'] <> 'roomfuncs') then begin
+            jsonMain.free();
+            exit;
+        end;
+
+        jsonArray := jsonMain.A['data'];
+        if(jsonArray = nil) then begin
+            AddMessage('failed parsing '+jsonStr);
+            exit;
+        end;
+
+        for i:=0 to jsonArray.count-1 do begin
+            jsonTemp := jsonArray.O[i];
+            func := AbsStrToForm(jsonTemp.S['form']);
+            if (not assigned(func)) then begin
+                continue;
+            end;
+
+            index := indexOfElement(listRoomFuncs, func);
+            if(index < 0) then begin
+                continue;
+            end;
+            curName := listRoomFuncs[index];
+
+            if(list.indexOf(curName) < 0) then begin
+				list.AddObject(curName, func);
+			end;
+
+        end;
+        jsonMain.free();
+    end;
+
+    procedure deserializeResourceJsonIntoList(jsonStr: string; list: TStringList);
+    var
+        jsonArray: TJsonArray;
+        jsonMain, jsonTemp, newEntry: TJsonObject;
+        i, count, resIndex: integer;
+        res: IInterface;
+    begin
+        //jsonArray := TJsonArray.create;
+        jsonMain := TJSONObject.Parse(jsonStr);
+        if(jsonMain = nil) then begin
+            exit;
+        end;
+
+        if(jsonMain.S['type'] <> 'resources') then begin
+            jsonMain.free();
+            exit;
+        end;
+
+        jsonArray := jsonMain.A['data'];
+        if(jsonArray = nil) then begin
+            AddMessage('failed parsing '+jsonStr);
+            exit;
+        end;
+
+        for i:=0 to jsonArray.count-1 do begin
+            jsonTemp := jsonArray.O[i];
+            res := AbsStrToForm(jsonTemp.S['form']);
+            count := jsonTemp.I['count'];
+            resIndex := indexOfElement(listRoomResources, res);
+
+            addResourceToList(resIndex, count, list);
+        end;
+        jsonMain.free();
+    end;
+
+    procedure addResourceToList(resIndex, cnt: Integer; list: TStringList);
 	var
 		nameBase: string;
 		//resForm: IInterface;
@@ -2072,12 +2443,12 @@ unit ImportHqRoom;
 		//resForm := listRoomResources.Objects[resIndex];
 
 		// try to find existing
-		for i:=0 to box.Items.count-1 do begin
-			resourceData := box.Items.Objects[i];
+		for i:=0 to list.count-1 do begin
+			resourceData := list.Objects[i];
 			if (resourceData.I['index'] = resIndex) then begin
 				newCnt := resourceData.I['count']+cnt;
 				resourceData.I['count'] := newCnt;
-				Box.Items[i] := IntToStr(newCnt) + ' x ' + nameBase;
+				list[i] := IntToStr(newCnt) + ' x ' + nameBase;
 				exit;
 			end;
 		end;
@@ -2087,7 +2458,12 @@ unit ImportHqRoom;
 		resourceData.I['index'] := resIndex;
 		resourceData.I['count'] := cnt;
 
-		box.Items.AddObject(IntToStr(cnt)+' x '+nameBase, resourceData);
+		list.AddObject(IntToStr(cnt)+' x '+nameBase, resourceData);
+	end;
+
+	procedure addResourceToListBox(resIndex, cnt: Integer; box: TListBox);
+	begin
+		addResourceToList(resIndex, cnt, box.Items);
 	end;
 
 	procedure freeStringListObjects(list: TStringList);
@@ -2194,26 +2570,11 @@ unit ImportHqRoom;
 			nr := tryToParseInt(inputName.Text);
 
 			resourceBox := TListBox(sender.parent.FindComponent('resourceBox'));
-			addResourceToList(selectResourceDropdown.ItemIndex, nr, resourceBox);
+			addResourceToListBox(selectResourceDropdown.ItemIndex, nr, resourceBox);
 			showRoomUpradeDialog2UpdateOk(resourceBox.parent);
 		end;
 
 		frm.free();
-	end;
-
-	procedure remResourceHandler(Sender: TObject);
-	var
-		resourceBox: TListBox;
-		index: integer;
-	begin
-		resourceBox := TListBox(sender.parent.FindComponent('resourceBox'));
-		if(resourceBox.ItemIndex < 0) then begin
-			exit;
-		end;
-
-		resourceBox.Items.Objects[resourceBox.ItemIndex].free();
-		resourceBox.Items.Delete(resourceBox.ItemIndex);
-		showRoomUpradeDialog2UpdateOk(resourceBox.parent);
 	end;
 
 	procedure remRoomFuncHandler(Sender: TObject);
@@ -2222,11 +2583,8 @@ unit ImportHqRoom;
 		index: integer;
 	begin
 		resourceBox := TListBox(sender.parent.FindComponent('roomFuncsBox'));
-		if(resourceBox.ItemIndex < 0) then begin
-			exit;
-		end;
 
-		resourceBox.Items.Delete(resourceBox.ItemIndex);
+        deleteSelectedBoxItems(resourceBox);
 	end;
 
 	procedure addRoomFuncHandler(Sender: TObject);
@@ -2266,7 +2624,7 @@ unit ImportHqRoom;
 			if(resourceBox.Items.indexOf(listRoomFuncs[selectResourceDropdown.ItemIndex]) < 0) then begin
 				resourceBox.Items.AddObject(listRoomFuncs[selectResourceDropdown.ItemIndex], listRoomFuncs.Objects[selectResourceDropdown.ItemIndex]);
 			end;
-			// addResourceToList(selectResourceDropdown.ItemIndex, nr, roomFuncsBox);
+			// addResourceToListBox(selectResourceDropdown.ItemIndex, nr, roomFuncsBox);
 		end;
 
 		frm.free();
@@ -2478,9 +2836,7 @@ unit ImportHqRoom;
 			exit;
 		end;
 
-		layoutsBox.Items.Objects[layoutsBox.ItemIndex].free();
-		layoutsBox.Items.Delete(layoutsBox.ItemIndex);
-		showRoomUpradeDialog2UpdateOk(layoutsBox.parent);
+        deleteSelectedBoxItems(layoutsBox);
 	end;
 
 	function tryToParseFloat(s: string): float;
@@ -2545,19 +2901,21 @@ unit ImportHqRoom;
 		resourceBox, roomFuncsBox: TListBox;
 		durationNr: float;
 		layoutsGroup, resourceGroup: TGroupBox;
+        parentWindow: TForm;
 	begin
-		btnOk := TButton(sender.parent.FindComponent('btnOk'));
+        parentWindow := findComponentParentWindow(sender);
+		btnOk := TButton(parentWindow.FindComponent('btnOk'));
 
-		inputName := TEdit(sender.parent.FindComponent('inputName'));
-		inputPrefix := TEdit(sender.parent.FindComponent('inputPrefix'));
-		inputDuration := TEdit(sender.parent.FindComponent('inputDuration'));
+		inputName := TEdit(parentWindow.FindComponent('inputName'));
+		inputPrefix := TEdit(parentWindow.FindComponent('inputPrefix'));
+		inputDuration := TEdit(parentWindow.FindComponent('inputDuration'));
 
-		selectUpgradeSlot := TComboBox(sender.parent.FindComponent('selectUpgradeSlot'));
-		selectActionGroup := TComboBox(sender.parent.FindComponent('selectActionGroup'));
+		selectUpgradeSlot := TComboBox(parentWindow.FindComponent('selectUpgradeSlot'));
+		selectActionGroup := TComboBox(parentWindow.FindComponent('selectActionGroup'));
 
-		resourceBox := TListBox(sender.parent.FindComponent('resourceBox'));
+		resourceBox := TListBox(parentWindow.FindComponent('resourceBox'));
 		if(resourceBox = nil) then begin
-			resourceGroup := TGroupBox (sender.parent.FindComponent('resourceGroup'));
+			resourceGroup := TGroupBox (parentWindow.FindComponent('resourceGroup'));
 			resourceBox := TListBox(resourceGroup.FindComponent('resourceBox'));
 		end;
 
@@ -2575,6 +2933,21 @@ unit ImportHqRoom;
 		btnOk.enabled := (trim(inputName.Text) <> '') and (trim(inputPrefix.Text) <> '') and (durationNr > 0) and (selectUpgradeSlot.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and (resourceBox.Items.count > 0);
 
 	end;
+
+    procedure updateOkButtonAuto(obj: TObject);
+    var
+        frm: TForm;
+    begin
+        frm := findComponentParentWindow(obj);
+
+        if(frm.Name = 'roomConfigDialog') then begin
+            updateRoomConfigOkBtn(obj);
+        end else if(frm.Name = 'roomUpgradeDialog1') then begin
+            updateRoomUpgrade1OkBtn(obj);
+        end else if(frm.Name = 'roomUpgradeDialog2') then begin
+            showRoomUpradeDialog2UpdateOk(obj);
+        end;
+    end;
 
     function getModelArrayIndex(str: string; modelArray: TStringList): integer;
     var
@@ -2616,7 +2989,7 @@ unit ImportHqRoom;
             // now find the index
             resIndex := indexOfElement(listRoomResources, curResObject);
 
-            addResourceToList(resIndex, resCount, resourceBox);
+            addResourceToListBox(resIndex, resCount, resourceBox);
         end;
     end;
 
@@ -2700,6 +3073,329 @@ unit ImportHqRoom;
         end;
     end;
 
+    procedure menuCopyAllHandler(sender: TObject);
+    var
+        item: TMenuItem;
+        resourceBox: TListBox;
+        maybeMenu: TPopupMenu;
+        jsonStr: string;
+    begin
+        // sender should be the item here
+        // item := TMenuItem(sender);
+        maybeMenu := currentOpenMenu; // because item.getParentMenu() isn't implemented in xedit
+        resourceBox := TListBox(maybeMenu.PopupComponent);
+
+        jsonStr := '';
+        // serialize the items to JSON
+        if(resourceBox.Name = 'resourceBox') then begin
+            jsonStr := serializeResourceListToJson(resourceBox.Items);
+        end else if(resourceBox.Name = 'roomFuncsBox') then begin
+            jsonStr := serializeRoomFuncListToJson(resourceBox.Items);
+        end else if(resourceBox.Name = 'layoutsBox') then begin
+            jsonStr := serializeLayoutListToJson(resourceBox.Items);
+        end else if(resourceBox.Name = 'listSlots') then begin
+            jsonStr := serializeSlotListToJson(resourceBox.Items);
+        end;
+        setFakeClipboardText(jsonStr);
+    end;
+
+    procedure remResourceHandler(Sender: TObject);
+	var
+		resourceBox: TListBox;
+	begin
+		resourceBox := TListBox(sender.parent.FindComponent('resourceBox'));
+		deleteSelectedBoxItems(resourceBox);
+	end;
+
+    function findComponentParentWindow(sender: TObject): TForm;
+    begin
+        Result := nil;
+
+
+        if(sender.ClassName = 'TForm') then begin
+            Result := sender;
+            exit;
+        end;
+
+        if(sender.parent = nil) then begin
+            exit;
+        end;
+
+        Result := findComponentParentWindow(sender.parent);
+    end;
+
+    procedure deleteSelectedBoxItems(box: TListBox);
+    var
+		index, i: integer;
+        needsFree, isRoomConfig: boolean;
+        parentForm: TForm;
+    begin
+        if(box.SelCount <= 0) then begin
+			exit;
+		end;
+        needsFree := false;
+
+        if ((box.Name = 'resourceBox') or (box.Name = 'layoutsBox')) then begin
+            needsFree := true;
+        end;
+
+        for i:=box.Items.count-1 downto 0 do begin
+            if (box.Selected(i)) then begin
+                if ((box.Items.Objects[i] <> nil) and needsFree) then begin
+                    box.Items.Objects[i].free();
+                end;
+                box.Items.Delete(i);
+            end;
+        end;
+
+        updateOkButtonAuto(box);
+    end;
+
+    procedure copySelectedBoxItems(box: TListBox);
+    var
+        jsonStr: string;
+        tempList: TStringList;
+        i: integer;
+    begin
+        tempList := TStringList.create;
+        jsonStr := '';
+        if(box.Name = 'resourceBox') then begin
+            // copy over
+            for i:=0 to box.Items.count-1 do begin
+                if(box.Selected(i)) then begin
+                    tempList.AddObject(box.Items[i], box.Items.Objects[i]);
+                end;
+            end;
+
+            // serialize the items to JSON
+            jsonStr := serializeResourceListToJson(tempList);
+        end else if(box.Name = 'roomFuncsBox') then begin
+            for i:=0 to box.Items.count-1 do begin
+                if(box.Selected(i)) then begin
+                    tempList.AddObject(box.Items[i], ObjectToElement(box.Items.Objects[i]));
+                end;
+            end;
+            jsonStr := serializeRoomFuncListToJson(tempList);
+        end else if(box.Name = 'layoutsBox') then begin
+            for i:=0 to box.Items.count-1 do begin
+                if(box.Selected(i)) then begin
+                    tempList.AddObject(box.Items[i], box.Items.Objects[i]);
+                end;
+            end;
+
+            jsonStr := serializeLayoutListToJson(tempList);
+        end else if(box.Name = 'listSlots') then begin
+            for i:=0 to box.Items.count-1 do begin
+                if(box.Selected(i)) then begin
+                    if(box.Items.Objects[i] <> nil) then begin
+                        tempList.AddObject(box.Items[i], ObjectToElement(box.Items.Objects[i]));
+                    end else begin
+                        tempList.Add(box.Items[i]);
+                    end;
+                end;
+            end;
+
+            jsonStr := serializeSlotListToJson(tempList);
+        end;
+        setFakeClipboardText(jsonStr);
+
+        tempList.free();
+    end;
+
+    procedure pasteBoxItems(box: TListBox);
+    var
+        jsonStr: string;
+    begin
+        jsonStr := getFakeClipboardText();
+        if(jsonStr <> '') then begin
+            if(box.Name = 'resourceBox') then begin
+                deserializeResourceJsonIntoList(jsonStr, box.Items);
+            end else if(box.Name = 'roomFuncsBox') then begin
+                deserializeRoomFuncsJsonIntoList(jsonStr, box.Items);
+            end else if(box.Name = 'layoutsBox') then begin
+                // serializeLayoutListToJson deserializeLayoutJsonIntoList
+                deserializeLayoutJsonIntoList(jsonStr, box.Items);
+            end else if(box.Name = 'listSlots') then begin
+                deserializeSlotJsonIntoList(jsonStr, box.Items);
+            end;
+        end;
+
+        updateOkButtonAuto(box);
+    end;
+
+    procedure menuCopySelectHandler(sender: TObject);
+    var
+        resourceBox: TListBox;
+        maybeMenu: TPopupMenu;
+    begin
+        // sender should be the item here
+        // item := TMenuItem(sender);
+        maybeMenu := currentOpenMenu; // because item.getParentMenu() isn't implemented in xedit
+        resourceBox := TListBox(maybeMenu.PopupComponent);
+
+        copySelectedBoxItems(resourceBox);
+    end;
+
+    procedure menuDeleteHandler(sender: TObject);
+    var
+        item: TMenuItem;
+        resourceBox: TListBox;
+        maybeMenu: TPopupMenu;
+        jsonStr: string;
+    begin
+        // sender should be the item here
+        // item := TMenuItem(sender);
+        maybeMenu := currentOpenMenu; // because item.getParentMenu() isn't implemented in xedit
+        resourceBox := TListBox(maybeMenu.PopupComponent);
+
+        deleteSelectedBoxItems(resourceBox);
+    end;
+
+    procedure menuPasteHandler(sender: TObject);
+    var
+        item: TMenuItem;
+        resourceBox: TListBox;
+        maybeMenu: TPopupMenu;
+        jsonStr: string;
+    begin
+        // sender should be the item here
+        // item := TMenuItem(sender);
+        maybeMenu := currentOpenMenu; // because item.getParentMenu() isn't implemented in xedit
+        resourceBox := TListBox(maybeMenu.PopupComponent);
+
+        pasteBoxItems(resourceBox);
+    end;
+
+    procedure menuOpenHandler(sender: TObject);
+    var
+        resourceBox: TListBox;
+        maybeMenu: TPopupMenu;
+        copySelectedItem, deleteItem, pasteItem, copyAllItem: TMenuItem;
+    begin
+        maybeMenu := TPopupMenu(sender);
+
+        currentOpenMenu := maybeMenu;
+
+        resourceBox := TListBox(maybeMenu.PopupComponent);
+
+        copySelectedItem := maybeMenu.FindComponent('copySelectedItem');
+        copyAllItem := maybeMenu.FindComponent('copyAllItem');
+        deleteItem       := maybeMenu.FindComponent('deleteItem');
+        pasteItem        := maybeMenu.FindComponent('pasteItem');
+
+        if(resourceBox.Items.count = 0) then begin
+            copyAllItem.enabled := false;
+        end else begin
+            copyAllItem.enabled := true;
+        end;
+
+        if(resourceBox.SelCount <= 0) then begin
+            copySelectedItem.enabled := false;
+            deleteItem.enabled := false;
+        end else begin
+            copySelectedItem.enabled := true;
+            deleteItem.enabled := true;
+        end;
+
+        //AddMessage('open '+IntToStr(resourceBox.ItemIndex)+' '+resourceBox.Name+' '+BoolToStr(copySelectedItem <> nil)+' '+BoolToStr(deleteItem <> nil));
+
+        // which box do we have?
+        if(resourceBox.Name = 'resourceBox') then begin
+            pasteItem.enabled := hasClipboardData('resources');
+        end else if(resourceBox.Name = 'roomFuncsBox') then begin
+            pasteItem.enabled := hasClipboardData('roomfuncs');
+        end else if(resourceBox.Name = 'layoutsBox') then begin
+            pasteItem.enabled := hasClipboardData('layouts');
+        end else if(resourceBox.Name = 'listSlots') then begin
+            pasteItem.enabled := hasClipboardData('slots');
+        end;
+    end;
+
+    procedure setupMenu(list: TListBox);
+    var
+        copySelectedItem, copyAllItem, pasteItem, deleteItem: TMenuItem;
+        menu: TPopupMenu;
+    begin
+        menu  := TPopupMenu.Create(list);
+        menu.Name := 'wtf';
+        list.PopupMenu  := menu;
+        menu.onPopup := menuOpenHandler;
+
+        copySelectedItem := TMenuItem.create(list.PopupMenu);
+        copySelectedItem.Name := 'copySelectedItem';
+        copySelectedItem.caption := 'Copy Selected';
+        copySelectedItem.onclick := menuCopySelectHandler;
+
+        copyAllItem := TMenuItem.create(list.PopupMenu);
+        copyAllItem.Name := 'copyAllItem';
+        copyAllItem.caption := 'Copy All';
+        copyAllItem.onclick := menuCopyAllHandler;
+
+        pasteItem := TMenuItem.create(list.PopupMenu);
+        pasteItem.Name := 'pasteItem';
+        pasteItem.caption := 'Paste';
+        pasteItem.onclick := menuPasteHandler;
+
+        deleteItem := TMenuItem.create(list.PopupMenu);
+        deleteItem.Name := 'deleteItem';
+        deleteItem.caption := 'Delete';
+        deleteItem.onclick := menuDeleteHandler;
+
+        menu.Items.add(copySelectedItem);
+        menu.Items.add(copyAllItem);
+        menu.Items.add(pasteItem);
+        menu.Items.add(deleteItem);
+    end;
+
+    procedure listboxKeyPressHandler(Sender: TObject; var Key: Word; Shift: TShiftState);
+    var
+        box: TListBox;
+        i: integer;
+    begin//procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+        box := TListBox(sender);
+
+        case (key) of
+            65: begin // a key
+                    if(Shift = [ssCtrl]) then begin
+                        // ctrl + a
+                        // box.selectAll(); // not implemented
+                        for i:=0 to box.Items.count-1 do begin
+                            box.selected(i) := true; // yes, really
+                        end;
+                    end;
+                end;
+            67: begin   // c key
+                    if(Shift = [ssCtrl]) then begin
+                        copySelectedBoxItems(box);
+                    end;
+                end;
+            68: begin   // d key
+                if(Shift = [ssCtrl]) then begin
+                        // ctrl + d = deselect
+                        // box.selectAll(); // not implemented
+                        for i:=0 to box.Items.count-1 do begin
+                            box.selected(i) := false; // deselect
+                        end;
+                    end;
+                end;
+            86: begin   // v key
+                    if(Shift = [ssCtrl]) then begin
+                        pasteBoxItems(box);
+                    end;
+                end;
+            88: begin   // x key
+                    if(Shift = [ssCtrl]) then begin
+                        copySelectedBoxItems(box);
+                        deleteSelectedBoxItems(box);
+                    end;
+                end;
+            VK_DELETE:
+                begin
+                    deleteSelectedBoxItems(box);
+                end;
+        end;
+    end;
+
 	procedure showRoomUpgradeDialog2(targetRoomConfig, existingElem: IInterface);
 	var
         frm: TForm;
@@ -2766,6 +3462,7 @@ unit ImportHqRoom;
         ArtObjEdid := 'SS2C2_AO_RoomShape_'+shapeKeywordBase;
 
 		frm := CreateDialog(windowCaption, 620, 600);// x=+30 y=+20
+		frm.Name := 'roomUpgradeDialog2';
 		curY := 0;
 		//if(not assigned(existingElem)) then begin
         CreateLabel(frm, 10, 10+curY, 'HQ: '+EditorID(targetHQ)+'.');
@@ -2865,6 +3562,9 @@ unit ImportHqRoom;
 
         extraSlotsBox   := CreateListBox(extraSlotsGroup, 8, 16, 200, 48, nil);
 		extraSlotsBox.Name := 'listSlots';
+		extraSlotsBox.Multiselect := true;
+        setupMenu(extraSlotsBox);
+        extraSlotsBox.OnKeyDown := listboxKeyPressHandler;
 
 		extraSlotsAddBtn := CreateButton(extraSlotsGroup, 210, 16, 'Add');
         extraSlotsRemBtn := CreateButton(extraSlotsGroup, 210, 40, 'Remove');
@@ -2905,8 +3605,11 @@ unit ImportHqRoom;
 
 		resourceBox := CreateListBox(resourceGroup, 8, 16, 200, 72, nil);
 		resourceBox.Name := 'resourceBox';
+        resourceBox.Multiselect := true;
 
 		resourceBox.ondblclick := editResourceHandler;
+        setupMenu(resourceBox);
+        resourceBox.OnKeyDown := listboxKeyPressHandler;
 
 		resourceAddBtn := CreateButton(resourceGroup, 210, 16, 'Add');
 		resourceEdtBtn := CreateButton(resourceGroup, 210, 40, 'Edit');
@@ -2925,6 +3628,9 @@ unit ImportHqRoom;
 
 		roomFuncsBox := CreateListBox(roomFuncsGroup, 8, 16, 200, 72, nil);
 		roomFuncsBox.Name := 'roomFuncsBox';
+		roomFuncsBox.Multiselect := true;
+        setupMenu(roomFuncsBox);
+        roomFuncsBox.OnKeyDown := listboxKeyPressHandler;
 
 		roomFuncAddBtn := CreateButton(roomFuncsGroup, 210, 16, 'Add');
 		roomFuncRemBtn := CreateButton(roomFuncsGroup, 210, 40, 'Remove');
@@ -2941,8 +3647,10 @@ unit ImportHqRoom;
 		layoutsGroup.Name := 'layoutsGroup';
 		layoutsBox := CreateListBox(layoutsGroup, 8, 16, 490, 72, nil);
 		layoutsBox.Name := 'layoutsBox';
-		//layoutsBox.onChange := showRoomUpradeDialog2UpdateOk;
 		layoutsBox.ondblclick := editLayoutHandler;
+		layoutsBox.Multiselect := true;
+		setupMenu(layoutsBox);
+        layoutsBox.OnKeyDown := listboxKeyPressHandler;
 
 		layoutsAddBtn := CreateButton(layoutsGroup, 500, 16, 'Add');
 		layoutsEdtBtn := CreateButton(layoutsGroup, 500, 40, 'Edit');
@@ -4012,7 +4720,7 @@ unit ImportHqRoom;
                     recycleLayouts.delete(0);
                 end;
                 if(curJsonData.S['path'] <> '') then begin
-                    AddMessage('Generating layout. Using recycled? '+BoolToStr(curLayout));
+                    //AddMessage('Generating layout. Using recycled? '+BoolToStr(curLayout));
                     newLayout := createRoomLayout(curLayout, targetHq, curJsonData.S['name'], curJsonData.S['path'], upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout);
                     newLayouts.addObject(EditorID(newLayout), newLayout);
                 end;
@@ -4173,6 +4881,7 @@ unit ImportHqRoom;
 
 		// will need several dialogs
 		frm := CreateDialog(windowCaption, 540, 180);
+		frm.Name := 'roomUpgradeDialog1';
 		curY := 0;
 
 		// targetHQ
@@ -4255,6 +4964,7 @@ unit ImportHqRoom;
 	begin
 		curY := 0;
 		frm := CreateDialog('Room Config', 570, 348);
+		frm.Name := 'roomConfigDialog';
 
 		CreateLabel(frm, 10, 10, 'Target HQ: '+findHqName(targetHQ));
 
@@ -4309,6 +5019,10 @@ unit ImportHqRoom;
 
 		listSlots := CreateListBox(frm, 10, 10+curY, 200, 100, nil);
 		listSlots.Name := 'listSlots';
+
+		listSlots.Multiselect := true;
+        setupMenu(listSlots);
+        listSlots.OnKeyDown := listboxKeyPressHandler;
 
 		listSlots.items.add('Base');
 		listSlots.items.add('Decoration');
