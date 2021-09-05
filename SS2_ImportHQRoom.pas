@@ -5,10 +5,10 @@
 
 	TODO:
 
-    - QoL Feature Request (ie lower priority) - ability to copy resource costs from another upgrade record. There will be a lot of similar upgrades and it would save having to write down all the details.
 	- Allow not selecting slot for a layout. generate a new KW then
     - Maybe add config file, at least for prefix
 	DONE:
+    - QoL Feature Request (ie lower priority) - ability to copy resource costs from another upgrade record. There will be a lot of similar upgrades and it would save having to write down all the details.
     1. For the ActionType keyword, looks like it's adding it even if already there - had an action I updated with the keyword on the misc twice.
     2. The newly created miscs are being called RoomUpgrade in their EDID, even when Construction. Let's call the construction ones RoomConstruction.
     3. An empty array property of AdditionalUpgradeSlots is being added when we skip adding those.
@@ -4403,13 +4403,15 @@ unit ImportHqRoom;
 		ResourceCost, ProvidedFunctionality, RoomLayouts, curResObject, curRoomFunc, newStruct, RoomRequiredKeywords, UpgradeSlotKeyword: IInterface;
 		resourceJson: TJsonObject;
 		curLayout: IInterface;
-		curLayoutName, curLayoutPath, selectedSlotStr, curSlotName, kwBase: string;
+		curLayoutName, curLayoutPath, selectedSlotStr, curSlotName, kwBase, roomShapePart: string;
 		upgradeSlotLayout, roomShapeKeyword, upgradeSlotKw, oldUpgradeSlotKw, oldUpgradeSlot, AdditionalUpgradeSlots, curSlot, curSlotMisc: IInterface;
 	begin
 		HqName := findHqNameShort(targetHq);
 		slotNameSpaceless := cleanStringForEditorID(getElementEditValues(upgradeSlot, 'FULL'));
 
 		upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
+        roomShapeKeyword := getRoomShapeKeywordFromConfig(targetRoomConfig);
+        roomShapePart := getRoomShapeUniquePart(EditorID(roomShapeKeyword));
 
         if(not assigned(existingElem)) then begin
             if(roomMode = 0) then begin
@@ -4417,6 +4419,7 @@ unit ImportHqRoom;
             end else begin
                 upgradeEdidPart := '_Action_RoomUpgrade_';
             end;
+            upgradeEdidPart := upgradeEdidPart+roomShapePart+'_';
 
             upgradeEdid := globalNewFormPrefix+'HQ'+HqName + upgradeEdidPart + upgradeNameSpaceless; //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
             upgradeResult := getCopyOfTemplate(targetFile, SS2_HQ_Action_RoomUpgrade_Template, upgradeEdid);
@@ -4499,7 +4502,6 @@ unit ImportHqRoom;
             setScriptProp(script, 'ActionAvailableGlobal', ActionAvailableGlobal);
         end;
 
-        roomShapeKeyword := getRoomShapeKeywordFromConfig(targetRoomConfig);
 
         ensureKeywordByPath(upgradeResult, roomShapeKeyword, 'KWDA');
 
