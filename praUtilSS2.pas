@@ -1750,6 +1750,29 @@ unit PraUtil;
 
         Result := ElementByPath(Result, 'Value\Array of Struct');
     end;
+    
+    {
+        Mostly a copy of ElementTypeString from mteFunctions, somewhat optimized
+    }
+    function getElementTypeString(e: IInterface): string;
+    begin
+        case ElementType(e) of
+            etFile:                 Result := 'etFile';
+            etMainRecord:           Result := 'etMainRecord';
+            etGroupRecord:          Result := 'etGroupRecord';
+            etSubRecord:            Result := 'etSubRecord';
+            etSubRecordStruct:      Result := 'etSubRecordStruct';
+            etSubRecordArray:       Result := 'etSubRecordArray';
+            etSubRecordUnion:       Result := 'etSubRecordUnion';
+            etArray:                Result := 'etArray';
+            etStruct:               Result := 'etStruct';
+            etValue:                Result := 'etValue';
+            etFlag:                 Result := 'etFlag';
+            etStringListTerminator: Result := 'etStringListTerminator';
+            etUnion:                Result := 'etUnion';
+            else                    Result := '';
+        end;
+    end;
 
     {
         Set the value of a raw script property or struct member
@@ -1771,7 +1794,7 @@ unit PraUtil;
 
         if(variantType = varUnknown) then begin
             // etMainRecord -> object, do a linksTo
-            iinterfaceTypeString := ElementTypeString(value);
+            iinterfaceTypeString := getElementTypeString(value);
             if(iinterfaceTypeString = 'etMainRecord') then begin
                 SetElementEditValues(propElem, 'Type', 'Object');
 
@@ -1813,7 +1836,7 @@ unit PraUtil;
         end;
 
         if(variantType = varUnknown) then begin
-            if(ElementTypeString(value) = 'etMainRecord') then begin
+            if(getElementTypeString(value) = 'etMainRecord') then begin
                 Result := true;
                 exit;
             end;
