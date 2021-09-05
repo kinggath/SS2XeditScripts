@@ -2980,9 +2980,7 @@ unit ImportHqRoom;
 
         for i:=0 to ElementCount(ResourceCost)-1 do begin
             curStruct := ElementByIndex(ResourceCost, i);
-            {AddMessage('dump begin');
-            dumpElem(curStruct);
-            AddMessage('dump end');}
+
             curResObject := getStructMember(curStruct, 'Item');
             resCount     := getStructMember(curStruct, 'iCount');
 
@@ -3296,8 +3294,6 @@ unit ImportHqRoom;
             copySelectedItem.enabled := true;
             deleteItem.enabled := true;
         end;
-
-        //AddMessage('open '+IntToStr(resourceBox.ItemIndex)+' '+resourceBox.Name+' '+BoolToStr(copySelectedItem <> nil)+' '+BoolToStr(deleteItem <> nil));
 
         // which box do we have?
         if(resourceBox.Name = 'resourceBox') then begin
@@ -5246,14 +5242,12 @@ unit ImportHqRoom;
         script := getScript(layer, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
 
         targetRoomConfig := findRoomConfigFromLayout(layer);
+        targetHQ := getScriptProp(script, 'workshopRef');
         currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHq, targetRoomConfig);
 
-        targetHQ := getScriptProp(script, 'workshopRef');
         slotMisc := findSlotMiscFromLayout(layer);
 
         layoutName := getElementEditValues(layer, 'FULL');
-
-
 
 		frm := CreateDialog('Edit Room Layout', 400, 190);
 
