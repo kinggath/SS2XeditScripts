@@ -3848,7 +3848,8 @@ unit ImportHqRoom;
 		slotKw := findSlotKeywordFromSlotMisc(upgradeSlot);
 
 		setScriptProp(resultScript, 'TagKeyword', slotKw);
-		setScriptProp(resultScript, 'workshopRef', hq);
+		//setScriptProp(resultScript, 'workshopRef', hq);
+        setUniversalForm(resultScript, 'workshopRef', hq);
 
 		// now, the hard part
 		spawnData := TJsonObject.create();
@@ -3967,7 +3968,6 @@ unit ImportHqRoom;
 
 
 		// now everything should be parsed
-		// AddMessage(spawnData.toString());
 		if(bRelativePositioning) then begin
 			hasRelativeCoordinateLayout   := true;
 		end else begin
@@ -4004,18 +4004,19 @@ unit ImportHqRoom;
 
 				rotatedData := ConvertAbsoluteCoordinatesToBaseRelative(spawnData.O['offset'].O['pos'], spawnData.O['offset'].O['rot'], itemPosVector, itemRotVector);
 
-				spawnObj.F['posX'] := rotatedData.O['pos'].F['x'];
-				spawnObj.F['posY'] := rotatedData.O['pos'].F['y'];
-				spawnObj.F['posZ'] := rotatedData.O['pos'].F['z'];
-				spawnObj.F['rotX'] := rotatedData.O['rot'].F['x'];
-				spawnObj.F['rotY'] := rotatedData.O['rot'].F['y'];
-				spawnObj.F['rotZ'] := rotatedData.O['rot'].F['z'];
+				spawnObj.O['pos'].F['x'] := rotatedData.O['pos'].F['x'];
+				spawnObj.O['pos'].F['y'] := rotatedData.O['pos'].F['y'];
+				spawnObj.O['pos'].F['z'] := rotatedData.O['pos'].F['z'];
+				spawnObj.O['rot'].F['x'] := rotatedData.O['rot'].F['x'];
+				spawnObj.O['rot'].F['y'] := rotatedData.O['rot'].F['y'];
+				spawnObj.O['rot'].F['z'] := rotatedData.O['rot'].F['z'];
 				// curSpawnObj.F['scale']:= spawnObj.F['scale'];
 
 				rotatedData.free();
 				itemRotVector.free();
 				itemPosVector.free();
 			end;
+
 			appendSpawn(spawnObj, arrayToUse);
 		end;
 
