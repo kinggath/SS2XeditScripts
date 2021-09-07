@@ -3887,9 +3887,14 @@ unit ImportHqRoom;
 			csvCols.StrictDelimiter := TRUE;
 			csvCols.DelimitedText := curLine;
 
+            if (csvCols.count < 8) then begin
+                AddMessage('Line "'+curLine+'" is not valid, skipping');
+				csvCols.Free;
+				continue;
+            end;
+
 			 // pos, rot, scale
-			if (csvCols.count < 8) or
-				(csvCols.Strings[0] = '') or
+			if (csvCols.Strings[0] = '') or
 				(csvCols.Strings[1] = '') or
 				(csvCols.Strings[2] = '') or
 				(csvCols.Strings[3] = '') or
@@ -5221,7 +5226,7 @@ unit ImportHqRoom;
         script: IInterface;
     begin
         script := getScript(layout, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
-        Result := getScriptProp(script, 'workshopRef');
+        Result := getUniversalForm(script, 'workshopRef');
     end;
 
     procedure showLayoutUpgradeDialog(layer: IInterface);
@@ -5243,7 +5248,7 @@ unit ImportHqRoom;
         script := getScript(layer, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
 
         targetRoomConfig := findRoomConfigFromLayout(layer);
-        targetHQ := getScriptProp(script, 'workshopRef');
+        targetHQ := getUniversalForm(script, 'workshopRef');
         currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHq, targetRoomConfig);
 
         slotMisc := findSlotMiscFromLayout(layer);
@@ -5362,7 +5367,7 @@ unit ImportHqRoom;
         configScript := getScript(targetElem, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
         if(assigned(configScript)) then begin
             AddMessage('Updating Room Layout '+EditorID(targetElem));
-			targetHQ := getScriptProp(configScript, 'workshopRef');
+			targetHQ := getUniversalForm(configScript, 'workshopRef');
             loadFormsForHq(targetHQ);
             showLayoutUpgradeDialog(targetElem);
             exit;
