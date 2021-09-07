@@ -3432,6 +3432,8 @@ unit ImportHqRoom;
         existingMiscScript, existingActi, existingActiScript: IInterface;
 
         modelIndex: integer;
+
+        actiData : TJsonObject;
 	begin
 		// load the slots for what we have
         currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHQ, targetRoomConfig);
@@ -3444,10 +3446,25 @@ unit ImportHqRoom;
 
             existingMiscScript := getScript(existingElem, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
 
-            // try to find the acti, too
-            existingActi := findRoomUpgradeActivator(existingElem);
-            AddMessage('Found corresponiding acti '+editorID(existingActi));
-            existingActiScript := getScript(existingActi, 'SimSettlementsV2:HQ:Library:ObjectRefs:HQWorkshopItemActionTrigger');
+            actiData := findRoomUpgradeActivatorsAndCobjs(existingElem);
+
+            // try to find the acti model
+            if (actiData.O['1'].S['acti'] <> '') then begin
+                existingActi := StrToForm(actiData.O['1'].S['acti']);
+            end else begin
+                if (actiData.O['2'].S['acti'] <> '') then begin
+                    existingActi := StrToForm(actiData.O['2'].S['acti']);
+                end else begin
+                    if (actiData.O['3'].S['acti'] <> '') then begin
+                        existingActi := StrToForm(actiData.O['3'].S['acti']);
+                    end;
+                end;
+            end;
+
+            if(assigned(existingActi)) then begin
+                // try to find the acti, too
+                existingActi := findRoomUpgradeActivator(existingElem);
+            end;
 
         end;
 
@@ -3711,12 +3728,10 @@ unit ImportHqRoom;
 
             fillSlotsFromExisting(extraSlotsBox.Items, existingMiscScript);
 
-            //setScriptProp(script, 'NewDepartmentOnCompletion', targetDepartment);
-            {existingActi := findRoomUpgradeActivator(existingElem);
-            existingActiScript := getScript(existingActi, 'SimSettlementsV2:HQ:Library:ObjectRefs:HQWorkshopItemActionTrigger');}
-
-            modelStr := GetElementEditValues(existingActi, 'Model\MODL');
-            selectModel.ItemIndex := getModelArrayIndex(modelStr, selectModel.Items);
+            if(assigned(existingActi)) then begin
+                modelStr := GetElementEditValues(existingActi, 'Model\MODL');
+                selectModel.ItemIndex := getModelArrayIndex(modelStr, selectModel.Items);
+            end;
 
             // now the hard parts
             fillResourceItemsFromExisting(resourceBox, existingMiscScript);
@@ -3783,6 +3798,20 @@ unit ImportHqRoom;
                 extraSlotsBox.Items
 			);
 
+
+// actiData
+            createRoomUpgradeActivatorsAndCobjs(
+                actiData,
+                roomUpgradeMisc,
+                targetHQ,
+                upgradeName,
+                modelStr,
+                resourceBox.Items,
+                upgradeDuration,
+                ArtObjEdid,
+                selectActionGroup.ItemIndex
+            );
+{
 			roomUpgradeActi := createRoomUpgradeActivator(existingActi, roomUpgradeMisc, targetHQ, upgradeName, modelStr);
 
 			createRoomUpgradeCOBJs(
@@ -3795,6 +3824,11 @@ unit ImportHqRoom;
                 ArtObjEdid,
                 selectActionGroup.ItemIndex
             );
+}
+            if(actiData <> nil) then begin
+                actiData.free();
+                actiData := nil;
+            end;
 
 			if(doRegisterCb.checked) then begin
 				// register
@@ -4174,6 +4208,7 @@ unit ImportHqRoom;
     end;
 
 	function createRoomUpgradeCOBJ(
+        existingElem: IInterface;
         edidBase, descriptionText: string;
         resourceComplexity: integer;
         acti, availableGlobal: IInterface;
@@ -4193,7 +4228,9 @@ unit ImportHqRoom;
         // 0 = construction
         // 1 = upgrade
         // try to find the cobj
-        Result := findRoomUpgradeCOBJ(resourceComplexity, acti);
+        //Result := findRoomUpgradeCOBJ(resourceComplexity, acti);
+        
+        Result := existingElem;
 
         if(roomMode = 0) then begin
             sourceTemplate := CobjRoomConstruction_Template;
@@ -4203,7 +4240,7 @@ unit ImportHqRoom;
 
 
         if(not assigned(Result)) then begin
-            edid := edidBase + '_' + IntToStr(resourceComplexity);
+            edid := edidBase + '_co_' + IntToStr(resourceComplexity);
 
             Result := getCopyOfTemplate(targetFile, sourceTemplate, edid);
         end else begin
@@ -4268,20 +4305,23 @@ unit ImportHqRoom;
 		cobjResources.free();
 	end;
 
-	procedure createRoomUpgradeCOBJs(
-        acti, forHq, availableGlobal: IInterface;
-        upgradeName: string;
+
+    procedure createRoomUpgradeActivatorsAndCobjs(
+        existingData: TJsonObject;
+        roomUpgradeMisc, forHq: IInterface;
+        upgradeName, modelStr: string;
         resources: TStringList;
         completionTime: float;
         ArtObjEdid: string;
         roomMode: integer
     );
-	var
-		cobj1, cobj2, cobj3, artObject: IInterface;
-		edidBase, descriptionText, upgradeNameSpaceless: string;
-		numDays: float;
-	begin
-		descriptionText := upgradeName+' | Completion Time: ';
+    var
+        availableGlobal, artObject: IInterface;
+        acti1, acti2, acti3, cobj1, cobj2, cobj3: IInterface;
+        edidBase, upgradeNameSpaceless, descriptionText: string;
+        numDays: float;
+    begin
+        descriptionText := upgradeName+' | Completion Time: ';
 
 		upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
 		numDays := round(completionTime / 24 * 10) / 10;
@@ -4297,16 +4337,35 @@ unit ImportHqRoom;
             artObject := findObjectByEdid(ArtObjEdid);
         end;
 
-        // now, we could have these 3 cobjs already
+        availableGlobal := getActionAvailableGlobal(roomUpgradeMisc);
+        upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
+        acti1 := nil;
+        acti2 := nil;
+        acti3 := nil;
+        cobj1 := nil;
+        cobj2 := nil;
+        cobj3 := nil;
 
-		edidBase := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
-		cobj1 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti, availableGlobal, resources, artObject, roomMode);
-		cobj2 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti, availableGlobal, resources, artObject, roomMode);
-		cobj3 := createRoomUpgradeCOBJ(edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti, availableGlobal, resources, artObject, roomMode);
+        if(existingData.O['1'].S['acti'] <> '') then acti1 := StrToForm(existingData.O['1'].S['acti']);
+        if(existingData.O['2'].S['acti'] <> '') then acti2 := StrToForm(existingData.O['2'].S['acti']);
+        if(existingData.O['3'].S['acti'] <> '') then acti3 := StrToForm(existingData.O['3'].S['acti']);
 
-	end;
+        if(existingData.O['1'].S['cobj'] <> '') then cobj1 := StrToForm(existingData.O['1'].S['cobj']);
+        if(existingData.O['2'].S['cobj'] <> '') then cobj2 := StrToForm(existingData.O['2'].S['cobj']);
+        if(existingData.O['3'].S['cobj'] <> '') then cobj3 := StrToForm(existingData.O['3'].S['cobj']);
 
-	function createRoomUpgradeActivator(existingElem, roomUpgradeMisc, forHq: IInterface; upgradeName, modelStr: string): IInterface;
+        acti1 := createRoomUpgradeActivator(acti1, roomUpgradeMisc, forHq, upgradeName, modelStr, RESOURCE_COMPLEXITY_MINIMAL);
+        acti2 := createRoomUpgradeActivator(acti2, roomUpgradeMisc, forHq, upgradeName, modelStr, RESOURCE_COMPLEXITY_CATEGORY);
+        acti3 := createRoomUpgradeActivator(acti3, roomUpgradeMisc, forHq, upgradeName, modelStr, RESOURCE_COMPLEXITY_FULL);
+//{"1":{"acti":"050008A0","cobj":"050008A1"},"2":{"cobj":"050008A2"},"3":{"cobj":"050008A3"}}
+        // now the COBJs
+        edidBase := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
+		cobj1 := createRoomUpgradeCOBJ(cobj1, edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti1, availableGlobal, resources, artObject, roomMode);
+		cobj2 := createRoomUpgradeCOBJ(cobj2, edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti2, availableGlobal, resources, artObject, roomMode);
+		cobj3 := createRoomUpgradeCOBJ(cobj3, edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti3, availableGlobal, resources, artObject, roomMode);
+    end;
+
+	function createRoomUpgradeActivator(existingElem, roomUpgradeMisc, forHq: IInterface; upgradeName, modelStr: string; resourceComplexity: integer): IInterface;
 	var
 		upgradeNameSpaceless, edid: string;
 		hqManager, script: IInterface;
@@ -4318,12 +4377,12 @@ unit ImportHqRoom;
 
         if(not assigned(existingElem)) then begin
             upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
-            edid := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
-            // SS2_HQBuildableAction_Template
+            edid := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless+'_ac_'+IntToStr(resourceComplexity);
             Result := getCopyOfTemplate(targetFile, SS2_HQBuildableAction_Template, edid);
         end else begin
             Result := existingElem;
         end;
+        
 
 		script := getScript(Result, 'SimSettlementsV2:HQ:Library:ObjectRefs:HQWorkshopItemActionTrigger');
 
@@ -4359,6 +4418,149 @@ unit ImportHqRoom;
 
         Result := nil;
 	end;
+
+    function findRoomUpgradeCOBJWithComplexity(acti: IInterface): TJsonObject;
+    var
+        i, curComplexity: integer;
+        curRef, conditions, complexityCondition, glob: IInterface;
+    begin
+        for i:=0 to ReferencedByCount(acti)-1 do begin
+            curRef := ReferencedByIndex(acti, i);
+            if(Signature(curRef) = 'COBJ') then begin
+                if(equals(PathLinksTo(curRef, 'CNAM'), acti)) then begin
+                    // now check which complexity we have
+                    conditions := ElementByPath(curRef, 'Conditions');
+                    curComplexity := getCobjConditionValue(conditions);
+                    if(curComplexity > -1) then begin
+                        Result := TJsonObject.create;
+                        Result.I['complexity'] := curComplexity;
+                        Result.S['form'] := FormToStr(curRef);
+                        exit;
+                    end;
+                end;
+            end;
+        end;
+
+        Result := nil;
+    end;
+
+    function findRoomUpgradeActivatorsAndCobjs(roomUpgradeMisc: IInterface): TJsonObject;
+    var
+        acti1, acti2, acti3, cobj1, cobj2, cobj3: IInterface;
+        curRef, script, otherMisc: IInterface;
+        cobjData: TJsonObject;
+        i: integer;
+    begin
+        Result := TJsonObject.create();
+
+        for i:=0 to ReferencedByCount(roomUpgradeMisc)-1 do begin
+            curRef := ReferencedByIndex(roomUpgradeMisc, i);
+
+            if(Signature(curRef) <> 'ACTI') then begin
+                continue;
+            end;
+
+            script := getScript(curRef, 'SimSettlementsV2:HQ:Library:ObjectRefs:HQWorkshopItemActionTrigger');
+            if (assigned(script)) then begin
+                otherMisc := getScriptProp(script, 'HQAction');
+                if(equals(otherMisc, roomUpgradeMisc)) then begin
+                    // okay, seems like we found one, but which?
+                    cobjData := findRoomUpgradeCOBJWithComplexity(curRef);
+                    if(cobjData <> nil) then begin
+                        case cobjData.I['complexity'] of
+                            1:  begin
+                                    acti1 := curRef;
+                                    cobj1 := StrToForm(cobjData.S['form']);
+                                end;
+                            2:  begin
+                                    acti2 := curRef;
+                                    cobj2 := StrToForm(cobjData.S['form']);
+                                end;
+                            3:  begin
+                                    acti3 := curRef;
+                                    cobj3 := StrToForm(cobjData.S['form']);
+                                end;
+                        end;
+                        cobjData.free();
+                        if (assigned(acti1) and assigned(acti2) and assigned(acti3)) then begin
+                            break;
+                        end;
+                    end;
+                end;
+            end;
+        end;
+
+        // do I have all of them?
+        // we might have one of the ACTI/COBJ pairs, where the ACTI would actually have all 3 COBJs
+        if (assigned(acti1) and assigned(acti2) and assigned(acti3) and assigned(cobj1) and assigned(cobj2) and assigned(cobj3)) then begin
+            // found all
+            Result.O['1'].S['acti'] := FormToStr(acti1);
+            Result.O['1'].S['cobj'] := FormToStr(cobj1);
+
+            Result.O['2'].S['acti'] := FormToStr(acti2);
+            Result.O['2'].S['cobj'] := FormToStr(cobj2);
+
+            Result.O['3'].S['acti'] := FormToStr(acti3);
+            Result.O['3'].S['cobj'] := FormToStr(cobj3);
+            exit;
+        end;
+
+        // check COBJ1
+        if(assigned(acti1)) then begin
+            // try to fill 2 and 3
+            if(not assigned(cobj2)) then begin
+                cobj2 := findRoomUpgradeCOBJ(2, acti1);
+            end;
+
+            if(not assigned(cobj3)) then begin
+                cobj3 := findRoomUpgradeCOBJ(3, acti1);
+            end;
+            // check COBJ2
+        end else if(assigned(acti2)) then begin
+            // try to fill 1 and 3
+            if(not assigned(cobj1)) then begin
+                cobj1 := findRoomUpgradeCOBJ(1, acti2);
+            end;
+
+            if(not assigned(cobj3)) then begin
+                cobj3 := findRoomUpgradeCOBJ(3, acti2);
+            end;
+            // check COBJ3
+        end else if(assigned(acti3)) then begin
+            // try to fill 1 and 2
+            if(not assigned(cobj1)) then begin
+                cobj1 := findRoomUpgradeCOBJ(1, acti3);
+            end;
+
+            if(not assigned(cobj2)) then begin
+                cobj2 := findRoomUpgradeCOBJ(2, acti3);
+            end;
+        end;
+
+        if(assigned(acti1)) then begin
+            Result.O['1'].S['acti'] := FormToStr(acti1);
+        end;
+
+        if(assigned(acti2)) then begin
+            Result.O['2'].S['acti'] := FormToStr(acti2);
+        end;
+
+        if(assigned(acti3)) then begin
+            Result.O['3'].S['acti'] := FormToStr(acti3);
+        end;
+
+        if(assigned(cobj1)) then begin
+            Result.O['1'].S['cobj'] := FormToStr(cobj1);
+        end;
+
+        if(assigned(cobj2)) then begin
+            Result.O['2'].S['cobj'] := FormToStr(cobj2);
+        end;
+
+        if(assigned(cobj3)) then begin
+            Result.O['3'].S['cobj'] := FormToStr(cobj3);
+        end;
+    end;
 
     function indexOfElement(list: TStringList; elem: IInterface): integer;
     var
