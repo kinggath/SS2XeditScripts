@@ -3439,7 +3439,7 @@ unit ImportHqRoom;
         currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHQ, targetRoomConfig);
 
 		secondRowOffset := 300;
-
+        actiData := nil;
         windowCaption := 'Generating Room Upgrade';
         if(assigned(existingElem)) then begin
             windowCaption := 'Updating Room Upgrade';
