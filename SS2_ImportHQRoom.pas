@@ -4346,13 +4346,15 @@ unit ImportHqRoom;
         cobj2 := nil;
         cobj3 := nil;
 
-        if(existingData.O['1'].S['acti'] <> '') then acti1 := StrToForm(existingData.O['1'].S['acti']);
-        if(existingData.O['2'].S['acti'] <> '') then acti2 := StrToForm(existingData.O['2'].S['acti']);
-        if(existingData.O['3'].S['acti'] <> '') then acti3 := StrToForm(existingData.O['3'].S['acti']);
+        if (nil <> existingData) then begin
+            if(existingData.O['1'].S['acti'] <> '') then acti1 := StrToForm(existingData.O['1'].S['acti']);
+            if(existingData.O['2'].S['acti'] <> '') then acti2 := StrToForm(existingData.O['2'].S['acti']);
+            if(existingData.O['3'].S['acti'] <> '') then acti3 := StrToForm(existingData.O['3'].S['acti']);
 
-        if(existingData.O['1'].S['cobj'] <> '') then cobj1 := StrToForm(existingData.O['1'].S['cobj']);
-        if(existingData.O['2'].S['cobj'] <> '') then cobj2 := StrToForm(existingData.O['2'].S['cobj']);
-        if(existingData.O['3'].S['cobj'] <> '') then cobj3 := StrToForm(existingData.O['3'].S['cobj']);
+            if(existingData.O['1'].S['cobj'] <> '') then cobj1 := StrToForm(existingData.O['1'].S['cobj']);
+            if(existingData.O['2'].S['cobj'] <> '') then cobj2 := StrToForm(existingData.O['2'].S['cobj']);
+            if(existingData.O['3'].S['cobj'] <> '') then cobj3 := StrToForm(existingData.O['3'].S['cobj']);
+        end;
 
         acti1 := createRoomUpgradeActivator(acti1, roomUpgradeMisc, forHq, upgradeName, modelStr, RESOURCE_COMPLEXITY_MINIMAL);
         acti2 := createRoomUpgradeActivator(acti2, roomUpgradeMisc, forHq, upgradeName, modelStr, RESOURCE_COMPLEXITY_CATEGORY);
