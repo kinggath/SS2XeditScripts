@@ -5,6 +5,7 @@
 
 	TODO:
 
+    Maybe later:
 	- Allow not selecting slot for a layout. generate a new KW then
     - Maybe add config file, at least for prefix
 	DONE:
@@ -947,7 +948,7 @@ unit ImportHqRoom;
 			curSlot := getObjectFromProperty(RoomUpgradeSlots, i);
 			curSlotScript := getScript(curSlot, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot_GNN');
 			if(assigned(curSlotScript)) then begin
-				AddMessage('Using default HQ because of _GNN script');
+				//AddMessage('because of _GNN script');
 				Result := SS2_HQ_WorkshopRef_GNN;
 				exit;
 			end;
@@ -962,7 +963,7 @@ unit ImportHqRoom;
 		end;
 
 		// finally, assume default HQ and hope for the best
-		AddMessage('Using default HQ');
+		//AddMessage('Using default HQ');
 		Result := SS2_HQ_WorkshopRef_GNN;
 	end;
 
@@ -4229,7 +4230,7 @@ unit ImportHqRoom;
         // 1 = upgrade
         // try to find the cobj
         //Result := findRoomUpgradeCOBJ(resourceComplexity, acti);
-        
+
         Result := existingElem;
 
         if(roomMode = 0) then begin
@@ -4384,7 +4385,7 @@ unit ImportHqRoom;
         end else begin
             Result := existingElem;
         end;
-        
+
 
 		script := getScript(Result, 'SimSettlementsV2:HQ:Library:ObjectRefs:HQWorkshopItemActionTrigger');
 
@@ -4973,6 +4974,15 @@ unit ImportHqRoom;
                 if(hasObjectInProperty(RoomUpgradeSlots, slot)) then begin
                     Result := curRef;
                     exit;
+                end;
+                continue;
+            end;
+            refScript := getScript(curRef, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
+            if(assigned(refScript)) then begin
+                RoomUpgradeSlots := getScriptProp(refScript, 'AdditionalUpgradeSlots');
+                if(hasObjectInProperty(RoomUpgradeSlots, slot)) then begin
+                    Result := findRoomConfigFromRoomUpgrade(curRef);
+                    if(assigned(Result)) then exit;
                 end;
             end;
         end;
