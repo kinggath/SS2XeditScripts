@@ -1767,19 +1767,19 @@ unit ImportHqRoom;
 	var
 		inputName, inputPrefix: TEdit;
 		btnOk: TButton;
-		selectMainDep, selectRoomShape, selectActionGroup: TComboBox;
+		selectRoomShape, selectActionGroup: TComboBox;
 		frm: TForm;
     begin
 		frm := findComponentParentWindow(sender);
         inputName := TEdit(frm.FindComponent('inputName'));
         inputPrefix := TEdit(frm.FindComponent('inputPrefix'));
-        selectMainDep := TComboBox(frm.FindComponent('selectMainDep'));
+        //selectMainDep := TComboBox(frm.FindComponent('selectMainDep'));
         selectRoomShape := TComboBox(frm.FindComponent('selectRoomShape'));
         selectActionGroup := TComboBox(frm.FindComponent('selectActionGroup'));
 
 		btnOk := TButton(frm.FindComponent('btnOk'));
 
-		if (trim(inputName.text) <> '') and (trim(inputPrefix.text) <> '') and (selectMainDep.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and ((selectRoomShape.ItemIndex >= 0) or (trim(selectRoomShape.text) <> '')) then begin
+		if (trim(inputName.text) <> '') and (trim(inputPrefix.text) <> '') and (selectActionGroup.ItemIndex >= 0) and ((selectRoomShape.ItemIndex >= 0) or (trim(selectRoomShape.text) <> '')) then begin
 			btnOk.enabled := true;
 		end else begin
 			btnOk.enabled := false;
@@ -1931,7 +1931,12 @@ unit ImportHqRoom;
 
 		configMiscScript := getScript(configMisc, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
 		setScriptProp(configMiscScript, 'ActionGroup', actionGroup);
-		setScriptProp(configMiscScript, 'PrimaryDepartment', primaryDepartment);
+
+        if(assigned(primaryDepartment)) then begin
+            setScriptProp(configMiscScript, 'PrimaryDepartment', primaryDepartment);
+        end else begin
+            deleteScriptProp(configMiscScript, 'PrimaryDepartment');
+        end;
 
 		roomConfigKw := getCopyOfTemplate(targetFile, keywordTemplate, globalNewFormPrefix+'Tag_RoomConfig_'+kwBase+'_'+roomNameSpaceless);
 
@@ -1984,8 +1989,8 @@ unit ImportHqRoom;
 		index := dropDown.Items.indexOf(value);
 		if(index >= 0) then begin
 			dropDown.ItemIndex := index;
-		end else begin
-			dropDown.ItemIndex := -1;
+		//end else begin
+		//	dropDown.ItemIndex := -1;
 		end;
 	end;
 
@@ -1997,7 +2002,7 @@ unit ImportHqRoom;
         if(not assigned(form)) then begin
             exit;
         end;
-        prevIndex := dropDown.ItemIndex;
+        //prevIndex := dropDown.ItemIndex;
 
 		for i:=0 to dropDown.Items.count-1 do begin
 			if(dropDown.Items.Objects[i] <> nil) then begin
@@ -2009,7 +2014,7 @@ unit ImportHqRoom;
 			end;
 		end;
 
-		dropDown.ItemIndex := prevIndex;
+		//dropDown.ItemIndex := prevIndex;
 	end;
 
 	function GetRoomSlotName(slotMisc: IInterface): string;
@@ -3438,7 +3443,12 @@ unit ImportHqRoom;
 	begin
 		// load the slots for what we have
         currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHQ, targetRoomConfig);
-
+//btnOk.enabled := (trim(inputName.Text) <> '') and 
+//(trim(inputPrefix.Text) <> '') and 
+//(inputDuration > 0) and 
+//(selectUpgradeSlot.ItemIndex >= 0) and 
+//(selectActionGroup.ItemIndex >= 0) and 
+//(resourceBox.Items.count > 0);
 		secondRowOffset := 300;
         actiData := nil;
         windowCaption := 'Generating Room Upgrade';
@@ -3485,14 +3495,14 @@ unit ImportHqRoom;
 
 		curY := curY + 46;
 
-		CreateLabel(frm, 10, 10+curY, 'Name:');
+		CreateLabel(frm, 10, 10+curY, 'Name:*');
 		inputName := CreateInput(frm, 100, 8+curY, '');
 		inputName.Name := 'inputName';
 		inputName.Text := '';
 		inputName.width := 200;
 		inputName.onChange := showRoomUpradeDialog2UpdateOk;
 
-		CreateLabel(frm, secondRowOffset+10, 10+curY, 'EditorID Prefix:');
+		CreateLabel(frm, secondRowOffset+10, 10+curY, 'EditorID Prefix:*');
 		inputPrefix := CreateInput(frm, secondRowOffset+100, 8+curY, '');
 		inputPrefix.Name := 'inputPrefix';
 		inputPrefix.Text := '';
@@ -3506,7 +3516,7 @@ unit ImportHqRoom;
 		modelList := prependNoneEntry(listModels);
 		//selectActionGroup
         // this is different now
-		CreateLabel(frm, 10, 10+curY, 'Object Type:');
+		CreateLabel(frm, 10, 10+curY, 'Object Type:*');
 
 		selectActionGroup := CreateComboBox(frm, 100, 8+curY, 500, nil);
 		selectActionGroup.Style := csDropDownList;
@@ -3543,7 +3553,7 @@ unit ImportHqRoom;
         end;
 
 		curY := curY + 24;
-		CreateLabel(frm, 10, 10+curY, 'Upgrade slot:');
+		CreateLabel(frm, 10, 10+curY, 'Upgrade slot:*');
 		selectUpgradeSlot := CreateComboBox(frm, 100, 8+curY, 200, currentListOfUpgradeSlots);
 		selectUpgradeSlot.Style := csDropDownList;
 		selectUpgradeSlot.Name := 'selectUpgradeSlot';
@@ -3592,7 +3602,7 @@ unit ImportHqRoom;
 
         secondRowOffset := 300;
 
-		CreateLabel(frm, secondRowOffset+10, 10+curY, 'Duration (hours):');
+		CreateLabel(frm, secondRowOffset+10, 10+curY, 'Duration (hours):*');
 		inputDuration := CreateInput(frm, secondRowOffset+150, 8+curY, '24.0');
 		inputDuration.width := 120;
 		inputDuration.Name := 'inputDuration';
@@ -3614,7 +3624,7 @@ unit ImportHqRoom;
 		// test
 
 		//CreateLabel();
-		resourceGroup := CreateGroup(frm, 10, curY, 290, 88, 'Resources');
+		resourceGroup := CreateGroup(frm, 10, curY, 290, 88, 'Resources*');
 		resourceGroup.Name := 'resourceGroup';
 
 		resourceBox := CreateListBox(resourceGroup, 8, 16, 200, 72, nil);
@@ -5179,7 +5189,9 @@ unit ImportHqRoom;
 		i: integer;
 		existingSlotProps, curExistingSlot: IInterface;
 		existingSlotName: string;
+        departmentList: TStringList;
 	begin
+        //if (trim(inputName.text) <> '') and (trim(inputPrefix.text) <> '') and (selectActionGroup.ItemIndex >= 0) and ((selectRoomShape.ItemIndex >= 0) or (trim(selectRoomShape.text) <> '')) then begin
 		curY := 0;
 		frm := CreateDialog('Room Config', 570, 348);
 		frm.Name := 'roomConfigDialog';
@@ -5189,14 +5201,14 @@ unit ImportHqRoom;
 		curY := 24;
 		secondRowOffset := 300;
 
-		CreateLabel(frm, 10, 10+curY, 'Room Name:');
+		CreateLabel(frm, 10, 10+curY, 'Room Name:*');
 		inputName := CreateInput(frm, 120, 8+curY, '');
 		inputName.width := 200;
 		inputName.Name := 'inputName';
 		inputName.Text := '';
 		inputName.onChange := updateRoomConfigOkBtn;
 
-		CreateLabel(frm, secondRowOffset+30, 10+curY, 'EditorID Prefix:');
+		CreateLabel(frm, secondRowOffset+30, 10+curY, 'EditorID Prefix:*');
 		inputPrefix := CreateInput(frm, secondRowOffset+120, 8+curY, '');
 		inputPrefix.Name := 'inputPrefix';
 		inputPrefix.Text := '';
@@ -5206,7 +5218,7 @@ unit ImportHqRoom;
 
 
 		curY := curY + 24;
-		CreateLabel(frm, 10, 10+curY, 'Room Shape:');
+		CreateLabel(frm, 10, 10+curY, 'Room Shape:*');
 
 		selectRoomShape := CreateComboBox(frm, 120, 8+curY, 430, listRoomShapes);
 		selectRoomShape.Name := 'selectRoomShape';
@@ -5214,19 +5226,21 @@ unit ImportHqRoom;
 		selectRoomShape.onChange := updateRoomConfigOkBtn;
 
 		curY := curY + 24;
-		CreateLabel(frm, 10, 10+curY, 'Action Group:');
+		CreateLabel(frm, 10, 10+curY, 'Action Group:*');
 		selectActionGroup := CreateComboBox(frm, 120, 8+curY, 430, listActionGroups);
 		selectActionGroup.Style := csDropDownList;
 		selectActionGroup.Name := 'selectActionGroup';
 		selectActionGroup.onChange := updateRoomConfigOkBtn;
 
+        departmentList := prependDummyEntry( listDepartmentObjects, '- NONE -');
+
 		curY := curY + 24;
 		CreateLabel(frm, 10, 10+curY, 'Primary Department:');
-		selectMainDep := CreateComboBox(frm, 120, 8+curY, 430, listDepartmentObjects);
+		selectMainDep := CreateComboBox(frm, 120, 8+curY, 430, departmentList);
 		selectMainDep.Style := csDropDownList;
 		selectMainDep.Name := 'selectMainDep';
-		selectMainDep.onChange := updateRoomConfigOkBtn;
-		// selectMainDep.Text := '';
+		// selectMainDep.onChange := updateRoomConfigOkBtn;
+		selectMainDep.ItemIndex := 0;
 
 		curY := curY + 24;
 		CreateLabel(frm, 10, 12+curY, 'Upgrade Slots:');
@@ -5280,18 +5294,18 @@ unit ImportHqRoom;
 			// existing roomshape
 			existingRoomshape := findKeywordByList(existingElem, listRoomShapes);
 			if(assigned(existingRoomshape)) then begin
-				setItemIndexByValue(selectRoomShape, EditorID(existingRoomshape));
+				setItemIndexByForm(selectRoomShape, existingRoomshape);
 			end;
 
 			configMiscScript := getScript(existingElem, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
 			existingActionGroup := getScriptProp(configMiscScript, 'ActionGroup');
 			if(assigned(existingActionGroup)) then begin
-				setItemIndexByValue(selectActionGroup, EditorID(existingActionGroup));
+				setItemIndexByForm(selectActionGroup, existingActionGroup);
 			end;
 
 			existingPrimaryDepartment := getScriptProp(configMiscScript, 'PrimaryDepartment');
 			if(assigned(existingPrimaryDepartment)) then begin
-				setItemIndexByValue(selectMainDep, EditorID(existingPrimaryDepartment));
+				setItemIndexByForm(selectMainDep, existingPrimaryDepartment);
 			end;
 
 			// load the slots
@@ -5316,7 +5330,11 @@ unit ImportHqRoom;
 			roomName := trim(inputName.Text);
 			roomShapeKw := nil;
 			roomShapeKwEdid := cleanStringForEditorID(selectRoomShape.Text);
-			primaryDepartment := ObjectToElement(listDepartmentObjects.Objects[selectMainDep.ItemIndex]);
+            if(selectMainDep.ItemIndex > 0) then begin
+                primaryDepartment := ObjectToElement(departmentList.Objects[selectMainDep.ItemIndex]);
+            end else begin
+                primaryDepartment := nil;
+            end;
 			actionGroup := ObjectToElement(listActionGroups.Objects[selectActionGroup.ItemIndex]);
 
 			if(selectRoomShape.ItemIndex >= 0) then begin
@@ -5332,6 +5350,7 @@ unit ImportHqRoom;
 			AddMessage('Room Config generated!');
 		end;
 
+        departmentList.free();
 
 		frm.free();
 	end;
