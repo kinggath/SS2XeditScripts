@@ -652,7 +652,7 @@ unit SS2Lib;
 		curData := spawnMiscData.O[curFileName];
 		//spawnMiscData
 		if(not spawnMiscData.O[curFileName].B['exists']) then begin
-			AddMessage('No data for '+GetFileName(targetFile)' present in cache, cache will be rebuilt.');
+			AddMessage('No data for '+GetFileName(targetFile)+' present in cache, cache will be rebuilt.');
 			Result := true;
 			exit;
 		end;
@@ -688,7 +688,6 @@ unit SS2Lib;
 				Result := true;
 				exit;
 			end;
-
 			// is this a real spawn?
 			if(strStartsWith(EditorID(curForm), recycleableMiscPrefix)) then begin
 				AddMessage('Cache file is not valid, it will be rebuilt.');
@@ -696,6 +695,7 @@ unit SS2Lib;
 				exit;
 			end;
 
+            // TODO maybe check something else in there
 			curScript := getScript(curForm, 'SimSettlementsV2:MiscObjects:StageItem');
 			if(not assigned(curScript)) then begin
 				AddMessage('Cache file is not valid, it will be rebuilt.');
