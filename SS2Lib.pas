@@ -494,7 +494,7 @@ unit SS2Lib;
     begin
         // super special workaround:
         if(EditorID(misc) = 'SS2_Template_StageItem') then exit;
-    
+
         hashedString := getMiscLookupKeyFromScript(miscScript);
         if(hashedString = '') then begin
             AddMessage('Failed to generate lookup key for '+EditorID(misc));
@@ -953,7 +953,7 @@ unit SS2Lib;
     begin
         setUniversalFormProperty(struct, nil, id, pluginName, 'BaseForm', 'iFormID', 'sPluginName');
     end;
-	
+
 	function isResourceObject_elem(elem: IInterface): boolean;
     var
         script: IInterface;
@@ -2029,11 +2029,8 @@ unit SS2Lib;
 
         Result := FilesEqual(targetFile, elemFile);
     end;
-
-    {
-        Creates a copy of the given template with the given edid, if it doesn't exist. If it does, the existing record is returned
-    }
-    function getCopyOfTemplate(targetFile, template: IInterface; newEdid: string): IInterface;
+    
+    function getCopyOfTemplateWithOverride(targetFile, template: IInterface; newEdid: string; useOverrides: boolean): IInterface;
     var
         group, newElem: IInterface;
         tmpEdid, templateSig: string;
@@ -2043,34 +2040,24 @@ unit SS2Lib;
         templateSig := signature(template);
         if(templateSig = '') then begin
             AddMessage('=== COULD NOT COPY TEMPLATE FOR '+newEdid+'. THIS IS VERY BAD ===');
-            // dumpElem(template);
             exit;
         end;
 
         // before doing anything else, see if this edid is used already
         newElem := FindObjectInFileByEdid(targetFile, newEdid);
         if(assigned(newElem)) then begin
-            Result := newElem;
+            if(useOverrides) then begin
+                Result := getOrCreateElementOverride(newElem, targetFile);
+            end else begin
+                Result := newElem;
+            end;
             exit;
         end;
-        //i := 1;
-
 
         if(tmpEdid <> '') then begin
             newEdid := tmpEdid;
         end;
 
-        // AddMessage('New Edid: '+newEdid);
-
-{
-        group := GroupBySignature(targetFile, templateSig);
-
-        if(not assigned(group)) then begin
-            group := Add(targetFile, templateSig, True);
-        end;
-
-        newElem := MainRecordByEditorID(group, newEdid);
-}
         if(not assigned(newElem)) then begin
             addRequiredMastersSilent(template, targetFile);
 
@@ -2082,7 +2069,24 @@ unit SS2Lib;
 
     end;
 
-    // function is
+    {
+        Creates a copy of the given template with the given edid, if it doesn't exist. If it does, the existing record is returned
+    }
+    function getCopyOfTemplate(targetFile, template: IInterface; newEdid: string): IInterface;
+    begin
+        Result := getCopyOfTemplateWithOverride(targetFile, template, newEdid, false);
+    end;
+
+    {
+        Override-aware version of getCopyOfTemplate:
+            - if form doesn't exist, it will be created in target file
+            - if form does exist, and has an override in targetFile, it will use that override
+            - if form does exist, and has no override in targetFile, an override in targetFile will be created
+    }
+    function getCopyOfTemplateOA(targetFile, template: IInterface; newEdid: string): IInterface;
+    begin
+        Result := getCopyOfTemplateWithOverride(targetFile, template, newEdid, true);
+    end;
 
     {
         Tries to find the adodn quest in targetFile. Does not auto-create it
@@ -5200,7 +5204,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         end;
 
         yOffset := yOffset+35;
-        
+
         descriptionInput := nil;
 
         if (showDescription) and (isFullPlot) then begin

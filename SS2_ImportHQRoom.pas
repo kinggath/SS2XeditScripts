@@ -1,9 +1,23 @@
 {
     Run on Room Config to update. Run on anything else to generate a new
 
-
-
 	TODO:
+    For the first 3, perhaps a pop-up for filling all this in, since it's all related to just giving the player information.
+
+    1.  Field for the designer's name. For this we'll need to create a MiscObject named that, and plug that into the DesignerNameHolder property on each of the layouts.
+        Probably should come up with a standard name scheme so you can search it up by EDID and avoid creating duplicates.
+        So something like SS2C2_NameHolder_Designer_<alphanumeric characters from the designer's name field>.
+
+    2. A mechanics description field, this should be used for the COBJ's DESC section.
+
+    3. A design description field, this should be used to create a Message form and plugged into the InformationMessage property of the layouts.
+
+    4.  This one should probably go on the main form, a dropdown box to select which recipe filter keyword to use on the COBJs,
+        any keyword starting with SS2_WorkshopMenu_HQ_Facilities_Construction_ for Construction, and any starting with SS2_WorkshopMenu_HQ_Facilities_Upgrades_ for those.
+        We were using the same keyword for all Upgrades and one for Construction before, but its becoming a mess.
+
+    5. Make this work on overrides
+
 
     Maybe later:
 	- Allow not selecting slot for a layout. generate a new KW then
@@ -23,7 +37,7 @@ unit ImportHqRoom;
 
 	const
 		cacheFile = ProgramPath + 'Edit Scripts\SS2\HqRoomCache.json';
-        cacheFileVersion = 2;
+        cacheFileVersion = 3;
 		fakeClipboardFile = ProgramPath + 'Edit Scripts\SS2\HqRoomClipboard.txt';
 
 		progressBarChar = '|';
@@ -39,6 +53,7 @@ unit ImportHqRoom;
 		listHQRefs: TStringList;
 		//listHqManagers: TStringList;
 		listRoomShapes: TStringList;
+		listKeywordsConstruct, listKeywordsUpgrade: TStringList;
 		listDepartmentObjects: TStringList;
 		listActionGroups: TStringList;
 		listRoomConfigs: TStringList;
@@ -841,6 +856,16 @@ unit ImportHqRoom;
 				// AddMessage('Found RoomShape! '+EditorID(curRec));
 				addObjectDupIgnore(listRoomShapes, edid, curRec);
 			end;
+
+            if(strStartsWithSS2(edid, 'WorkshopMenu_HQ_Facilities_Construction_')) then begin
+                // use a better prefix
+				addObjectDupIgnore(listKeywordsConstruct, stripSS2Prefix(edid, 'WorkshopMenu_HQ_Facilities_Construction_'), curRec);
+			end;
+
+            if(strStartsWithSS2(edid, 'WorkshopMenu_HQ_Engineering_Upgrades_')) then begin
+				addObjectDupIgnore(listKeywordsUpgrade, stripSS2Prefix(edid, 'WorkshopMenu_HQ_Engineering_Upgrades_'), curRec);
+			end;
+
 			updateProgress(i);
 		end;
 		endProgress();
@@ -897,6 +922,12 @@ unit ImportHqRoom;
 
 		Result := false;
 	end;
+
+    function stripSS2Prefix(str, prefix: string): string;
+    begin
+        Result := stripPrefix('SS2_'+prefix, str);
+        Result := stripPrefix('SS2C2_'+prefix, Result);
+    end;
 
 	function findHqByLocation(loc: IInterface): IInterface;
 	var
@@ -1257,6 +1288,9 @@ unit ImportHqRoom;
 		currentCacheFile.S['DefaultHQ'] := FormToAbsStr(SS2_HQ_WorkshopRef_GNN);
 		// simple stuff
 		writeObjectListToCacheFile(listRoomShapes, 'RoomShapes');
+		writeObjectListToCacheFile(listKeywordsUpgrade, 'UpgradeKeywords');
+		writeObjectListToCacheFile(listKeywordsConstruct, 'ConstructKeywords');
+        //listKeywordsConstruct,listKeywordsUpgrade
 		// writeObjectListToCacheFile(listRoomConfigs, 'RoomConfigs');
 		writeObjectListToCacheFile(listRoomFuncs, 'RoomFuncs');
 		writeObjectListToCacheFile(listRoomResources, 'RoomResources');
@@ -1516,6 +1550,11 @@ unit ImportHqRoom;
 				// simple stuff
 				// readFileDependentObjectList(curFileObj, listHQRefs, 		fileContainer.O['HQs']);
 				readFileDependentObjectList(curFileObj, listRoomShapes, 	fileContainer.O['RoomShapes']);
+
+				readFileDependentObjectList(curFileObj, listKeywordsUpgrade,fileContainer.O['UpgradeKeywords']);
+				readFileDependentObjectList(curFileObj, listKeywordsConstruct, 	fileContainer.O['ConstructKeywords']);
+
+
 				//readFileDependentObjectList(curFileObj, listRoomConfigs, 	fileContainer.O['RoomConfigs']);
 				readFileDependentObjectList(curFileObj, listRoomFuncs, 		fileContainer.O['RoomFuncs']);
 				//readFileDependentObjectList(curFileObj, listHqManagers, 	fileContainer.O['HqManagers']);
@@ -1707,6 +1746,8 @@ unit ImportHqRoom;
 
 		listHQRefs := nil;
 		listRoomShapes := TStringList.create;
+        listKeywordsConstruct := TStringList.create;
+        listKeywordsUpgrade := TStringList.create;
 		listDepartmentObjects := TStringList.create;
 		listActionGroups := TStringList.create;
 		listRoomFuncs := TStringList.create;
@@ -1728,6 +1769,8 @@ unit ImportHqRoom;
 
 		//listHQRefs.Duplicates := dupIgnore;
 		listRoomShapes.Duplicates := dupIgnore;
+        listKeywordsConstruct.Duplicates := dupIgnore;
+        listKeywordsUpgrade.Duplicates := dupIgnore;
 		listDepartmentObjects.Duplicates := dupIgnore;
 		listActionGroups.Duplicates := dupIgnore;
 		listRoomConfigs.Duplicates := dupIgnore;
@@ -1746,7 +1789,11 @@ unit ImportHqRoom;
 		if(not assigned(targetElem)) then begin
 			targetElem := e;
 			targetFile := GetFile(e);
-		end;
+		end else begin
+            AddMessage('Please run this on exactly one item. Try the file header if you don''t want to update anything.');
+            Result := 1;
+            exit;
+        end;
     end;
 
 	procedure updateRoomUpgrade1OkBtn(sender: TObject);
@@ -2807,7 +2854,7 @@ unit ImportHqRoom;
 				layoutData.S['slot'] := selectedSlotStr;
 				layoutsBox.Items[index] := layoutDisplayName;
 			end;
-			showRoomUpradeDialog2UpdateOk(layoutsBox.parent);
+			showRoomUprade UpdateOk(layoutsBox.parent);
 		end;
 
 		frm.free();
@@ -2903,7 +2950,7 @@ unit ImportHqRoom;
 	var
 		btnOk: TButton;
 		inputName, inputDuration, inputPrefix: TEdit;
-		selectUpgradeSlot, selectActionGroup: TComboBox;
+		selectUpgradeSlot, selectActionGroup, selectCobjKeyword: TComboBox;
 		resourceBox, roomFuncsBox: TListBox;
 		durationNr: float;
 		layoutsGroup, resourceGroup: TGroupBox;
@@ -2918,6 +2965,7 @@ unit ImportHqRoom;
 
 		selectUpgradeSlot := TComboBox(parentWindow.FindComponent('selectUpgradeSlot'));
 		selectActionGroup := TComboBox(parentWindow.FindComponent('selectActionGroup'));
+		selectCobjKeyword := TComboBox(parentWindow.FindComponent('selectCobjKeyword'));
 
 		resourceBox := TListBox(parentWindow.FindComponent('resourceBox'));
 		if(resourceBox = nil) then begin
@@ -2936,9 +2984,40 @@ unit ImportHqRoom;
 
 		durationNr := tryToParseFloat(trim(inputDuration.Text));
 
-		btnOk.enabled := (trim(inputName.Text) <> '') and (trim(inputPrefix.Text) <> '') and (durationNr > 0) and (selectUpgradeSlot.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and (resourceBox.Items.count > 0);
-
+		btnOk.enabled := (trim(inputName.Text) <> '') and (trim(inputPrefix.Text) <> '') and (durationNr > 0) and (selectUpgradeSlot.ItemIndex >= 0) and (selectCobjKeyword.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and (resourceBox.Items.count > 0);
 	end;
+
+    procedure roomUpgradeTypeChanged(sender: TObject);
+    const
+        minusOne = -1;
+    var
+        selectCobjKeyword, selectActionGroup: TComboBox;
+        parentWindow: TForm;
+	begin
+        parentWindow := findComponentParentWindow(sender);
+		selectActionGroup := TComboBox(parentWindow.FindComponent('selectActionGroup'));
+		selectCobjKeyword := TComboBox(parentWindow.FindComponent('selectCobjKeyword'));
+
+        //  update selectCobjKeyword
+        case(selectActionGroup.ItemIndex) of
+            // fun fact: case...of can't do negative number literals
+            minusOne:
+                begin
+                    selectCobjKeyword.enabled := false;
+                end;
+            0:
+                begin
+                    selectCobjKeyword.enabled := true;
+                    selectCobjKeyword.Items := listKeywordsConstruct;
+                end;
+            1:
+                begin
+                    selectCobjKeyword.enabled := true;
+                    selectCobjKeyword.Items := listKeywordsUpgrade;
+                end;
+        end;
+        showRoomUpradeDialog2UpdateOk(sender);
+    end;
 
     procedure updateOkButtonAuto(obj: TObject);
     var
@@ -2967,6 +3046,26 @@ unit ImportHqRoom;
         end;
 
         Result := 0;
+    end;
+
+    procedure fillCobjKeywordFromExisting(selectCobjKeyword: TComboBox; existingCobj: IInterface);
+    var
+        fnam, firstEntry, keyword: IInterface;
+        index: integer;
+    begin
+        keyword := nil;
+        fnam := ElementByPath(existingCobj, 'FNAM');
+        if(ElementCount(fnam) < 1) then begin
+            exit;
+        end;
+        // take the first entry in here
+        keyword := LinksTo(ElementByIndex(fnam, 0));
+
+        if(not assigned(keyword)) then begin
+            exit;
+        end;
+
+        setItemIndexByForm(selectCobjKeyword, keyword);
     end;
 
     procedure fillResourceItemsFromExisting(resourceBox: TListBox; script: IInterface);
@@ -3404,7 +3503,7 @@ unit ImportHqRoom;
 		btnOk, btnCancel: TButton;
 		resultCode, curY, secondRowOffset, thirdRowOffset: integer;
 
-		selectUpgradeSlot, selectDepartment, selectModel, selectMiscModel, selectActionGroup: TComboBox;
+		selectUpgradeSlot, selectDepartment, selectModel, selectMiscModel, selectActionGroup, selectCobjKeyword: TComboBox;
 		assignDepAtEnd, assignDepAtStart, disableClutter, disableGarbarge, defaultConstMarkers, realTimeTimer: TCheckBox;
 		doRegisterCb: TCheckBox;
 		departmentList, modelList, modelListMisc: TStringList;
@@ -3435,7 +3534,7 @@ unit ImportHqRoom;
 		roomShapeKeyword, upgradeSlot, actionGroup: IInterface;
 
         // existing stuff
-        existingMiscScript, existingActi, existingActiScript: IInterface;
+        existingMiscScript, existingActi, existingActiScript, existingCobj, cobjKeyword: IInterface;
 
         modelIndex: integer;
 
@@ -3443,12 +3542,7 @@ unit ImportHqRoom;
 	begin
 		// load the slots for what we have
         currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHQ, targetRoomConfig);
-//btnOk.enabled := (trim(inputName.Text) <> '') and 
-//(trim(inputPrefix.Text) <> '') and 
-//(inputDuration > 0) and 
-//(selectUpgradeSlot.ItemIndex >= 0) and 
-//(selectActionGroup.ItemIndex >= 0) and 
-//(resourceBox.Items.count > 0);
+
 		secondRowOffset := 300;
         actiData := nil;
         windowCaption := 'Generating Room Upgrade';
@@ -3459,6 +3553,9 @@ unit ImportHqRoom;
 
             actiData := findRoomUpgradeActivatorsAndCobjs(existingElem);
 
+            existingActi := nil;
+            existingCobj := nil;
+
             // try to find the acti model
             if (actiData.O['1'].S['acti'] <> '') then begin
                 existingActi := StrToForm(actiData.O['1'].S['acti']);
@@ -3468,6 +3565,18 @@ unit ImportHqRoom;
                 end else begin
                     if (actiData.O['3'].S['acti'] <> '') then begin
                         existingActi := StrToForm(actiData.O['3'].S['acti']);
+                    end;
+                end;
+            end;
+
+            if (actiData.O['1'].S['cobj'] <> '') then begin
+                existingCobj := StrToForm(actiData.O['1'].S['cobj']);
+            end else begin
+                if (actiData.O['2'].S['cobj'] <> '') then begin
+                    existingCobj := StrToForm(actiData.O['2'].S['cobj']);
+                end else begin
+                    if (actiData.O['3'].S['cobj'] <> '') then begin
+                        existingCobj := StrToForm(actiData.O['3'].S['cobj']);
                     end;
                 end;
             end;
@@ -3523,7 +3632,7 @@ unit ImportHqRoom;
 		selectActionGroup.Name := 'selectActionGroup';
 		selectActionGroup.ItemIndex := -1;
         fillObjectTypeActionGroups(targetHQ, selectActionGroup);
-		selectActionGroup.onChange := showRoomUpradeDialog2UpdateOk;
+		selectActionGroup.onChange := roomUpgradeTypeChanged;
 
 
 
@@ -3558,6 +3667,14 @@ unit ImportHqRoom;
 		selectUpgradeSlot.Style := csDropDownList;
 		selectUpgradeSlot.Name := 'selectUpgradeSlot';
 		selectUpgradeSlot.onChange := showRoomUpradeDialog2UpdateOk;
+
+        // put the new dropdown here
+        CreateLabel(frm, secondRowOffset+10, 10+curY, 'Submenu:*');
+        //listKeywordsConstruct
+        selectCobjKeyword := CreateComboBox(frm, secondRowOffset+100, 8+curY, 200, listKeywordsConstruct);
+		selectCobjKeyword.Style := csDropDownList;
+		selectCobjKeyword.Name := 'selectCobjKeyword';
+		selectCobjKeyword.onChange := showRoomUpradeDialog2UpdateOk;
 
 
         secondRowOffset := 210;
@@ -3744,14 +3861,19 @@ unit ImportHqRoom;
                 selectModel.ItemIndex := getModelArrayIndex(modelStr, selectModel.Items);
             end;
 
+            // find the cobj
+            fillCobjKeywordFromExisting(selectCobjKeyword, existingCobj);
+            //selectCobjKeyword
+
             // now the hard parts
             fillResourceItemsFromExisting(resourceBox, existingMiscScript);
+
             fillRoomFunctionsFromExisting(roomFuncsBox, existingMiscScript);
             // and the hardedest
             fillLayoutsFromExisting(layoutsBox, existingMiscScript);
         end;
+        roomUpgradeTypeChanged(btnOk);
 
-		showRoomUpradeDialog2UpdateOk(btnOk);
 		resultCode := frm.ShowModal();
 		if(resultCode = mrYes) then begin
 
@@ -3780,6 +3902,8 @@ unit ImportHqRoom;
 			if(selectDepartment.ItemIndex > 0) then begin
 				targetDepartment := ObjectToElement(selectDepartment.Items.Objects[selectDepartment.ItemIndex]);
 			end;
+            
+            cobjKeyword := ObjectToElement(selectCobjKeyword.Items.Objects[selectCobjKeyword.ItemIndex]);
 
 			upgradeName := trim(inputName.Text);
 			upgradeDuration := tryToParseFloat(inputDuration.Text);
@@ -3809,7 +3933,9 @@ unit ImportHqRoom;
                 extraSlotsBox.Items
 			);
 
-
+            if(not assigned(cobjKeyword)) then begin
+                AddMessage('FUCK WHY');
+            end;
 // actiData
             createRoomUpgradeActivatorsAndCobjs(
                 actiData,
@@ -3820,22 +3946,10 @@ unit ImportHqRoom;
                 resourceBox.Items,
                 upgradeDuration,
                 ArtObjEdid,
+                cobjKeyword,
                 selectActionGroup.ItemIndex
             );
-{
-			roomUpgradeActi := createRoomUpgradeActivator(existingActi, roomUpgradeMisc, targetHQ, upgradeName, modelStr);
 
-			createRoomUpgradeCOBJs(
-                roomUpgradeActi,
-                targetHQ,
-                getActionAvailableGlobal(roomUpgradeMisc),
-                upgradeName,
-                resourceBox.Items,
-                upgradeDuration,
-                ArtObjEdid,
-                selectActionGroup.ItemIndex
-            );
-}
             if(actiData <> nil) then begin
                 actiData.free();
                 actiData := nil;
@@ -4225,6 +4339,7 @@ unit ImportHqRoom;
         acti, availableGlobal: IInterface;
         resources: TStringList;
         artObject: IInterface;
+        cobjKeyword: IInterface;
         roomMode: integer
     ): IInterface;
 	var
@@ -4259,6 +4374,7 @@ unit ImportHqRoom;
             // set the put down sound
 
             setPathLinksTo(Result, 'ZNAM', pathLinksTo(sourceTemplate, 'ZNAM'));
+            {
             // set the category
             srcFnam := ElementByPath(sourceTemplate, 'FNAM');
             dstFnam := ElementByPath(Result, 'FNAM');
@@ -4276,7 +4392,19 @@ unit ImportHqRoom;
                     ElementAssign(dstFnam, HighInteger, ElementByIndex(srcFnam, i), false);
                 end;
             end;
+            }
         end;
+        
+        // try to remove the FNAMs
+        dstFnam := ElementByPath(Result, 'FNAM');
+        // clear the prev
+        for i:=0 to ElementCount(dstFnam)-1 do begin
+            RemoveElement(dstFnam, 0);
+            // this won't remove element #0
+        end;
+        // put in cobjKeyword
+        SetLinksTo(ElementByIndex(dstFnam, 0), cobjKeyword);
+        
 
 		SetElementEditValues(Result, 'DESC', descriptionText);
 
@@ -4324,6 +4452,7 @@ unit ImportHqRoom;
         resources: TStringList;
         completionTime: float;
         ArtObjEdid: string;
+        cobjKeyword: IInterface;
         roomMode: integer
     );
     var
@@ -4370,12 +4499,12 @@ unit ImportHqRoom;
         acti1 := createRoomUpgradeActivator(acti1, roomUpgradeMisc, forHq, upgradeName, modelStr, RESOURCE_COMPLEXITY_MINIMAL);
         acti2 := createRoomUpgradeActivator(acti2, roomUpgradeMisc, forHq, upgradeName, modelStr, RESOURCE_COMPLEXITY_CATEGORY);
         acti3 := createRoomUpgradeActivator(acti3, roomUpgradeMisc, forHq, upgradeName, modelStr, RESOURCE_COMPLEXITY_FULL);
-//{"1":{"acti":"050008A0","cobj":"050008A1"},"2":{"cobj":"050008A2"},"3":{"cobj":"050008A3"}}
+
         // now the COBJs
         edidBase := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
-		cobj1 := createRoomUpgradeCOBJ(cobj1, edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti1, availableGlobal, resources, artObject, roomMode);
-		cobj2 := createRoomUpgradeCOBJ(cobj2, edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti2, availableGlobal, resources, artObject, roomMode);
-		cobj3 := createRoomUpgradeCOBJ(cobj3, edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti3, availableGlobal, resources, artObject, roomMode);
+		cobj1 := createRoomUpgradeCOBJ(cobj1, edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti1, availableGlobal, resources, artObject, cobjKeyword, roomMode);
+		cobj2 := createRoomUpgradeCOBJ(cobj2, edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti2, availableGlobal, resources, artObject, cobjKeyword, roomMode);
+		cobj3 := createRoomUpgradeCOBJ(cobj3, edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti3, availableGlobal, resources, artObject, cobjKeyword, roomMode);
     end;
 
 	function createRoomUpgradeActivator(existingElem, roomUpgradeMisc, forHq: IInterface; upgradeName, modelStr: string; resourceComplexity: integer): IInterface;
