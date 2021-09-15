@@ -79,6 +79,9 @@ unit ImportHqRoom;
         SS2_Tag_HQ_RoomIsClean: IInterface;
         SS2_Tag_HQ_ActionType_RoomConstruction: IInterface;
         SS2_Tag_HQ_ActionType_RoomUpgrade: IInterface;
+        defaultUpgradeKw, defaultConstructionKw: IInterface;
+        // SS2_WorkshopMenu_HQ_Engineering_Upgrades_Other
+        // SS2_WorkshopMenu_HQ_Facilities_Construction_Other
 		// templates
 		SS2_HQ_Action_RoomUpgrade_Template: IInterface;
 		SS2_HQRoomLayout_Template: IInterface;
@@ -1731,6 +1734,9 @@ unit ImportHqRoom;
         SS2_Tag_HQ_ActionType_RoomConstruction  := FindObjectByEdidWithError('SS2_Tag_HQ_ActionType_RoomConstruction');
         SS2_Tag_HQ_ActionType_RoomUpgrade       := FindObjectByEdidWithError('SS2_Tag_HQ_ActionType_RoomUpgrade');
 
+        defaultUpgradeKw        := FindObjectByEdidWithError('SS2_WorkshopMenu_HQ_Engineering_Upgrades_Other');
+        defaultConstructionKw   := FindObjectByEdidWithError('SS2_WorkshopMenu_HQ_Facilities_Construction_Other');
+
 		if(hasFindObjectError) then begin
 			Result := 1;
 			exit;
@@ -2854,7 +2860,7 @@ unit ImportHqRoom;
 				layoutData.S['slot'] := selectedSlotStr;
 				layoutsBox.Items[index] := layoutDisplayName;
 			end;
-			showRoomUprade UpdateOk(layoutsBox.parent);
+			showRoomUpradeDialog2UpdateOk(layoutsBox.parent);
 		end;
 
 		frm.free();
@@ -2973,15 +2979,6 @@ unit ImportHqRoom;
 			resourceBox := TListBox(resourceGroup.FindComponent('resourceBox'));
 		end;
 
-        {
-		// roomFuncsBox := TListBox(sender.parent.FindComponent('roomFuncsBox'));
-		layoutsBox := TListBox(sender.parent.FindComponent('layoutsBox'));
-		if(layoutsBox = nil) then begin
-			layoutsGroup := TGroupBox (sender.parent.FindComponent('layoutsGroup'));
-			layoutsBox := TListBox(layoutsGroup.FindComponent('layoutsBox'));
-		end;
-        }
-
 		durationNr := tryToParseFloat(trim(inputDuration.Text));
 
 		btnOk.enabled := (trim(inputName.Text) <> '') and (trim(inputPrefix.Text) <> '') and (durationNr > 0) and (selectUpgradeSlot.ItemIndex >= 0) and (selectCobjKeyword.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and (resourceBox.Items.count > 0);
@@ -2993,10 +2990,19 @@ unit ImportHqRoom;
     var
         selectCobjKeyword, selectActionGroup: TComboBox;
         parentWindow: TForm;
+        prevSelection, defaultKw: IInterface;
+        tmpIndex: integer;
 	begin
         parentWindow := findComponentParentWindow(sender);
 		selectActionGroup := TComboBox(parentWindow.FindComponent('selectActionGroup'));
 		selectCobjKeyword := TComboBox(parentWindow.FindComponent('selectCobjKeyword'));
+
+        prevSelection := nil;
+        defaultKw     := nil;
+
+        if(selectCobjKeyword.ItemIndex >= 0) then begin
+            prevSelection := ObjectToElement(selectCobjKeyword.Items.Objects[selectCobjKeyword.ItemIndex]);
+        end;
 
         //  update selectCobjKeyword
         case(selectActionGroup.ItemIndex) of
@@ -3007,16 +3013,28 @@ unit ImportHqRoom;
                 end;
             0:
                 begin
+                    defaultKw := defaultConstructionKw;
                     selectCobjKeyword.enabled := true;
                     selectCobjKeyword.Items := listKeywordsConstruct;
                 end;
             1:
                 begin
+                    defaultKw := defaultUpgradeKw;
                     selectCobjKeyword.enabled := true;
                     selectCobjKeyword.Items := listKeywordsUpgrade;
                 end;
         end;
         showRoomUpradeDialog2UpdateOk(sender);
+
+        if(prevSelection <> nil) then begin
+            tmpIndex := indexOfElement(selectCobjKeyword.Items, prevSelection);
+            if(tmpIndex >= 0) then begin
+                selectCobjKeyword.ItemIndex := tmpIndex;
+                exit;
+            end;
+        end;
+
+        setItemIndexByForm(selectCobjKeyword, defaultKw);
     end;
 
     procedure updateOkButtonAuto(obj: TObject);
@@ -3902,7 +3920,7 @@ unit ImportHqRoom;
 			if(selectDepartment.ItemIndex > 0) then begin
 				targetDepartment := ObjectToElement(selectDepartment.Items.Objects[selectDepartment.ItemIndex]);
 			end;
-            
+
             cobjKeyword := ObjectToElement(selectCobjKeyword.Items.Objects[selectCobjKeyword.ItemIndex]);
 
 			upgradeName := trim(inputName.Text);
@@ -4394,7 +4412,7 @@ unit ImportHqRoom;
             end;
             }
         end;
-        
+
         // try to remove the FNAMs
         dstFnam := ElementByPath(Result, 'FNAM');
         // clear the prev
@@ -4404,7 +4422,7 @@ unit ImportHqRoom;
         end;
         // put in cobjKeyword
         SetLinksTo(ElementByIndex(dstFnam, 0), cobjKeyword);
-        
+
 
 		SetElementEditValues(Result, 'DESC', descriptionText);
 
