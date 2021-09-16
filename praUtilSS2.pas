@@ -2322,6 +2322,17 @@ unit PraUtil;
         Result.Top := top;
         Result.Text := escapeString(text);
     end;
+    
+    function CreateMultilineInput(frm: TForm; left, top, width, height: Integer; text: String): TMemo;
+    begin
+        Result := TMemo.Create(frm);
+        Result.Parent := frm;
+        Result.Left := left;
+        Result.Top := top;
+        Result.Width := width;
+        Result.height := height;
+        Result.Text := escapeString(text);
+    end;
 
     function CreateGroup(frm: TForm; left: Integer; top: Integer; width: Integer; height: Integer; caption: String): TGroupBox;
     begin
