@@ -3177,7 +3177,7 @@ unit ImportHqRoom;
             end;
             
             if(assigned(descHolder)) then begin
-                currentUpgradeDescriptionData.S['designDesc'] := getElementEditValues(descHolder, 'FULL');
+                currentUpgradeDescriptionData.S['designDesc'] := getElementEditValues(descHolder, 'DESC');
             end;
         end;
     // fill currentUpgradeDescriptionData
@@ -4918,7 +4918,6 @@ unit ImportHqRoom;
         Result := getElemByEdidAndSig(edid, 'MESG', targetFile);
 
         setElementEditValues(Result, 'DESC', msg);
-        setElementEditValues(Result, 'FULL', msg);
     end;
 
     function getLayoutNameMisc(designerName: string): IInterface;
