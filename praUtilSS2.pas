@@ -411,7 +411,7 @@ unit PraUtil;
         end;
         Result := $00FFFFFF and id;
     end;
-	
+
 	function getElementLocalFormId(e: IInterface): cardinal;
 	begin
 		Result := getLocalFormId(GetFile(e), FormID(e));
@@ -739,17 +739,16 @@ unit PraUtil;
     var
         theFormID: cardinal;
     begin
+        Result := nil;
+        if(str = '') then exit;
         // StrToInt64 must be used, otherwise large values will just cause an error
         theFormID := StrToInt64('$' + str);
 
-        if(theFormID = 0) then begin
-            Result := nil;
-            exit;
-        end;
+        if(theFormID = 0) then exit;
 
         Result := getFormByLoadOrderFormID(theFormID);
     end;
-	
+
 	{
 		Encodes a form into Filename:formID
 	}
@@ -765,7 +764,7 @@ unit PraUtil;
 
 		Result := theFilename + ':'+IntToHex(theFormId, 8);
 	end;
-	
+
 	{
 		Decodes a Filename:formID string into a form
 	}
@@ -780,10 +779,10 @@ unit PraUtil;
 		if(separatorPos <= 0) then begin
 			exit;
 		end;
-		
+
 		theFilename := copy(str, 1, separatorPos-1);
 		formIdStr := copy(str, separatorPos+1, length(str)-separatorPos+1);
-		
+
 		Result := getFormByFilenameAndFormID(theFilename, StrToInt('$'+formIdStr));
 	end;
 
@@ -941,7 +940,7 @@ unit PraUtil;
             end
         end;
     end;
-    
+
     procedure ensureKeywordByPath(toElem: IInterface; kw: IInterface; targetSig: string);
     begin
         if(not hasKeywordByPath(toElem, kw, targetSig)) then begin
@@ -1750,7 +1749,7 @@ unit PraUtil;
 
         Result := ElementByPath(Result, 'Value\Array of Struct');
     end;
-    
+
     {
         Mostly a copy of ElementTypeString from mteFunctions, somewhat optimized
     }
@@ -1907,7 +1906,7 @@ unit PraUtil;
         typeStr: string;
     begin
         typeStr := geevt(prop, 'Type');
-        
+
         if(typeStr = '') then begin
             // assume it's an array
             clearArrayProperty(prop);
@@ -1918,14 +1917,14 @@ unit PraUtil;
         SetElementEditValues(prop, 'Bool', 'False');
         SetElementEditValues(prop, 'Type', typeStr);
     end;
-    
+
     {
         For when the prop is Value\Array of x already
     }
     procedure clearArrayProperty(prop: IInterface);
     var
         i, num: integer;
-        
+
     begin
         num := ElementCount(prop);
         for i:=0 to num-1 do begin
@@ -2186,6 +2185,12 @@ unit PraUtil;
         masterElem := MasterOrSelf(sourceElem);
         targetFileName := GetFileName(targetFile);
 
+        // important failsafe
+        if(FilesEqual(targetFile,  GetFile(masterElem))) then begin
+            Result := sourceElem;
+            exit;
+        end;
+
         numOverrides := OverrideCount(masterElem);
 
         for i:=0 to numOverrides-1 do begin
@@ -2198,11 +2203,44 @@ unit PraUtil;
         end;
     end;
 
+    function getExistingElementOverrideOrClosest(sourceElem: IInterface; targetFile: IwbFile): IInterface;
+    var
+        masterElem, curOverride: IINterface;
+        numOverrides, i: integer;
+        targetFileName: string;
+    begin
+
+        masterElem := MasterOrSelf(sourceElem);
+        targetFileName := GetFileName(targetFile);
+        Result := masterElem;
+
+        // important failsafe
+        if(FilesEqual(targetFile,  GetFile(masterElem))) then begin
+            Result := sourceElem;
+            exit;
+        end;
+
+        numOverrides := OverrideCount(masterElem);
+
+        for i:=0 to numOverrides-1 do begin
+            curOverride := OverrideByIndex(masterElem, i);
+            Result := curOverride;
+
+            if (FilesEqual(GetFile(curOverride), targetFile)) then begin
+                exit;
+            end;
+        end;
+    end;
+
     function createElementOverride(sourceElem: IInterface; targetFile: IwbFile): IInterface;
     var
         existingOverride: IInterface;
     begin
         existingOverride := getExistingElementOverride(sourceElem, targetFile);
+        if(equals(existingOverride, sourceElem)) then begin
+            Result := existingOverride;
+            exit;
+        end;
 
         if(assigned(existingOverride)) then begin
             Remove(existingOverride);
@@ -2235,7 +2273,7 @@ unit PraUtil;
     begin
         Result := StringReplace(str, '&', '&&', [rfReplaceAll]);
     end;
-	
+
 	{
 		Removes all strings except letters, numbers, _ and -
 	}
@@ -2322,7 +2360,7 @@ unit PraUtil;
         Result.Top := top;
         Result.Text := escapeString(text);
     end;
-    
+
     function CreateMultilineInput(frm: TForm; left, top, width, height: Integer; text: String): TMemo;
     begin
         Result := TMemo.Create(frm);

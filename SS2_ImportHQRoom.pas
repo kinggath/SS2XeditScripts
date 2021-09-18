@@ -4,13 +4,6 @@
 	TODO:
     For the first 3, perhaps a pop-up for filling all this in, since it's all related to just giving the player information.
 
-    1.  Field for the designer's name. For this we'll need to create a MiscObject named that, and plug that into the DesignerNameHolder property on each of the layouts.
-        Probably should come up with a standard name scheme so you can search it up by EDID and avoid creating duplicates.
-        So something like SS2C2_NameHolder_Designer_<alphanumeric characters from the designer's name field>.
-
-    2. A mechanics description field, this should be used for the COBJ's DESC section.
-
-    3. A design description field, this should be used to create a Message form and plugged into the InformationMessage property of the layouts.
 
 
     5. Make this work on overrides
@@ -20,6 +13,13 @@
 	- Allow not selecting slot for a layout. generate a new KW then
     - Maybe add config file, at least for prefix
 	DONE:
+    1.  Field for the designer's name. For this we'll need to create a MiscObject named that, and plug that into the DesignerNameHolder property on each of the layouts.
+        Probably should come up with a standard name scheme so you can search it up by EDID and avoid creating duplicates.
+        So something like SS2C2_NameHolder_Designer_<alphanumeric characters from the designer's name field>.
+
+    2. A mechanics description field, this should be used for the COBJ's DESC section.
+
+    3. A design description field, this should be used to create a Message form and plugged into the InformationMessage property of the layouts.
     4.  This one should probably go on the main form, a dropdown box to select which recipe filter keyword to use on the COBJs,
         any keyword starting with SS2_WorkshopMenu_HQ_Facilities_Construction_ for Construction, and any starting with SS2_WorkshopMenu_HQ_Facilities_Upgrades_ for those.
         We were using the same keyword for all Upgrades and one for Construction before, but its becoming a mess.
@@ -37,7 +37,7 @@ unit ImportHqRoom;
 
 	const
 		cacheFile = ProgramPath + 'Edit Scripts\SS2\HqRoomCache.json';
-        cacheFileVersion = 3;
+        cacheFileVersion = 4;
 		fakeClipboardFile = ProgramPath + 'Edit Scripts\SS2\HqRoomClipboard.txt';
 
 		progressBarChar = '|';
@@ -834,6 +834,7 @@ unit ImportHqRoom;
 		filesEntry := currentCacheFile.O['files'];
 
 		searchString := FormToAbsStr(hq);
+
 		for i:=0 to filesEntry.count-1 do begin
 			curFileName := filesEntry.names[i];
 			curHqObj := filesEntry.O[curFileName].O['HQs'];
@@ -845,6 +846,7 @@ unit ImportHqRoom;
 				exit;
 			end;
 		end;
+        AddMessage('=== ERROR: failed to find manager for HQ ===');
 	end;
 
 	procedure loadKeywordsFromFile(fromFile:  IInterface);
@@ -1550,6 +1552,7 @@ unit ImportHqRoom;
 		for i:=0 to forFiles.count-1 do begin
 			curFileName := forFiles[i];
 			curFileObj  := ObjectToElement(forFiles.Objects[i]);
+            AddMessage('checking file '+curFileName);
 
 			// this shouldn't actually be possible
 			if(not FileExists(DataPath+curFileName)) then begin
@@ -1566,7 +1569,7 @@ unit ImportHqRoom;
 				AddMessage('File '+curFileName+' will be reloaded.');
 				Result.A['filesToReload'].add(curFileName);
 				// reset the object (or try to)
-				filesContainer.clear();
+				fileContainer.clear();
 			end else begin
 
 				// simple stuff
@@ -1581,8 +1584,6 @@ unit ImportHqRoom;
 				readFileDependentObjectList(curFileObj, listRoomFuncs, 		fileContainer.O['RoomFuncs']);
 				//readFileDependentObjectList(curFileObj, listHqManagers, 	fileContainer.O['HqManagers']);
 				readFileDependentObjectList(curFileObj, listRoomResources, 	fileContainer.O['RoomResources']);
-
-
 			end;
 
 		end;
@@ -1927,12 +1928,12 @@ unit ImportHqRoom;
 		// SS2_Tag_RoomSlot_<room shape>_<room name>_<slot name> [KYWD:0B00A3AB]
 
 		if(not assigned(existingMisc)) then begin
-			slotKw := getCopyOfTemplate(targetFile, keywordTemplate, edidKw);
+			slotKw := getCopyOfTemplateOA(targetFile, keywordTemplate, edidKw);
 			if(EditorID(forHq) = 'SS2_HQ_WorkshopRef_GNN') then begin
-				slotMisc := getCopyOfTemplate(targetFile, SS2_HQ_RoomSlot_Template_GNN, edidMisc);
+				slotMisc := getCopyOfTemplateOA(targetFile, SS2_HQ_RoomSlot_Template_GNN, edidMisc);
 				miscScript := getScript(slotMisc, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot_GNN');
 			end else begin
-				slotMisc := getCopyOfTemplate(targetFile, SS2_HQ_RoomSlot_Template, edidMisc);
+				slotMisc := getCopyOfTemplateOA(targetFile, SS2_HQ_RoomSlot_Template, edidMisc);
 				miscScript := getScript(slotMisc, 'simsettlementsv2:hq:library:miscobjects:requirementtypes:hqroomupgradeslot');
 				setScriptProp(miscScript, 'HQLocation', getRefLocation(forHq));
 			end;
@@ -1975,23 +1976,25 @@ unit ImportHqRoom;
 			roomShapeKwEdid := EditorID(roomShapeKw);
 		end else begin
 			// find/make KW
-			roomShapeKw := getCopyOfTemplate(targetFile, keywordTemplate, roomShapeKwEdid);
+			roomShapeKw := getCopyOfTemplateOA(targetFile, keywordTemplate, roomShapeKwEdid);
 		end;
 
 		kwBase := getRoomShapeUniquePart(roomShapeKwEdid);
 		if(kwBase = '') then begin
 			kwBase := roomShapeKwEdid;
 		end;
+        
+        // roomConfigKw := nil;
 
 		if(not assigned(existingElem)) then begin
 			configMiscEdid := globalNewFormPrefix+'HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
-			configMisc := getCopyOfTemplate(targetFile, SS2_HQGNN_Action_AssignRoomConfig_Template, configMiscEdid);
+			configMisc := getCopyOfTemplateOA(targetFile, SS2_HQGNN_Action_AssignRoomConfig_Template, configMiscEdid);
 			addKeywordByPath(configMisc, roomShapeKw, 'KWDA');
 
 			roomConfigKeywordEdid := globalNewFormPrefix+'Tag_RoomConfig_'+kwBase+'_'+roomNameSpaceless;//<RoomShapeKeywordName>_<Name Entered Above>
-			roomConfigKeyword := getCopyOfTemplate(targetFile, keywordTemplate, roomConfigKeywordEdid);
+			roomConfigKeyword := getCopyOfTemplateOA(targetFile, keywordTemplate, roomConfigKeywordEdid);
 		end else begin
-			configMisc := existingElem;
+			configMisc := getOrCreateElementOverride(existingElem, targetFile);
 			// try to remove the current room shape KW
 			oldRoomShapeKw := findKeywordByList(existingElem, listRoomShapes);
 			if(not FormsEqual(oldRoomShapeKw, roomShapeKw)) then begin
@@ -2011,7 +2014,9 @@ unit ImportHqRoom;
             deleteScriptProp(configMiscScript, 'PrimaryDepartment');
         end;
 
-		roomConfigKw := getCopyOfTemplate(targetFile, keywordTemplate, globalNewFormPrefix+'Tag_RoomConfig_'+kwBase+'_'+roomNameSpaceless);
+        
+
+		//roomConfigKw := getCopyOfTemplateOA(targetFile, keywordTemplate, globalNewFormPrefix+'Tag_RoomConfig_'+kwBase+'_'+roomNameSpaceless);
 
 		setScriptProp(configMiscScript, 'RoomShapeKeyword', roomShapeKw);
 
@@ -2982,7 +2987,6 @@ unit ImportHqRoom;
 		layoutsGroup, resourceGroup: TGroupBox;
         parentWindow: TForm;
 	begin
-        AddMessage('yes checking');
         parentWindow := findComponentParentWindow(sender);
 		btnOk := TButton(parentWindow.FindComponent('btnOk'));
 
@@ -3153,34 +3157,73 @@ unit ImportHqRoom;
             roomFuncsBox.Items.AddObject(listRoomFuncs[roomFuncIndex], listRoomFuncs.Objects[roomFuncIndex]);
         end;
     end;
-    
+
+    function getDesignerObjectsFromUpgradeScript(script: IInterface): TJsonObject;
+    var
+        cobjDesc : string;
+        RoomLayouts, firstLayout, layoutScript, nameHolder, descHolder, curNameHolder, curDescHolder: IInterface;
+        i: integer;
+    begin
+        Result := nil;
+
+        RoomLayouts := getScriptProp(script, 'RoomLayouts');
+
+        for i:=0 to ElementCount(RoomLayouts)-1 do begin
+            firstLayout := getObjectFromProperty(RoomLayouts, i);
+
+            layoutScript := getScript(firstLayout, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
+            curNameHolder := getScriptProp(layoutScript, 'DesignerNameHolder');
+            curDescHolder := getScriptProp(layoutScript, 'InformationMessage');
+
+            if(assigned(curNameHolder)) then begin
+                nameHolder := curNameHolder;
+            end;
+
+            if(assigned(curDescHolder)) then begin
+                descHolder := curDescHolder;
+            end;
+
+            if(assigned(descHolder) and assigned(nameHolder)) then begin
+                break;
+            end;
+        end;
+
+        if ((not assigned(descHolder)) and (not assigned(nameHolder))) then begin
+            exit;
+        end;
+
+        Result := TJsonObject.create;
+        Result.S['name'] := FormToStr(nameHolder);
+        Result.S['desc'] := FormToStr(descHolder);
+    end;
+
+
     procedure fillDescriptionDataFromExisting(existingCobj, existingMiscScript: IInterface);
     var
         cobjDesc : string;
         RoomLayouts, firstLayout, layoutScript, nameHolder, descHolder: IInterface;
+        designerData: TJsonObject;
     begin
         // first, get the COBJ's description
         currentUpgradeDescriptionData.S['mechanicsDesc'] := getElementEditValues(existingCobj, 'DESC');
-        {currentUpgradeDescriptionData.S['designerName']     := trim(inputDesigner.Text);
-            currentUpgradeDescriptionData.S['mechanicsDesc']    := trim(inputMechanics.Text);
-            currentUpgradeDescriptionData.S['designDesc']       := trim(inputDesign.Text);}
-        // now we need a Layout
-        RoomLayouts := getScriptProp(existingMiscScript, 'RoomLayouts');
-        if(ElementCount(RoomLayouts) > 0) then begin
-            firstLayout := getObjectFromProperty(RoomLayouts, 0);
-            layoutScript := getScript(firstLayout, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
-            nameHolder := getScriptProp(layoutScript, 'DesignerNameHolder');
-            descHolder := getScriptProp(layoutScript, 'InformationMessage');
-            
+
+        designerData := getDesignerObjectsFromUpgradeScript(existingMiscScript);
+
+        if(nil <> designerData) then begin
+            nameHolder := StrToForm(designerData.S['name']);
+            descHolder := StrToForm(designerData.S['desc']);
+
             if(assigned(nameHolder)) then begin
                 currentUpgradeDescriptionData.S['designerName'] := getElementEditValues(nameHolder, 'FULL');
             end;
-            
+
             if(assigned(descHolder)) then begin
                 currentUpgradeDescriptionData.S['designDesc'] := getElementEditValues(descHolder, 'DESC');
             end;
+
+            designerData.free();
         end;
-    // fill currentUpgradeDescriptionData
+
     end;
 
     procedure fillLayoutsFromExisting(layoutsBox: TListBox; script: IInterface);
@@ -3220,7 +3263,7 @@ unit ImportHqRoom;
         constructionGroup, upgradeGroup: IInterface;
     begin
         hqManager := getManagerForHq(hq);
-
+AddMessage('do we have HQ manager? '+BoolToStr(assigned(hqManager)));
         hqManagerScript := getHqManagerScript(hqManager);
         constructionGroup := getScriptProp(hqManagerScript, 'RoomConstructionActionGroup');
         upgradeGroup := getScriptProp(hqManagerScript, 'RoomUpgradesActionGroup');
@@ -3999,6 +4042,10 @@ unit ImportHqRoom;
 
         // update fields if updating
         if(assigned(existingElem)) then begin
+            if(not IsMaster(existingElem)) then begin
+                doRegisterCb.checked := false;
+                doRegisterCb.enabled := false;
+            end;
             inputPrefix.Text := findEditorIdPrefix(existingElem);
 
             inputName.Text := GetElementEditValues(existingElem, 'FULL');
@@ -4015,6 +4062,7 @@ unit ImportHqRoom;
             inputDuration.Text := floatToStr(getScriptPropDefault(existingMiscScript, 'Duration', 24.0));
 
             actionGroup := getScriptProp(existingMiscScript, 'DepartmentHQActionGroup');
+
             setItemIndexByForm(selectActionGroup, actionGroup);
 
             upgradeSlot := getScriptProp(existingMiscScript, 'TargetUpgradeSlot');
@@ -4031,7 +4079,7 @@ unit ImportHqRoom;
                 modelStr := GetElementEditValues(existingActi, 'Model\MODL');
                 selectModel.ItemIndex := getModelArrayIndex(modelStr, selectModel.Items);
             end;
-            
+
 
             // find the cobj
             fillCobjKeywordFromExisting(selectCobjKeyword, existingCobj);
@@ -4044,7 +4092,7 @@ unit ImportHqRoom;
             // and the hardedest
             fillLayoutsFromExisting(layoutsBox, existingMiscScript);
             // fill currentUpgradeDescriptionData
-            // 
+            //
             fillDescriptionDataFromExisting(existingCobj, existingMiscScript);
         end;
         roomUpgradeTypeChanged(btnOk);
@@ -4180,9 +4228,10 @@ unit ImportHqRoom;
         if(not assigned(existingElem)) then begin
             layoutNameSpaceless := cleanStringForEditorID(layoutName);
             resultEdid := globalNewFormPrefix+'HQRoomLayout_'+upgradeNameSpaceless+'_'+slotNameSpaceless+'_'+layoutNameSpaceless;
-            Result := getCopyOfTemplate(targetFile, SS2_HQRoomLayout_Template, resultEdid);
+            Result := getCopyOfTemplateOA(targetFile, SS2_HQRoomLayout_Template, resultEdid);
         end else begin
-            Result := existingElem;
+            Result := getOrCreateElementOverride(existingElem, targetFile);
+            //
         end;
 
 		resultScript := getScript(Result, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
@@ -4550,7 +4599,11 @@ unit ImportHqRoom;
         // try to find the cobj
         //Result := findRoomUpgradeCOBJ(resourceComplexity, acti);
 
-        Result := existingElem;
+        Result := nil;
+        if(assigned(existingElem)) then begin
+            Result := getOrCreateElementOverride(existingElem, targetFile);
+        end;
+
 
         if(roomMode = 0) then begin
             sourceTemplate := CobjRoomConstruction_Template;
@@ -4562,7 +4615,7 @@ unit ImportHqRoom;
         if(not assigned(Result)) then begin
             edid := edidBase + '_co_' + IntToStr(resourceComplexity);
 
-            Result := getCopyOfTemplate(targetFile, sourceTemplate, edid);
+            Result := getCopyOfTemplateOA(targetFile, sourceTemplate, edid);
         end else begin
             // apply some things from the template
             // set the put down sound
@@ -4671,6 +4724,8 @@ unit ImportHqRoom;
         cobj2 := nil;
         cobj3 := nil;
 
+        AddMessage('do we have? '+existingData.toString());
+
         if (nil <> existingData) then begin
             if(existingData.O['1'].S['acti'] <> '') then acti1 := StrToForm(existingData.O['1'].S['acti']);
             if(existingData.O['2'].S['acti'] <> '') then acti2 := StrToForm(existingData.O['2'].S['acti']);
@@ -4705,9 +4760,9 @@ unit ImportHqRoom;
         if(not assigned(existingElem)) then begin
             upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
             edid := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless+'_ac_'+IntToStr(resourceComplexity);
-            Result := getCopyOfTemplate(targetFile, SS2_HQBuildableAction_Template, edid);
+            Result := getCopyOfTemplateOA(targetFile, SS2_HQBuildableAction_Template, edid);
         end else begin
-            Result := existingElem;
+            Result := getOrCreateElementOverride(existingElem, targetFile);
         end;
 
 
@@ -4746,11 +4801,12 @@ unit ImportHqRoom;
         Result := nil;
 	end;
 
-    function findRoomUpgradeCOBJWithComplexity(acti: IInterface): TJsonObject;
+    function findRoomUpgradeCOBJWithComplexityOvr(acti: IInterface): TJsonObject;
     var
         i, curComplexity: integer;
         curRef, conditions, complexityCondition, glob: IInterface;
     begin
+        AddMessage('checking shit '+FullPath(acti));
         for i:=0 to ReferencedByCount(acti)-1 do begin
             curRef := ReferencedByIndex(acti, i);
             if(Signature(curRef) = 'COBJ') then begin
@@ -4762,6 +4818,7 @@ unit ImportHqRoom;
                         Result := TJsonObject.create;
                         Result.I['complexity'] := curComplexity;
                         Result.S['form'] := FormToStr(curRef);
+                        AddMessage('wtf');
                         exit;
                     end;
                 end;
@@ -4771,17 +4828,74 @@ unit ImportHqRoom;
         Result := nil;
     end;
 
+    function findRoomUpgradeCOBJWithComplexity(acti: IInterface): TJsonObject;
+    var
+        i,j, curComplexity: integer;
+        curRef, conditions, complexityCondition, glob, actiMaster: IInterface;
+    begin
+        actiMaster := MasterOrSelf(acti);
+        Result := nil;
+
+        for i:=OverrideCount(actiMaster)-1 downto 0 do begin
+            AddMessage('trying '+IntToStr(i));
+            Result := findRoomUpgradeCOBJWithComplexityOvr(OverrideByIndex(actiMaster, i));
+            if(Result <> nil) then begin
+                AddMessage('ya?');
+                exit;
+            end;
+        end;
+
+        Result := findRoomUpgradeCOBJWithComplexityOvr(actiMaster);
+
+    end;
+
+    procedure postprocessRoomUpgradeActivatorsAndCobjs(json: TJsonObject);
+    var
+        i:  integer;
+        iStr, actiStr, cobjStr: string;
+        acti, cobj: IInterface;
+    begin
+
+        for i:=1 to 3 do begin
+            iStr := intToStr(i);
+            actiStr := json.O[iStr].S['acti'];
+            cobjStr := json.O[iStr].S['cobj'];
+
+            acti := nil;
+            cobj := nil;
+
+            if(actiStr <> '') then begin
+                acti := StrToForm(actiStr);
+            end;
+
+            if(cobjStr <> '') then begin
+                cobj := StrToForm(cobjStr);
+            end;
+
+            if (assigned(acti)) then begin
+                json.O[iStr].S['acti'] := FormToStr(getExistingElementOverrideOrClosest(acti, targetFile));
+            end;
+
+            if(assigned(cobj)) then begin
+                json.O[iStr].S['cobj'] := FormToStr(getExistingElementOverrideOrClosest(cobj, targetFile));
+            end;
+        end;
+    end;
+
     function findRoomUpgradeActivatorsAndCobjs(roomUpgradeMisc: IInterface): TJsonObject;
     var
         acti1, acti2, acti3, cobj1, cobj2, cobj3: IInterface;
         curRef, script, otherMisc: IInterface;
         cobjData: TJsonObject;
         i: integer;
+        roomUpgradeMiscMaster: IInterface;
     begin
-        Result := TJsonObject.create();
 
-        for i:=0 to ReferencedByCount(roomUpgradeMisc)-1 do begin
-            curRef := ReferencedByIndex(roomUpgradeMisc, i);
+        Result := TJsonObject.create();
+        roomUpgradeMiscMaster := MasterOrSelf(roomUpgradeMisc);
+
+        for i:=0 to ReferencedByCount(roomUpgradeMiscMaster)-1 do begin
+            curRef := ReferencedByIndex(roomUpgradeMiscMaster, i);
 
             if(Signature(curRef) <> 'ACTI') then begin
                 continue;
@@ -4790,7 +4904,7 @@ unit ImportHqRoom;
             script := getScript(curRef, 'SimSettlementsV2:HQ:Library:ObjectRefs:HQWorkshopItemActionTrigger');
             if (assigned(script)) then begin
                 otherMisc := getScriptProp(script, 'HQAction');
-                if(equals(otherMisc, roomUpgradeMisc)) then begin
+                if(equals(otherMisc, roomUpgradeMiscMaster)) then begin
                     // okay, seems like we found one, but which?
                     cobjData := findRoomUpgradeCOBJWithComplexity(curRef);
                     if(cobjData <> nil) then begin
@@ -4816,9 +4930,9 @@ unit ImportHqRoom;
                 end;
             end;
         end;
-
         // do I have all of them?
         // we might have one of the ACTI/COBJ pairs, where the ACTI would actually have all 3 COBJs
+
         if (assigned(acti1) and assigned(acti2) and assigned(acti3) and assigned(cobj1) and assigned(cobj2) and assigned(cobj3)) then begin
             // found all
             Result.O['1'].S['acti'] := FormToStr(acti1);
@@ -4829,8 +4943,10 @@ unit ImportHqRoom;
 
             Result.O['3'].S['acti'] := FormToStr(acti3);
             Result.O['3'].S['cobj'] := FormToStr(cobj3);
+            postprocessRoomUpgradeActivatorsAndCobjs(Result);
             exit;
         end;
+
 
         // check COBJ1
         if(assigned(acti1)) then begin
@@ -4887,6 +5003,9 @@ unit ImportHqRoom;
         if(assigned(cobj3)) then begin
             Result.O['3'].S['cobj'] := FormToStr(cobj3);
         end;
+
+        // postprocess
+        postprocessRoomUpgradeActivatorsAndCobjs(Result);
     end;
 
     function indexOfElement(list: TStringList; elem: IInterface): integer;
@@ -4906,29 +5025,37 @@ unit ImportHqRoom;
         end;
     end;
 
-    function getLayoutDescriptionMsg(msg, upgradeNameSpaceless, slotNameSpaceless: string): IInterface;
+    function getLayoutDescriptionMsg(existingElem: IInterface; msg, upgradeNameSpaceless, slotNameSpaceless: string): IInterface;
     var
         edid: string;
     begin
-        edid := generateEdid('LayoutDescription_', upgradeNameSpaceless+'_'+slotNameSpaceless);//globalNewFormPrefix+'';
-        // 3. A design description field, this should be used to create a Message form and plugged into the InformationMessage property of the layouts.
-        //SS2_Name_Dog
-        //function getCopyOfTemplate(targetFile, template: IInterface; newEdid: string): IInterface;
-        //Result := getCopyOfTemplate(targetFile, LayoutDescriptionTemplate, edid);
-        Result := getElemByEdidAndSig(edid, 'MESG', targetFile);
+        if(not assigned(existingElem)) then begin
+            edid := generateEdid('LayoutDescription_', upgradeNameSpaceless+'_'+slotNameSpaceless);//globalNewFormPrefix+'';
+            // 3. A design description field, this should be used to create a Message form and plugged into the InformationMessage property of the layouts.
+            //SS2_Name_Dog
+            //function getCopyOfTemplateOA(targetFile, template: IInterface; newEdid: string): IInterface;
+            //Result := getCopyOfTemplateOA(targetFile, LayoutDescriptionTemplate, edid);
+            Result := getElemByEdidAndSig(edid, 'MESG', targetFile);
+        end else begin
+            Result := getOrCreateElementOverride(existingElem, targetFile);
+        end;
 
         setElementEditValues(Result, 'DESC', msg);
     end;
 
-    function getLayoutNameMisc(designerName: string): IInterface;
+    function getLayoutNameMisc(existingElem: IInterface; designerName: string): IInterface;
     var
         edid: string;
     begin
         {Field for the designer's name. For this we'll need to create a MiscObject named that, and plug that into the DesignerNameHolder property on each of the layouts.
         Probably should come up with a standard name scheme so you can search it up by EDID and avoid creating duplicates.
         So something like SS2C2_NameHolder_Designer_<alphanumeric characters from the designer's name field>.}
-        edid := generateEdid('NameHolder_Designer_', cleanStringForEditorID(designerName));
-        Result := getElemByEdidAndSig(edid, 'MISC', targetFile);
+        if(not assigned(existingElem)) then begin
+            edid := generateEdid('NameHolder_Designer_', cleanStringForEditorID(designerName));
+            Result := getElemByEdidAndSig(edid, 'MISC', targetFile);
+        end else begin
+            Result := getOrCreateElementOverride(existingElem, targetFile);
+        end;
 
         setElementEditValues(Result, 'FULL', designerName);
     end;
@@ -4966,6 +5093,7 @@ unit ImportHqRoom;
 		curLayoutName, curLayoutPath, selectedSlotStr, curSlotName, kwBase, roomShapePart: string;
 		upgradeSlotLayout, roomShapeKeyword, upgradeSlotKw, oldUpgradeSlotKw, oldUpgradeSlot, AdditionalUpgradeSlots, curSlot, curSlotMisc: IInterface;
         descriptionMsg, designerMisc: IInterface;
+        designerData: TJsonObject;
 	begin
 		HqName := findHqNameShort(targetHq);
 		slotNameSpaceless := cleanStringForEditorID(getElementEditValues(upgradeSlot, 'FULL'));
@@ -4983,9 +5111,9 @@ unit ImportHqRoom;
             upgradeEdidPart := upgradeEdidPart+roomShapePart+'_';
 
             upgradeEdid := globalNewFormPrefix+'HQ'+HqName + upgradeEdidPart + upgradeNameSpaceless; //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
-            upgradeResult := getCopyOfTemplate(targetFile, SS2_HQ_Action_RoomUpgrade_Template, upgradeEdid);
+            upgradeResult := getCopyOfTemplateOA(targetFile, SS2_HQ_Action_RoomUpgrade_Template, upgradeEdid);
         end else begin
-            upgradeResult := existingElem;
+            upgradeResult := getOrCreateElementOverride(existingElem, targetFile);
         end;
 
         // upgrade or construction?
@@ -5055,7 +5183,7 @@ unit ImportHqRoom;
             // make ActionAvailableGlobal
             // if updating, assume this exists already
             ActionAvailableGlobalEdid := globalNewFormPrefix+'HQActionAvailable_'+HqName+'_'+upgradeNameSpaceless;
-            ActionAvailableGlobal := getCopyOfTemplate(targetFile, versionGlobalTemplate, ActionAvailableGlobalEdid);
+            ActionAvailableGlobal := getCopyOfTemplateOA(targetFile, versionGlobalTemplate, ActionAvailableGlobalEdid);
             // how do I remove the CONST flag?
             SetElementEditValues(ActionAvailableGlobal, 'Record Header\Record Flags\Constant', '0');
             SetElementEditValues(ActionAvailableGlobal, 'FLTV', '0');
@@ -5150,9 +5278,20 @@ unit ImportHqRoom;
         end;
 
         if(layouts.count > 0) then begin
+            // find
+            designerData := getDesignerObjectsFromUpgradeScript(script);
 
-            descriptionMsg := getLayoutDescriptionMsg(designDescription, upgradeNameSpaceless, slotNameSpaceless);
-            designerMisc := getLayoutNameMisc(designerName);
+            descriptionMsg  := nil;
+            designerMisc    := nil;
+
+            if(designerData <> nil) then begin
+                descriptionMsg  := StrToForm(designerData.S['desc']);
+                designerMisc    := StrToForm(designerData.S['name']);
+                designerData.free();
+            end;
+
+            descriptionMsg := getLayoutDescriptionMsg(descriptionMsg, designDescription, upgradeNameSpaceless, slotNameSpaceless);
+            designerMisc   := getLayoutNameMisc(designerMisc, designerName);
 
             RoomLayouts := getOrCreateScriptPropArrayOfObject(script, 'RoomLayouts');
             if(assigned(existingElem)) then begin
@@ -5637,6 +5776,10 @@ unit ImportHqRoom;
 
 		// change some stuff, if we are updating
 		if(assigned(existingElem)) then begin
+            if(not isMaster(existingElem)) then begin
+                doRegisterCb.checked := false;
+                doRegisterCb.enabled := false;
+            end;
 			inputName.Text := GetElementEditValues(existingElem, 'FULL');
 			// existing roomshape
 			existingRoomshape := findKeywordByList(existingElem, listRoomShapes);
