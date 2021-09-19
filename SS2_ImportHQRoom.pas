@@ -37,7 +37,7 @@ unit ImportHqRoom;
 
 	const
 		cacheFile = ProgramPath + 'Edit Scripts\SS2\HqRoomCache.json';
-        cacheFileVersion = 4;
+        cacheFileVersion = 5;
 		fakeClipboardFile = ProgramPath + 'Edit Scripts\SS2\HqRoomClipboard.txt';
 
 		progressBarChar = '|';
@@ -1428,12 +1428,6 @@ unit ImportHqRoom;
 			curFileName := forFiles[i];
 			curFileObj  := ObjectToElement(forFiles.Objects[i]);
 
-			// this shouldn't actually be possible
-			if(not FileExists(DataPath+curFileName)) then begin
-				AddMessage('=== ERRROR: it seems that file '+curFileName+' doesn''t actually exist, despite being loaded???');
-				continue;
-			end;
-
 			fileContainer := filesContainer.O[curFileName];
 
 			// complex stuff
@@ -1554,13 +1548,16 @@ unit ImportHqRoom;
 			curFileObj  := ObjectToElement(forFiles.Objects[i]);
             AddMessage('checking file '+curFileName);
 
-			// this shouldn't actually be possible
+			fileContainer := filesContainer.O[curFileName];
+			// this shouldn't actually be possible, but sometimes happens??
 			if(not FileExists(DataPath+curFileName)) then begin
-				AddMessage('=== ERRROR: it seems that file '+curFileName+' doesn''t actually exist, despite being loaded???');
+				AddMessage('=== ERRROR: Somehow, FileExists returns false for '+curFileName+', but it is loaded. Cache will not be used for it.');
+                Result.A['filesToReload'].add(curFileName);
+                // reset the current object
+				fileContainer.clear();
 				continue;
 			end;
 
-			fileContainer := filesContainer.O[curFileName];
 
 			realFileAge := FileAge(DataPath+curFileName);
 
@@ -1568,7 +1565,7 @@ unit ImportHqRoom;
 				// file changed since
 				AddMessage('File '+curFileName+' will be reloaded.');
 				Result.A['filesToReload'].add(curFileName);
-				// reset the object (or try to)
+				// reset the current object
 				fileContainer.clear();
 			end else begin
 
@@ -2409,7 +2406,7 @@ unit ImportHqRoom;
         jsonMain, jsonTemp, newEntry: TJsonObject;
         i, count, resIndex: integer;
         res: IInterface;
-        jsonStr, fuckWtf: string;
+        jsonStr: string;
     begin
         //AddMessage('do we have? '+dataKey);
         jsonStr := getFakeClipboardText();
@@ -3622,7 +3619,7 @@ AddMessage('do we have HQ manager? '+BoolToStr(assigned(hqManager)));
         menu: TPopupMenu;
     begin
         menu  := TPopupMenu.Create(list);
-        menu.Name := 'wtf';
+        //menu.Name := 'wtf';
         list.PopupMenu  := menu;
         menu.onPopup := menuOpenHandler;
 
@@ -4818,7 +4815,7 @@ AddMessage('do we have HQ manager? '+BoolToStr(assigned(hqManager)));
                         Result := TJsonObject.create;
                         Result.I['complexity'] := curComplexity;
                         Result.S['form'] := FormToStr(curRef);
-                        AddMessage('wtf');
+                        
                         exit;
                     end;
                 end;
@@ -4837,10 +4834,8 @@ AddMessage('do we have HQ manager? '+BoolToStr(assigned(hqManager)));
         Result := nil;
 
         for i:=OverrideCount(actiMaster)-1 downto 0 do begin
-            AddMessage('trying '+IntToStr(i));
             Result := findRoomUpgradeCOBJWithComplexityOvr(OverrideByIndex(actiMaster, i));
             if(Result <> nil) then begin
-                AddMessage('ya?');
                 exit;
             end;
         end;
@@ -5027,10 +5022,15 @@ AddMessage('do we have HQ manager? '+BoolToStr(assigned(hqManager)));
 
     function getLayoutDescriptionMsg(existingElem: IInterface; msg, upgradeNameSpaceless, slotNameSpaceless: string): IInterface;
     var
-        edid: string;
+        edidBase, edid: string;
     begin
         if(not assigned(existingElem)) then begin
-            edid := generateEdid('LayoutDescription_', upgradeNameSpaceless+'_'+slotNameSpaceless);//globalNewFormPrefix+'';
+            edidBase := upgradeNameSpaceless;
+            if(slotNameSpaceless <> '') then begin
+                edidBase := upgradeNameSpaceless+'_'+slotNameSpaceless;
+                
+            end;
+            edid := generateEdid('LayoutDescription_', edidBase);//globalNewFormPrefix+'';
             // 3. A design description field, this should be used to create a Message form and plugged into the InformationMessage property of the layouts.
             //SS2_Name_Dog
             //function getCopyOfTemplateOA(targetFile, template: IInterface; newEdid: string): IInterface;
