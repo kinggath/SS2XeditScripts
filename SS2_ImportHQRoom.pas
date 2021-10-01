@@ -1545,13 +1545,26 @@ unit ImportHqRoom;
 		filesContainer := currentCacheFile.O['files'];
 		for i:=0 to forFiles.count-1 do begin
 			curFileName := forFiles[i];
-			curFileObj  := ObjectToElement(forFiles.Objects[i]);
-            AddMessage('checking file '+curFileName);
+            
+            if(nil <> forFiles.Objects[i]) then begin
+                curFileObj  := ObjectToElement(forFiles.Objects[i]);
+            end else begin
+                // try to fetch by name
+                curFileObj := FindFile(curFileName);
+                if(not assigned(curFileObj)) then begin
+                    AddMessage('WARNING! Required file '+curFileName+' is not loaded!');
+                    // Result.A['filesToReload'].add(curFileName);
+                    // fileContainer.clear();
+                    continue;
+                end;
+            end;
+            
+            //AddMessage('checking file '+curFileName);
 
 			fileContainer := filesContainer.O[curFileName];
 			// this shouldn't actually be possible, but sometimes happens??
 			if(not FileExists(DataPath+curFileName)) then begin
-				AddMessage('=== ERRROR: Somehow, FileExists returns false for '+curFileName+', but it is loaded. Cache will not be used for it.');
+				//AddMessage('File '+curFileName+' hasn''t been saved yet, no caching possible');
                 Result.A['filesToReload'].add(curFileName);
                 // reset the current object
 				fileContainer.clear();
@@ -1625,6 +1638,11 @@ unit ImportHqRoom;
 		//AddMessage('Loading data for HQ '+findHqName(targetHQ)+'...');
 
 		masterList := getMasterList(targetFile);
+        
+        // hardcode-add some files
+        //masterList.add('SS2.esm');
+        //masterList.add('SS2_XPAC_Chapter2.esm');
+        
 		cacheResult := loadListsFromCache(masterList);
 
 
@@ -3260,7 +3278,6 @@ unit ImportHqRoom;
         constructionGroup, upgradeGroup: IInterface;
     begin
         hqManager := getManagerForHq(hq);
-AddMessage('do we have HQ manager? '+BoolToStr(assigned(hqManager)));
         hqManagerScript := getHqManagerScript(hqManager);
         constructionGroup := getScriptProp(hqManagerScript, 'RoomConstructionActionGroup');
         upgradeGroup := getScriptProp(hqManagerScript, 'RoomUpgradesActionGroup');
@@ -4134,7 +4151,7 @@ AddMessage('do we have HQ manager? '+BoolToStr(assigned(hqManager)));
 
             mechanicsDescr := currentUpgradeDescriptionData.S['mechanicsDesc'];
             if(mechanicsDescr = '') then begin
-                mechanicsDescr := generateUpgradeDescription(upgradeDuration, resourceBox.Items);
+                mechanicsDescr := generateUpgradeDescription(upgradeDuration, roomFuncsBox.Items);
             end;
 
 			roomUpgradeMisc := createRoomUpgradeMisc(
@@ -4721,7 +4738,6 @@ AddMessage('do we have HQ manager? '+BoolToStr(assigned(hqManager)));
         cobj2 := nil;
         cobj3 := nil;
 
-        AddMessage('do we have? '+existingData.toString());
 
         if (nil <> existingData) then begin
             if(existingData.O['1'].S['acti'] <> '') then acti1 := StrToForm(existingData.O['1'].S['acti']);
@@ -4803,7 +4819,7 @@ AddMessage('do we have HQ manager? '+BoolToStr(assigned(hqManager)));
         i, curComplexity: integer;
         curRef, conditions, complexityCondition, glob: IInterface;
     begin
-        AddMessage('checking shit '+FullPath(acti));
+        //AddMessage('checking shit '+FullPath(acti));
         for i:=0 to ReferencedByCount(acti)-1 do begin
             curRef := ReferencedByIndex(acti, i);
             if(Signature(curRef) = 'COBJ') then begin
