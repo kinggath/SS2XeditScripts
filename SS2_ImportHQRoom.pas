@@ -4142,6 +4142,7 @@ unit ImportHqRoom;
 			end;
 
             cobjKeyword := ObjectToElement(selectCobjKeyword.Items.Objects[selectCobjKeyword.ItemIndex]);
+            
 
 			upgradeName := trim(inputName.Text);
 			upgradeDuration := tryToParseFloat(inputDuration.Text);
@@ -4177,11 +4178,9 @@ unit ImportHqRoom;
                 currentUpgradeDescriptionData.S['designerName'],
                 currentUpgradeDescriptionData.S['designDesc']
 			);
+            
+            AddMessage('cobjKeyword = '+EditorID(cobjKeyword)+' '+IntToStr(selectCobjKeyword.ItemIndex));
 
-            if(not assigned(cobjKeyword)) then begin
-                AddMessage('FUCK WHY');
-            end;
-// actiData
             createRoomUpgradeActivatorsAndCobjs(
                 actiData,
                 roomUpgradeMisc,
@@ -4635,36 +4634,23 @@ unit ImportHqRoom;
             // set the put down sound
 
             setPathLinksTo(Result, 'ZNAM', pathLinksTo(sourceTemplate, 'ZNAM'));
-            {
-            // set the category
-            srcFnam := ElementByPath(sourceTemplate, 'FNAM');
-            dstFnam := ElementByPath(Result, 'FNAM');
-            // clear the prev
-            for i:=0 to ElementCount(dstFnam)-1 do begin
-                RemoveElement(dstFnam, 0);
-                // this won't remove element #0
-            end;
-
-            // add the new
-            for i:=0 to ElementCount(srcFnam)-1 do begin
-                if(i = 0) then begin
-                    SetLinksTo(ElementByIndex(dstFnam, 0), LinksTo(ElementByIndex(srcFnam, 0)));
-                end else begin
-                    ElementAssign(dstFnam, HighInteger, ElementByIndex(srcFnam, i), false);
-                end;
-            end;
-            }
         end;
 
         // try to remove the FNAMs
         dstFnam := ElementByPath(Result, 'FNAM');
         // clear the prev
         for i:=0 to ElementCount(dstFnam)-1 do begin
+            // sometimes this removes element 0, sometimes it doesn't
             RemoveElement(dstFnam, 0);
-            // this won't remove element #0
         end;
+        
+        kwHolder := ElementByIndex(dstFnam, 0);
+        if(not assigned(kwHolder)) then begin
+            kwHolder := ElementAssign(dstFnam, HighInteger, nil, False);
+        end;
+
         // put in cobjKeyword
-        SetLinksTo(ElementByIndex(dstFnam, 0), cobjKeyword);
+        SetLinksTo(kwHolder, cobjKeyword);
 
 
 		SetElementEditValues(Result, 'DESC', descriptionText);
@@ -4755,6 +4741,7 @@ unit ImportHqRoom;
 
         // now the COBJs
         edidBase := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
+
 		cobj1 := createRoomUpgradeCOBJ(cobj1, edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti1, availableGlobal, resources, artObject, cobjKeyword, roomMode);
 		cobj2 := createRoomUpgradeCOBJ(cobj2, edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti2, availableGlobal, resources, artObject, cobjKeyword, roomMode);
 		cobj3 := createRoomUpgradeCOBJ(cobj3, edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti3, availableGlobal, resources, artObject, cobjKeyword, roomMode);
