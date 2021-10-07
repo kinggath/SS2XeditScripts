@@ -37,7 +37,7 @@ unit ImportHqRoom;
 
 	const
 		cacheFile = ProgramPath + 'Edit Scripts\SS2\HqRoomCache.json';
-        cacheFileVersion = 6;
+        cacheFileVersion = 7;
 		fakeClipboardFile = ProgramPath + 'Edit Scripts\SS2\HqRoomClipboard.txt';
 
 		progressBarChar = '|';
@@ -62,6 +62,7 @@ unit ImportHqRoom;
 		listModelsMisc: TStringList;
 		listRoomResources: TStringList;
 		listTechActionTypes: TStringList;
+        listPutDownSounds: TStringList;//SS2_SFX_HQProjectType
 		// other lists
 		edidLookupCache: TStringList;
 
@@ -633,7 +634,7 @@ unit ImportHqRoom;
 				// might be
 				curScriptName := GetElementEditValues(curScript, 'scriptName');
 
-				if (checkScriptExtends(curScriptName, 'SimSettlementsV2:HQ:Library:Quests:SpecificHQManager')) then begin
+				if (checkScriptExtendsCached(curScriptName, 'SimSettlementsV2:HQ:Library:Quests:SpecificHQManager')) then begin
 					Result := curScript;
 					exit;
 				end;
@@ -1111,6 +1112,35 @@ unit ImportHqRoom;
 		end;
     end;
 
+	procedure loadSoundsFromFile(fromFile:  IInterface);
+    var i: integer;
+		curRec, group: IInterface;
+		edid, curName, curFileName: string;
+	begin
+		curFileName := GetFileName(fromFile);
+		group := GroupBySignature(fromFile, 'SNDR');
+		startProgress('Loading Sounds from '+GetFileName(fromFile), ElementCount(group));
+		for i:=0 to ElementCount(group)-1 do begin
+
+			curRec := ElementByIndex(group, i);
+			edid := EditorID(curRec);
+
+
+			updateProgress(i);
+			if(strStartsWith(edid, 'SS2_SFX_HQProjectType_')) then begin
+
+                curName := stripPrefix('SS2_SFX_HQProjectType_', edid);
+
+                addObjectDupIgnore(listPutDownSounds, curName, curRec);
+
+                continue;
+				// SimSettlementsV2:HQ:Library:MiscObjects:HQRoomFunctionality
+			end;
+		end;
+		endProgress();
+
+    end;
+
 	procedure loadMiscsFromFile(fromFile:  IInterface);
 	var i: integer;
 		curRec, group, curHq, curScript: IInterface;
@@ -1125,11 +1155,13 @@ unit ImportHqRoom;
 			curRec := ElementByIndex(group, i);
 			edid := EditorID(curRec);
 
+			updateProgress(i);
+
 			if(pos('HQ_ActionGroup_', edid) > 0) then begin
 
 				if(edid <> 'SS2_HQ_ActionGroup_Template') then begin
 					//SimSettlementsV2:HQ:Library:MiscObjects:ActionGroupTypes:DepartmentHQActionGroup
-					curScript := findScriptInElementByName(curRec, 'SimSettlementsV2:HQ:Library:MiscObjects:HQActionGroup');
+					curScript := findScriptInElementByNameCached(curRec, 'SimSettlementsV2:HQ:Library:MiscObjects:HQActionGroup');
 					if(assigned(curScript)) then begin
 						curHq := getHqFromRoomActionGroup(curRec, curScript);
 						// theoretically, this might be unset
@@ -1195,8 +1227,6 @@ unit ImportHqRoom;
 				continue;
 			end;
 
-
-			updateProgress(i);
 		end;
 		endProgress();
 	end;
@@ -1218,6 +1248,8 @@ unit ImportHqRoom;
 		updateProgress(2);
 		loadMiscsFromFile(fromFile);
 		updateProgress(3);
+		loadSoundsFromFile(fromFile);
+		updateProgress(4);
 		loadHQDependentFormsFromFile(fromFile);
 		// loadQuestsFromFile(fromFile);
 		endProgress();
@@ -1305,7 +1337,6 @@ unit ImportHqRoom;
 
 	procedure saveListsToCache(masterList: TStringList);
 	var
-		fileContents: TStringList;
 		i, realFileAge: integer;
 		hqKey, curFileName: string;
 		filesEntry, filesEntries: TJsonObject;
@@ -1327,6 +1358,7 @@ unit ImportHqRoom;
 		writeObjectListToCacheFile(listRoomFuncs, 'RoomFuncs');
 		writeObjectListToCacheFile(listRoomResources, 'RoomResources');
 		writeObjectListToCacheFile(listTechActionTypes, 'TechActionTypes');
+		writeObjectListToCacheFile(listPutDownSounds, 'PutDownSounds');
 
 		// update file timestamp
 
@@ -1342,16 +1374,18 @@ unit ImportHqRoom;
 		writeStringList(listModels, 	currentCacheFile.O['assets'].A['ActivatorModels']);
 		writeStringList(listModelsMisc, currentCacheFile.O['assets'].A['MiscModels']);
 
-		fileContents := TStringList.create;
+		saveCacheFile();
+	end;
 
-		//TEMP := currentCacheFile.toString();
-
+    procedure saveCacheFile();
+    var
+		fileContents: TStringList;
+    begin
+        fileContents := TStringList.create;
 		fileContents.add(currentCacheFile.toString());
 		fileContents.saveToFile(cacheFile);
 		fileContents.free();
-		// cacheJson.free();
-
-	end;
+    end;
 
     function joinLines(l: TStringList; separator: string): string;
 	var
@@ -1622,6 +1656,7 @@ unit ImportHqRoom;
 				//readFileDependentObjectList(curFileObj, listHqManagers, 	fileContainer.O['HqManagers']);
 				readFileDependentObjectList(curFileObj, listRoomResources, 	fileContainer.O['RoomResources']);
 				readFileDependentObjectList(curFileObj, listTechActionTypes,fileContainer.O['TechActionTypes']);
+				readFileDependentObjectList(curFileObj, listPutDownSounds,fileContainer.O['PutDownSounds']);
 			end;
 
 		end;
@@ -1837,18 +1872,23 @@ unit ImportHqRoom;
 		listModelsMisc := TStringList.create;
 		listRoomResources := TStringList.create;
 		listTechActionTypes := TStringList.create;
+		listPutDownSounds := TStringList.create;
 		listRoomConfigs := TStringList.create;
 
 		resourceLookupTable := TJsonObject.create;
 		edidLookupCache     := TStringList.create;
 
 
+        // scriptExtendsCache.OwnsObjects := true; // another thing xedit doesn't support
+
 		listRoomFuncs.Sorted := true;
 		listRoomResources.Sorted := true;
 		listTechActionTypes.Sorted := true;
+		listPutDownSounds.Sorted := true;
 		listModels.Sorted := true;
 		listModelsMisc.Sorted := true;
 		listRoomConfigs.Sorted := true;
+		listKeywordsTech.Sorted := true;
 
 		//listHQRefs.Duplicates := dupIgnore;
 		listRoomShapes.Duplicates := dupIgnore;
@@ -1864,6 +1904,8 @@ unit ImportHqRoom;
 		listModelsMisc.Duplicates := dupIgnore;
 		listRoomResources.Duplicates := dupIgnore;
 		listTechActionTypes.Duplicates := dupIgnore;
+		listPutDownSounds.Duplicates := dupIgnore;
+
     end;
 
     // called for every record selected in xEdit
@@ -3216,6 +3258,7 @@ unit ImportHqRoom;
 
         ResourceCost := getScriptProp(script, 'ResourceCost');
         if(not assigned(ResourceCost)) then begin
+            //AddMessage
             exit;
         end;
 
@@ -4272,7 +4315,8 @@ unit ImportHqRoom;
                 ArtObjEdid,
                 cobjKeyword,
                 selectActionGroup.ItemIndex,
-                mechanicsDescr
+                mechanicsDescr,
+                nil
             );
 
             if(actiData <> nil) then begin
@@ -4307,7 +4351,7 @@ unit ImportHqRoom;
 		btnOk, btnCancel: TButton;
 		resultCode, curY, secondRowOffset, thirdRowOffset: integer;
 
-		selectMiscModel, selectModel, selectActionGroup, selectCobjKeyword: TComboBox;
+		selectMiscModel, selectModel, selectActionGroup, selectCobjKeyword, selectPutDownSound: TComboBox;
 		assignDepAtEnd, assignDepAtStart, disableClutter, disableGarbarge, defaultConstMarkers, realTimeTimer, completableCheckbox: TCheckBox;
 		doRegisterCb: TCheckBox;
 		departmentList, modelList, modelListMisc: TStringList;
@@ -4323,7 +4367,7 @@ unit ImportHqRoom;
 		roomUpgradeMisc, roomUpgradeActi: IInterface;
 		upgradeDuration: float;
 
-		roomShapeKeyword, upgradeSlot, actionGroup: IInterface;
+		roomShapeKeyword, upgradeSlot, actionGroup, putDownSound: IInterface;
 
         // existing stuff
         existingMiscScript, existingActi, existingActiScript, existingCobj, cobjKeyword: IInterface;
@@ -4331,6 +4375,8 @@ unit ImportHqRoom;
         modelIndex: integer;
 
         actiData : TJsonObject;
+
+        descriptionInput: TMemo;
 	begin
 		// load the slots for what we have
         //currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHQ, targetRoomConfig);
@@ -4341,7 +4387,7 @@ unit ImportHqRoom;
         if(assigned(existingElem)) then begin
             windowCaption := 'Updating Tech Research/Other';
 
-            existingMiscScript := getScript(existingElem, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
+            existingMiscScript := findScriptInElementByNameCached(existingElem, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQAction');
 
             actiData := findRoomUpgradeActivatorsAndCobjs(existingElem);
 
@@ -4386,7 +4432,7 @@ unit ImportHqRoom;
         MiscModelFilename := '';//shapeKeywordBase+'.nif';
         ArtObjEdid := '';//'SS2C2_AO_RoomShape_'+shapeKeywordBase;
 
-		frm := CreateDialog(windowCaption, 620, 450);
+		frm := CreateDialog(windowCaption, 620, 400);
 		frm.Name := 'techResearchDialog2';
 		curY := 0;
 		//if(not assigned(existingElem)) then begin
@@ -4454,51 +4500,43 @@ unit ImportHqRoom;
         //end;
 
 		curY := curY + 24;
-
-        // put the new dropdown here
         CreateLabel(frm, 10, 10+curY, 'Submenu:*');
-        //listKeywordsConstruct
-        selectCobjKeyword := CreateComboBox(frm, 100, 8+curY, 500, listKeywordsTech);
+        selectCobjKeyword := CreateComboBox(frm, 100, 8+curY, 200, listKeywordsTech);
 		selectCobjKeyword.Style := csDropDownList;
 		selectCobjKeyword.Name := 'selectCobjKeyword';
-		//selectCobjKeyword.onChange := showRoomUpradeDialog2UpdateOk;
+        //curY := curY + 24;
+
+        CreateLabel(frm, secondRowOffset+10, 10+curY, 'Putdown sound:');
+        selectPutDownSound := CreateComboBox(frm, secondRowOffset+100, 8+curY, 200, listPutDownSounds);
+		selectPutDownSound.Style := csDropDownList;
+		selectPutDownSound.Name := 'selectPutDownSound';
 
 
-        secondRowOffset := 210;
-        thirdRowOffset := 400;
+
+        secondRowOffset := 170;
+        thirdRowOffset := 340;
 
 		// selectUpgradeSlot.onChange := updateRoomUpgrade1OkBtn;
 		curY := curY + 42;
-		realTimeTimer:= CreateCheckbox(frm, 100, curY, 'Real-Time Timer');
+		realTimeTimer:= CreateCheckbox(frm, 10, curY, 'Real-Time Timer');
 		realTimeTimer.Checked := false;
 
-        completableCheckbox := CreateCheckbox(frm, secondRowOffset+100, curY, 'Completable');
+        completableCheckbox := CreateCheckbox(frm, secondRowOffset+10, curY, 'Completable');
         completableCheckbox.Checked := false;
 
-		curY := curY + 50;
+		//curY := curY + 24;
 
         secondRowOffset := 300;
 
-		CreateLabel(frm, secondRowOffset+10, curY, 'Duration (hours):*');
-		inputDuration := CreateInput(frm, secondRowOffset+150, curY-2, '24.0');
+		CreateLabel(frm, thirdRowOffset+10, curY, 'Duration (hours):*');
+		inputDuration := CreateInput(frm, thirdRowOffset+140, curY-2, '24.0');
 		inputDuration.width := 120;
 		inputDuration.Name := 'inputDuration';
 		inputDuration.Text := '24.0';
 		inputDuration.onChange := showTechResearchDialog2UpdateOk;
 
-		// curY := curY + 24;
+		curY := curY + 24;
 
-		//selectMainDep.onChange := updateRoomConfigOkBtn;
-
-		// curY := curY + 24;
-
-        //CreateLabel(frm, secondRowOffset+10, 10+curY, 'test');
-        descriptionButton := CreateButton(frm, secondRowOffset+10, curY + 24, 'Set Descriptions...');
-        descriptionButton.onclick := showDescriptionEditDialog;
-        // currentUpgradeDescriptionData: TJsonObject;
-
-		//curY := curY + 34;
-		// test
 
 		//CreateLabel();
 		resourceGroup := CreateGroup(frm, 10, curY, 290, 88, 'Resources*');
@@ -4523,6 +4561,9 @@ unit ImportHqRoom;
 		resourceAddBtn.onclick := addResourceHandler;
 		resourceEdtBtn.onclick := editResourceHandler;
 		resourceRemBtn.onclick := remResourceHandler;
+
+        CreateLabel(frm, secondRowOffset+10, curY, 'Mechanics description:');
+        descriptionInput := CreateMultilineInput(frm, secondRowOffset+10, curY+16, 290, 80, '');
 
 
 		//layoutsBox: TListBox;
@@ -4568,17 +4609,8 @@ unit ImportHqRoom;
             actionGroup := getScriptProp(existingMiscScript, 'DepartmentHQActionGroup');
 
             setItemIndexByForm(selectActionGroup, actionGroup);
+            selectActionGroup.enabled := false;
 
-            //upgradeSlot := getScriptProp(existingMiscScript, 'TargetUpgradeSlot');
-            //setItemIndexByForm(selectUpgradeSlot, upgradeSlot);
-            {
-            targetDepartment := getScriptProp(existingMiscScript, 'NewDepartmentOnCompletion');
-            if(assigned(targetDepartment)) then begin
-                setItemIndexByForm(selectDepartment, targetDepartment);
-            end;
-            }
-
-            //fillSlotsFromExisting(extraSlotsBox.Items, existingMiscScript);
 
             if(assigned(existingActi)) then begin
                 modelStr := GetElementEditValues(existingActi, 'Model\MODL');
@@ -4587,18 +4619,21 @@ unit ImportHqRoom;
 
 
             // find the cobj
+
             fillCobjKeywordFromExisting(selectCobjKeyword, existingCobj);
             //selectCobjKeyword
 
             // now the hard parts
             fillResourceItemsFromExisting(resourceBox, existingMiscScript);
 
-            //fillRoomFunctionsFromExisting(roomFuncsBox, existingMiscScript);
-            // and the hardedest
-            //fillLayoutsFromExisting(layoutsBox, existingMiscScript);
-            // fill currentUpgradeDescriptionData
-            //
-            fillDescriptionDataFromExisting(existingCobj, existingMiscScript);
+            if(assigned(existingCobj)) then begin
+                descriptionInput.Text := getElementEditValues(existingCobj, 'DESC');
+
+                putDownSound := pathLinksTo(existingCobj, 'ZNAM');
+
+                setItemIndexByForm(selectPutDownSound, putDownSound);
+            end;
+
         end;
 
         //roomUpgradeTypeChanged(btnOk);
@@ -4640,8 +4675,7 @@ unit ImportHqRoom;
 
 			actionGroup := ObjectToElement(selectActionGroup.Items.Objects[selectActionGroup.ItemIndex]);
 
-            mechanicsDescr := currentUpgradeDescriptionData.S['mechanicsDesc'];
-
+			putDownSound := ObjectToElement(selectPutDownSound.Items.Objects[selectPutDownSound.ItemIndex]);
 
             roomUpgradeMisc := createTechResearchMisc(
                 existingElem,
@@ -4652,36 +4686,8 @@ unit ImportHqRoom;
                 realTimeTimer.Checked,
                 upgradeDuration,
                 resourceBox.Items,
-                actionGroup,
-                currentUpgradeDescriptionData.S['designerName'],
-                currentUpgradeDescriptionData.S['designDesc']
+                actionGroup
             );
-            {
-			roomUpgradeMisc := createRoomUpgradeMisc(
-				existingElem,
-				targetRoomConfig,
-				upgradeName,
-				modelStrMisc,
-				nil, //upgradeSlot
-				false,//assignDepAtStart.Checked,
-				false,//assignDepAtEnd.Checked,
-				false,//defaultConstMarkers.Checked,
-				false,//disableClutter.Checked,
-				false,//disableGarbarge.Checked,
-                completableCheckbox.Checked,
-				realTimeTimer.Checked,
-				upgradeDuration,
-				nil,//targetDepartment,
-				resourceBox.Items,
-				nil,//roomFuncsBox.Items,
-				nil,//layoutsBox.Items,
-				actionGroup,
-                2,// because 0 and 1 are construction and upgrade //selectActionGroup.ItemIndex,
-                nil, //extraSlotsBox.Items
-                currentUpgradeDescriptionData.S['designerName'],
-                currentUpgradeDescriptionData.S['designDesc']
-			);
-            }
 
             AddMessage('cobjKeyword = '+EditorID(cobjKeyword)+' '+IntToStr(selectCobjKeyword.ItemIndex));
 
@@ -4695,8 +4701,9 @@ unit ImportHqRoom;
                 upgradeDuration,
                 ArtObjEdid,
                 cobjKeyword,
-                2,//selectActionGroup.ItemIndex,
-                mechanicsDescr
+                2,
+                trim(descriptionInput.Text),
+                putDownSound
             );
 
             if(actiData <> nil) then begin
@@ -5100,7 +5107,8 @@ unit ImportHqRoom;
         resources: TStringList;
         artObject: IInterface;
         cobjKeyword: IInterface;
-        roomMode: integer
+        roomMode: integer;
+        putDownSound: IInterface
     ): IInterface;
 	var
 		edid, curName: string;
@@ -5113,6 +5121,7 @@ unit ImportHqRoom;
         // roomMode is:
         // 0 = construction
         // 1 = upgrade
+        // 2 = tech/other
         // try to find the cobj
         //Result := findRoomUpgradeCOBJ(resourceComplexity, acti);
 
@@ -5138,6 +5147,10 @@ unit ImportHqRoom;
             // set the put down sound
 
             setPathLinksTo(Result, 'ZNAM', pathLinksTo(sourceTemplate, 'ZNAM'));
+        end;
+
+        if (assigned(putDownSound)) then begin
+            setPathLinksTo(Result, 'ZNAM', putDownSound);
         end;
 
         // try to remove the FNAMs
@@ -5205,7 +5218,8 @@ unit ImportHqRoom;
         ArtObjEdid: string;
         cobjKeyword: IInterface;
         roomMode: integer;
-        descriptionText: string
+        descriptionText: string;
+        putDownSound: IInterface
     );
     var
         availableGlobal, artObject: IInterface;
@@ -5246,9 +5260,9 @@ unit ImportHqRoom;
         // now the COBJs
         edidBase := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
 
-		cobj1 := createRoomUpgradeCOBJ(cobj1, edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti1, availableGlobal, resources, artObject, cobjKeyword, roomMode);
-		cobj2 := createRoomUpgradeCOBJ(cobj2, edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti2, availableGlobal, resources, artObject, cobjKeyword, roomMode);
-		cobj3 := createRoomUpgradeCOBJ(cobj3, edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti3, availableGlobal, resources, artObject, cobjKeyword, roomMode);
+		cobj1 := createRoomUpgradeCOBJ(cobj1, edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti1, availableGlobal, resources, artObject, cobjKeyword, roomMode, putDownSound);
+		cobj2 := createRoomUpgradeCOBJ(cobj2, edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti2, availableGlobal, resources, artObject, cobjKeyword, roomMode, putDownSound);
+		cobj3 := createRoomUpgradeCOBJ(cobj3, edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti3, availableGlobal, resources, artObject, cobjKeyword, roomMode, putDownSound);
     end;
 
 	function createRoomUpgradeActivator(existingElem, roomUpgradeMisc, forHq: IInterface; upgradeName, modelStr: string; resourceComplexity: integer): IInterface;
@@ -5848,8 +5862,7 @@ unit ImportHqRoom;
 		realTime: boolean;
 		duration: float;
         resources: TStringList;
-		actionGroup: IInterface;
-        designerName, designDescription: string
+		miscTemplate: IInterface
     ): IInterface;
 	var
 		upgradeResult: IInterface;
@@ -5876,7 +5889,7 @@ unit ImportHqRoom;
             upgradeEdidPart := '_Action_TechResearch_';
 
             upgradeEdid := globalNewFormPrefix+'HQ'+HqName + upgradeEdidPart + upgradeNameSpaceless; //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
-            upgradeResult := getCopyOfTemplateOA(targetFile, SS2_HQ_Action_RoomUpgrade_Template, upgradeEdid);
+            upgradeResult := getCopyOfTemplateOA(targetFile, miscTemplate, upgradeEdid);
         end else begin
             upgradeResult := getOrCreateElementOverride(existingElem, targetFile);
         end;
@@ -5904,7 +5917,7 @@ unit ImportHqRoom;
 
 		SetElementEditValues(upgradeResult, 'FULL', upgradeName);
 
-		script := getScript(upgradeResult, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
+		script := getFirstScript(upgradeResult);
 
         {
         maybe cleanup?
@@ -5920,7 +5933,7 @@ unit ImportHqRoom;
 		setScriptProp(script, 'Duration', duration);
 
 
-		setScriptProp(script, 'DepartmentHQActionGroup', actionGroup);
+//		setScriptProp(script, 'DepartmentHQActionGroup', actionGroup);
 
 
         {
@@ -6126,7 +6139,11 @@ unit ImportHqRoom;
 	var
 		script: IInterface;
 	begin
-		script := getScript(upgradeMisc, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
+        //SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQAction
+        //SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade
+		// script := getScript(upgradeMisc, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
+		//script := findScriptInElementByName(upgradeMisc, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQAction');
+		script := getFirstScript(upgradeMisc);
 		Result := getScriptProp(script, 'ActionAvailableGlobal');
 	end;
 
@@ -6588,11 +6605,9 @@ unit ImportHqRoom;
 				showRoomConfigDialog(nil);
             end else if (selectedIndex = 1) then begin
                 loadForRoomUpgade();
-                AddMessage('upgrade');
 				showRoomUpgradeDialog(nil);
 			end else begin
 				loadForRoomUpgade();
-                AddMessage('tech');
 				showTechResearchDialog(nil);
 			end;
 		end;
@@ -6604,7 +6619,7 @@ unit ImportHqRoom;
 		curHq: IInterface;
 	begin
 		if(not assigned(actGrpScript)) then begin
-			actGrpScript := findScriptInElementByName(actGrp, 'SimSettlementsV2:HQ:Library:MiscObjects:HQActionGroup');
+			actGrpScript := findScriptInElementByNameCached(actGrp, 'SimSettlementsV2:HQ:Library:MiscObjects:HQActionGroup');
 		end;
 
 		curHq := getScriptProp(actGrpScript, 'HQRef');
@@ -6762,12 +6777,20 @@ unit ImportHqRoom;
 	procedure showRelevantDialog();
 	var
 		configScript: IInterface;
+        scriptName: string;
 	begin
 		// what is targetElem?
+        configScript := getFirstScript(targetElem);
+        if(not assigned(configScript)) then begin
+            showMultipleChoiceDialog();
+            exit;
+        end;
+
+        scriptName := LowerCase(geevt(configScript, 'scriptName'));
 
         // room config?
-		configScript := getScript(targetElem, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
-		if(assigned(configScript)) then begin
+		// configScript := getScript(targetElem, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
+		if(scriptName = 'simsettlementsv2:hq:library:miscobjects:requirementtypes:actiontypes:hqroomconfig') then begin
 			AddMessage('Updating Room Config '+EditorID(targetElem));
 			// loadHQs();
 			targetHQ := getHqFromRoomConfig(configScript);
@@ -6779,28 +6802,24 @@ unit ImportHqRoom;
 		end;
 
         // room upgrade?
-        configScript := getScript(targetElem, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
-        if(assigned(configScript)) then begin
+        //if(assigned(configScript)) then begin
+		if(scriptName = 'simsettlementsv2:hq:baseactiontypes:hqroomupgrade') then begin
 			targetHQ := getHqFromRoomUpdate(configScript);
             loadFormsForHq(targetHQ);
             loadForRoomUpgade();
 
-            if (isRoomConstructionOrUpgrade(targetElem)) then begin
-                AddMessage('Updating Room Upgrade '+EditorID(targetElem));
-                // showRoomUpgradeDialog2(roomConfig, targetElem);
-                showRoomUpgradeDialog(targetElem);
-            end else begin
-                AddMessage('Updating Tech Research/Other '+EditorID(targetElem));
-                
-                showTechResearchDialog(targetElem);
-            end;
+
+            AddMessage('Updating Room Upgrade '+EditorID(targetElem));
+            // showRoomUpgradeDialog2(roomConfig, targetElem);
+            showRoomUpgradeDialog(targetElem);
+
 
             exit;
         end;
 
         // room layout?
-        configScript := getScript(targetElem, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
-        if(assigned(configScript)) then begin
+
+		if(scriptName = 'simsettlementsv2:hq:library:weapons:hqroomlayout') then begin
             AddMessage('Updating Room Layout '+EditorID(targetElem));
 			targetHQ := getUniversalForm(configScript, 'workshopRef');
             loadFormsForHq(targetHQ);
@@ -6808,8 +6827,71 @@ unit ImportHqRoom;
             exit;
         end;
 
+        // maybe tech/other?
+        //if(not isRoomConstructionOrUpgrade(targetElem)) then begin
+            if(checkScriptExtendsCached(scriptName, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQAction')) then begin
+                targetHQ := getHqFromRoomUpdate(configScript);
+                loadFormsForHq(targetHQ);
+                loadForRoomUpgade();
+                AddMessage('Updating Tech Research/Other '+EditorID(targetElem));
+                showTechResearchDialog(targetElem);
+                exit;
+            end;
+        //end;
+
 		showMultipleChoiceDialog();
 	end;
+
+    function checkScriptExtendsCached(scriptCheck, scriptCompare: string): boolean;
+    var
+        cacheLine: string;
+        i, extendsState: integer;
+        cacheSubEntry: TJsonObject;
+    begin
+        cacheSubEntry := currentCacheFile.O['extendsCache'];
+
+        scriptCheck := LowerCase(scriptCheck);
+        scriptCompare := LowerCase(scriptCompare);
+
+        extendsState := cacheSubEntry.O[scriptCheck].I[scriptCompare];
+        if(extendsState = 0) then begin
+            // unknown
+            Result := checkScriptExtends(scriptCheck, scriptCompare);
+            if(Result) then begin
+                extendsState := 2;
+            end else begin
+                extendsState := 1;
+            end;
+
+            cacheSubEntry.O[scriptCheck].I[scriptCompare] := extendsState;
+            saveCacheFile();
+        end else begin
+            // 1 = false, 2 = true
+            Result := extendsState = 2;
+        end;
+    end;
+
+    function findScriptInElementByNameCached(e: IInterface; scriptName: String): IInterface;
+    var
+        curScript, scripts: IInterface;
+        i: integer;
+		curScriptName: string;
+    begin
+        Result := nil;
+        scripts := ElementByPath(e, 'VMAD - Virtual Machine Adapter\Scripts');
+
+        for i := 0 to ElementCount(scripts)-1 do begin
+            curScript := ElementByIndex(scripts, i);
+
+			curScriptName := GetElementEditValues(curScript, 'scriptName');
+
+			if (checkScriptExtendsCached(curScriptName, scriptName)) then begin
+				Result := curScript;
+				exit;
+			end;
+        end;
+
+    end;
 
 	procedure cleanUp();
 	begin
@@ -6831,11 +6913,13 @@ unit ImportHqRoom;
 		listModelsMisc.free();
 		listRoomResources.free();
 		listTechActionTypes.free();
+		listPutDownSounds.free();
 		if(currentCacheFile <> nil) then begin
 			currentCacheFile.free();
 		end;
 
 		edidLookupCache.free();
+
 		resourceLookupTable.free();
 		progressBarStack.free();
 		pexCleanUp();

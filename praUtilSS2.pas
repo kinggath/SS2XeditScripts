@@ -1443,6 +1443,23 @@ unit PraUtil;
     end;
 
     {
+        Get the first script in the element, no matter what
+    }
+    function getFirstScript(e: IInterface): IInterface;
+    var
+        curScript, scripts: IInterface;
+        i: integer;
+    begin
+        Result := nil;
+        scripts := ElementByPath(e, 'VMAD - Virtual Machine Adapter\Scripts');
+
+        for i := 0 to ElementCount(scripts)-1 do begin
+            Result := ElementByIndex(scripts, i);
+            exit;
+        end;
+    end;
+
+    {
         Like getScript, but if it doesn't exist, it will be added
     }
     function addScript(e: IInterface; scriptName: String): IInterface;
