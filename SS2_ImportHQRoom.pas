@@ -6,13 +6,13 @@
 
 
 
-    5. Make this work on overrides
 
 
     Maybe later:
 	- Allow not selecting slot for a layout. generate a new KW then
     - Maybe add config file, at least for prefix
 	DONE:
+    5. Make this work on overrides
     1.  Field for the designer's name. For this we'll need to create a MiscObject named that, and plug that into the DesignerNameHolder property on each of the layouts.
         Probably should come up with a standard name scheme so you can search it up by EDID and avoid creating duplicates.
         So something like SS2C2_NameHolder_Designer_<alphanumeric characters from the designer's name field>.
@@ -37,7 +37,7 @@ unit ImportHqRoom;
 
 	const
 		cacheFile = ProgramPath + 'Edit Scripts\SS2\HqRoomCache.json';
-        cacheFileVersion = 7;
+        cacheFileVersion = 8;
 		fakeClipboardFile = ProgramPath + 'Edit Scripts\SS2\HqRoomClipboard.txt';
 
 		progressBarChar = '|';
@@ -1141,6 +1141,34 @@ unit ImportHqRoom;
 
     end;
 
+	procedure loadCmposFromFile(fromFile:  IInterface);
+    var i: integer;
+		curRec, group, curHq, curScript: IInterface;
+		edid, curName, curFileName, curHqKey: string;
+		curFormID: cardinal;
+	begin
+		curFileName := GetFileName(fromFile);
+		group := GroupBySignature(fromFile, 'CMPO');
+		startProgress('Loading CMPOs from '+GetFileName(fromFile), ElementCount(group));
+		for i:=0 to ElementCount(group)-1 do begin
+
+			curRec := ElementByIndex(group, i);
+			edid := EditorID(curRec);
+
+			updateProgress(i);
+
+            if(strStartsWith(edid, 'SS2_c_')) then begin
+                // but ignore all SS2_c_HQ_
+                if(not strStartsWith(edid, 'SS2_c_HQ_')) then begin
+                    curName := getElementEditValues(curRec, 'FULL');
+                    addObjectDupIgnore(listRoomResources, curName, curRec);
+                end;
+            end;
+
+		end;
+		endProgress();
+    end;
+
 	procedure loadMiscsFromFile(fromFile:  IInterface);
 	var i: integer;
 		curRec, group, curHq, curScript: IInterface;
@@ -1239,7 +1267,7 @@ unit ImportHqRoom;
 	procedure loadFormsFromFile(fromFile: IInterface);
 	begin
 		AddMessage('Loading forms from file '+GetFileName(fromFile));
-		startProgress('', 4);
+		startProgress('', 6);
 		updateProgress(0);
 		loadHQsFromFile(fromFile);
 		updateProgress(1);
@@ -1248,8 +1276,10 @@ unit ImportHqRoom;
 		updateProgress(2);
 		loadMiscsFromFile(fromFile);
 		updateProgress(3);
-		loadSoundsFromFile(fromFile);
+		loadCmposFromFile(fromFile);
 		updateProgress(4);
+		loadSoundsFromFile(fromFile);
+		updateProgress(5);
 		loadHQDependentFormsFromFile(fromFile);
 		// loadQuestsFromFile(fromFile);
 		endProgress();
@@ -3139,7 +3169,12 @@ unit ImportHqRoom;
 
 		durationNr := tryToParseFloat(trim(inputDuration.Text));
 
-		btnOk.enabled := (trim(inputName.Text) <> '') and (trim(inputPrefix.Text) <> '') and (durationNr > 0) and (selectCobjKeyword.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and (resourceBox.Items.count > 0);
+        //selectActionGroup.enabled
+        if(selectActionGroup.enabled) then begin
+            btnOk.enabled := (trim(inputName.Text) <> '') and (trim(inputPrefix.Text) <> '') and (durationNr > 0) and (selectCobjKeyword.ItemIndex >= 0) and (selectActionGroup.ItemIndex >= 0) and (resourceBox.Items.count > 0);
+        end else begin
+            btnOk.enabled := (trim(inputName.Text) <> '') and (trim(inputPrefix.Text) <> '') and (durationNr > 0) and (selectCobjKeyword.ItemIndex >= 0) and (resourceBox.Items.count > 0);
+        end;
 	end;
 
     procedure roomUpgradeTypeChanged(sender: TObject);
@@ -3329,8 +3364,8 @@ unit ImportHqRoom;
         end;
 
         Result := TJsonObject.create;
-        Result.S['name'] := FormToStr(nameHolder);
-        Result.S['desc'] := FormToStr(descHolder);
+        Result.S['name'] := FormToStr(getExistingElementOverrideOrClosest(nameHolder, targetFile));
+        Result.S['desc'] := FormToStr(getExistingElementOverrideOrClosest(descHolder, targetFile));
     end;
 
 
@@ -4298,8 +4333,8 @@ unit ImportHqRoom;
 				actionGroup,
                 selectActionGroup.ItemIndex,
                 extraSlotsBox.Items,
-                currentUpgradeDescriptionData.S['designerName'],
-                currentUpgradeDescriptionData.S['designDesc']
+                trim(currentUpgradeDescriptionData.S['designerName']),
+                trim(currentUpgradeDescriptionData.S['designDesc'])
 			);
 
             AddMessage('cobjKeyword = '+EditorID(cobjKeyword)+' '+IntToStr(selectCobjKeyword.ItemIndex));
@@ -4606,7 +4641,7 @@ unit ImportHqRoom;
 
             inputDuration.Text := floatToStr(getScriptPropDefault(existingMiscScript, 'Duration', 24.0));
 
-            actionGroup := getScriptProp(existingMiscScript, 'DepartmentHQActionGroup');
+            // actionGroup := getScriptProp(existingMiscScript, 'DepartmentHQActionGroup'); // this doesn't work
 
             setItemIndexByForm(selectActionGroup, actionGroup);
             selectActionGroup.enabled := false;
@@ -4774,10 +4809,14 @@ unit ImportHqRoom;
 
         if(assigned(descriptionMsg)) then begin
             setScriptProp(resultScript, 'InformationMessage', descriptionMsg);
+        end else begin
+            clearScriptProp(resultScript, 'InformationMessage');
         end;
 
         if(assigned(designerMisc)) then begin
             setScriptProp(resultScript, 'DesignerNameHolder', designerMisc);
+        end else begin
+            clearScriptProp(resultScript, 'DesignerNameHolder');
         end;
 
         // property descriptionMsg, designerMisc
@@ -5545,6 +5584,9 @@ unit ImportHqRoom;
     var
         edidBase, edid: string;
     begin
+        if (msg = '') then begin
+            exit;
+        end;
         if(not assigned(existingElem)) then begin
             edidBase := upgradeNameSpaceless;
             if(slotNameSpaceless <> '') then begin
@@ -5568,6 +5610,16 @@ unit ImportHqRoom;
     var
         edid: string;
     begin
+        if (assigned(existingElem)) then begin
+            edid := generateEdid('NameHolder_Designer_', '');
+            if(EditorID(existingElem) = edid) then begin
+                AddMessage('WARNING: found broken name holder. Try deleting it manually: '+FullPath(existingElem));
+                existingElem := nil;
+            end;
+        end;
+        if (designerName = '') then begin
+            exit;
+        end;
         {Field for the designer's name. For this we'll need to create a MiscObject named that, and plug that into the DesignerNameHolder property on each of the layouts.
         Probably should come up with a standard name scheme so you can search it up by EDID and avoid creating duplicates.
         So something like SS2C2_NameHolder_Designer_<alphanumeric characters from the designer's name field>.}
