@@ -2117,11 +2117,11 @@ unit ImportHqRoom;
         // roomConfigKw := nil;
 
 		if(not assigned(existingElem)) then begin
-			configMiscEdid := globalNewFormPrefix+'HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
+			configMiscEdid := generateEdid('HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_', kwBase+'_'+roomNameSpaceless);
 			configMisc := getCopyOfTemplateOA(targetFile, SS2_HQGNN_Action_AssignRoomConfig_Template, configMiscEdid);
 			addKeywordByPath(configMisc, roomShapeKw, 'KWDA');
 
-			roomConfigKeywordEdid := globalNewFormPrefix+'Tag_RoomConfig_'+kwBase+'_'+roomNameSpaceless;//<RoomShapeKeywordName>_<Name Entered Above>
+			roomConfigKeywordEdid := generateEdid('Tag_RoomConfig_', kwBase+'_'+roomNameSpaceless);
 			roomConfigKeyword := getCopyOfTemplateOA(targetFile, keywordTemplate, roomConfigKeywordEdid);
 		end else begin
 			configMisc := getOrCreateElementOverride(existingElem, targetFile);
@@ -4786,7 +4786,7 @@ unit ImportHqRoom;
 	begin
         if(not assigned(existingElem)) then begin
             layoutNameSpaceless := cleanStringForEditorID(layoutName);
-            resultEdid := globalNewFormPrefix+'HQRoomLayout_'+upgradeNameSpaceless+'_'+slotNameSpaceless+'_'+layoutNameSpaceless;
+            resultEdid := generateEdid('HQRoomLayout_', upgradeNameSpaceless+'_'+slotNameSpaceless+'_'+layoutNameSpaceless);
             Result := getCopyOfTemplateOA(targetFile, SS2_HQRoomLayout_Template, resultEdid);
         end else begin
             Result := getOrCreateElementOverride(existingElem, targetFile);
@@ -5178,7 +5178,7 @@ unit ImportHqRoom;
 
 
         if(not assigned(Result)) then begin
-            edid := edidBase + '_co_' + IntToStr(resourceComplexity);
+            edid := shortenEdid(edidBase + '_co_' + IntToStr(resourceComplexity));
 
             Result := getCopyOfTemplateOA(targetFile, sourceTemplate, edid);
         end else begin
@@ -5316,7 +5316,7 @@ unit ImportHqRoom;
 
         if(not assigned(existingElem)) then begin
             upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
-            edid := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless+'_ac_'+IntToStr(resourceComplexity);
+            edid := generateEdid('HQ'+findHqNameShort(forHq)+'_BuildableAction_', upgradeNameSpaceless+'_ac_'+IntToStr(resourceComplexity));
             Result := getCopyOfTemplateOA(targetFile, SS2_HQBuildableAction_Template, edid);
         end else begin
             Result := getOrCreateElementOverride(existingElem, targetFile);
@@ -5593,7 +5593,7 @@ unit ImportHqRoom;
                 edidBase := upgradeNameSpaceless+'_'+slotNameSpaceless;
 
             end;
-            edid := generateEdid('LayoutDescription_', edidBase);//globalNewFormPrefix+'';
+            edid := generateEdid('LayoutDescription_', edidBase);
             // 3. A design description field, this should be used to create a Message form and plugged into the InformationMessage property of the layouts.
             //SS2_Name_Dog
             //function getCopyOfTemplateOA(targetFile, template: IInterface; newEdid: string): IInterface;
@@ -5684,7 +5684,7 @@ unit ImportHqRoom;
             end;
             upgradeEdidPart := upgradeEdidPart+roomShapePart+'_';
 
-            upgradeEdid := globalNewFormPrefix+'HQ'+HqName + upgradeEdidPart + upgradeNameSpaceless; //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
+            upgradeEdid := generateEdid('HQ'+HqName, upgradeEdidPart + upgradeNameSpaceless); //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
             upgradeResult := getCopyOfTemplateOA(targetFile, SS2_HQ_Action_RoomUpgrade_Template, upgradeEdid);
         end else begin
             upgradeResult := getOrCreateElementOverride(existingElem, targetFile);
@@ -5757,7 +5757,7 @@ unit ImportHqRoom;
         if(not assigned(existingElem)) then begin
             // make ActionAvailableGlobal
             // if updating, assume this exists already
-            ActionAvailableGlobalEdid := globalNewFormPrefix+'HQActionAvailable_'+HqName+'_'+upgradeNameSpaceless;
+            ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', upgradeNameSpaceless);
             ActionAvailableGlobal := getCopyOfTemplateOA(targetFile, versionGlobalTemplate, ActionAvailableGlobalEdid);
             // how do I remove the CONST flag?
             SetElementEditValues(ActionAvailableGlobal, 'Record Header\Record Flags\Constant', '0');
@@ -5940,7 +5940,7 @@ unit ImportHqRoom;
         if(not assigned(existingElem)) then begin
             upgradeEdidPart := '_Action_TechResearch_';
 
-            upgradeEdid := globalNewFormPrefix+'HQ'+HqName + upgradeEdidPart + upgradeNameSpaceless; //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
+            upgradeEdid := generateEdid('HQ'+HqName, upgradeEdidPart + upgradeNameSpaceless); //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
             upgradeResult := getCopyOfTemplateOA(targetFile, miscTemplate, upgradeEdid);
         end else begin
             upgradeResult := getOrCreateElementOverride(existingElem, targetFile);
@@ -6015,7 +6015,7 @@ unit ImportHqRoom;
         if(not assigned(existingElem)) then begin
             // make ActionAvailableGlobal
             // if updating, assume this exists already
-            ActionAvailableGlobalEdid := globalNewFormPrefix+'HQActionAvailable_'+HqName+'_'+upgradeNameSpaceless;
+            ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', upgradeNameSpaceless);
             ActionAvailableGlobal := getCopyOfTemplateOA(targetFile, versionGlobalTemplate, ActionAvailableGlobalEdid);
             // how do I remove the CONST flag?
             SetElementEditValues(ActionAvailableGlobal, 'Record Header\Record Flags\Constant', '0');

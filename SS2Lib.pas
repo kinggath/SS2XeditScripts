@@ -1126,6 +1126,11 @@ unit SS2Lib;
         Result := getShortEdid(globalNewFormPrefix+prefix, stripPrefix(prefix, stripPrefix(globalNewFormPrefix, base)));
     end;
 
+    function shortenEdid(edid: string): string;
+    begin
+        Result := shortenWithCrc32(edid);
+    end;
+
 
     ///////////////////// TEMPLATE HELPER FUNCTIONS /////////////////////
 
@@ -2029,7 +2034,7 @@ unit SS2Lib;
 
         Result := FilesEqual(targetFile, elemFile);
     end;
-    
+
     function getCopyOfTemplateWithOverride(targetFile, template: IInterface; newEdid: string; useOverrides: boolean): IInterface;
     var
         group, newElem: IInterface;
