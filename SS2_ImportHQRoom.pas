@@ -3185,10 +3185,18 @@ unit ImportHqRoom;
         parentWindow: TForm;
         prevSelection, defaultKw: IInterface;
         tmpIndex: integer;
+        assignDepAtStart, assignDepAtEnd, defaultConstMarkers, disableClutter, disableGarbarge, realTimeTimer: TCheckBox;
 	begin
         parentWindow := findComponentParentWindow(sender);
 		selectActionGroup := TComboBox(parentWindow.FindComponent('selectActionGroup'));
 		selectCobjKeyword := TComboBox(parentWindow.FindComponent('selectCobjKeyword'));
+
+        assignDepAtStart    := TCheckBox(parentWindow.FindComponent('assignDepAtStart'));
+        assignDepAtEnd      := TCheckBox(parentWindow.FindComponent('assignDepAtEnd'));
+        defaultConstMarkers := TCheckBox(parentWindow.FindComponent('defaultConstMarkers'));
+        disableClutter      := TCheckBox(parentWindow.FindComponent('disableClutter'));
+        disableGarbarge     := TCheckBox(parentWindow.FindComponent('disableGarbarge'));
+        realTimeTimer       := TCheckBox(parentWindow.FindComponent('realTimeTimer'));
 
         prevSelection := nil;
         defaultKw     := nil;
@@ -3209,12 +3217,26 @@ unit ImportHqRoom;
                     defaultKw := defaultConstructionKw;
                     selectCobjKeyword.enabled := true;
                     selectCobjKeyword.Items := listKeywordsConstruct;
+                    // check some
+                    assignDepAtStart.checked    := true;
+                    assignDepAtEnd.checked      := false;
+                    defaultConstMarkers.checked := true;
+                    disableClutter.checked      := true;
+                    disableGarbarge.checked     := true;
+                    realTimeTimer.checked       := false;
                 end;
             1:
                 begin
                     defaultKw := defaultUpgradeKw;
                     selectCobjKeyword.enabled := true;
                     selectCobjKeyword.Items := listKeywordsUpgrade;
+                    // uncheck all
+                    assignDepAtStart.checked    := false;
+                    assignDepAtEnd.checked      := false;
+                    defaultConstMarkers.checked := false;
+                    disableClutter.checked      := false;
+                    disableGarbarge.checked     := false;
+                    realTimeTimer.checked       := false;
                 end;
         end;
 
@@ -3278,6 +3300,7 @@ unit ImportHqRoom;
             exit;
         end;
 
+        AddMessage('Trying to set submenu to '+EditorID(keyword));
         setItemIndexByForm(selectCobjKeyword, keyword);
     end;
 
@@ -4057,20 +4080,30 @@ unit ImportHqRoom;
         thirdRowOffset := 400;
 
 		// selectUpgradeSlot.onChange := updateRoomUpgrade1OkBtn;
+        // The 6 checkboxes
 		curY := curY + 42;
 		assignDepAtStart := CreateCheckbox(frm, 10, curY, 'Assign department to room at start');
         assignDepAtStart.Checked := true;
+        assignDepAtStart.Name := 'assignDepAtStart';
+
 		assignDepAtEnd := CreateCheckbox(frm, 10, curY + 16, 'Assign department to room at end');
+        assignDepAtEnd.Name := 'assignDepAtEnd';
 
 		defaultConstMarkers := CreateCheckbox(frm, secondRowOffset+10, curY, 'Use default construction markers');
 		defaultConstMarkers.Checked := true;
-		disableClutter := CreateCheckbox(frm, secondRowOffset+10, curY + 16, 'Disable clutter on completion');
+        defaultConstMarkers.Name := 'defaultConstMarkers';
 
+		disableClutter := CreateCheckbox(frm, secondRowOffset+10, curY + 16, 'Disable clutter on completion');
 		disableClutter.Checked := true;
+		disableClutter.Name := 'disableClutter';
+
 		disableGarbarge:= CreateCheckbox(frm, thirdRowOffset+10, curY, 'Disable garbage on completion');
 		disableGarbarge.Checked := true;
+		disableGarbarge.Name := 'disableGarbarge';
+
 		realTimeTimer:= CreateCheckbox(frm, thirdRowOffset+10, curY + 16, 'Real-Time Timer');
 		realTimeTimer.Checked := false;
+		realTimeTimer.Name := 'realTimeTimer';
 
 		curY := curY + 50;
 
@@ -4224,13 +4257,6 @@ unit ImportHqRoom;
             modelStrMisc := GetElementEditValues(existingElem, 'Model\MODL');
             selectMiscModel.ItemIndex := getModelArrayIndex(modelStrMisc, selectMiscModel.Items);
 
-            assignDepAtStart.Checked    := getScriptPropDefault(existingMiscScript, 'bAssignDepartmentToRoomAtStartOfAction', assignDepAtStart.Checked);
-            assignDepAtEnd.Checked      := getScriptPropDefault(existingMiscScript, 'bAssignDepartmentToRoomAtEndOfAction', assignDepAtEnd.Checked);
-            disableClutter.Checked      := getScriptPropDefault(existingMiscScript, 'bDisableClutter_OnCompletion', disableClutter.Checked);
-            disableGarbarge.Checked     := getScriptPropDefault(existingMiscScript, 'bDisableGarbage_OnCompletion', disableGarbarge.Checked);
-            defaultConstMarkers.Checked := getScriptPropDefault(existingMiscScript, 'bUseDefaultConstructionMarkers', defaultConstMarkers.Checked);
-            realTimeTimer.Checked       := getScriptPropDefault(existingMiscScript, 'RealTimeTimer', realTimeTimer.Checked);
-
             inputDuration.Text := floatToStr(getScriptPropDefault(existingMiscScript, 'Duration', 24.0));
 
             actionGroup := getScriptProp(existingMiscScript, 'DepartmentHQActionGroup');
@@ -4238,6 +4264,7 @@ unit ImportHqRoom;
             setItemIndexByForm(selectActionGroup, actionGroup);
 
             upgradeSlot := getScriptProp(existingMiscScript, 'TargetUpgradeSlot');
+            AddMessage('upgradeSlot='+FullPath(upgradeSlot));
             setItemIndexByForm(selectUpgradeSlot, upgradeSlot);
 
             targetDepartment := getScriptProp(existingMiscScript, 'NewDepartmentOnCompletion');
@@ -4253,22 +4280,32 @@ unit ImportHqRoom;
             end;
 
 
-            // find the cobj
-            fillCobjKeywordFromExisting(selectCobjKeyword, existingCobj);
-            //selectCobjKeyword
-
             // now the hard parts
             fillResourceItemsFromExisting(resourceBox, existingMiscScript);
-
             fillRoomFunctionsFromExisting(roomFuncsBox, existingMiscScript);
-            // and the hardedest
             fillLayoutsFromExisting(layoutsBox, existingMiscScript);
-            // fill currentUpgradeDescriptionData
-            //
             fillDescriptionDataFromExisting(existingCobj, existingMiscScript);
+
+            // this will repopulate the submenu dropdown
+            roomUpgradeTypeChanged(btnOk);
+
+            // do the checkboxes after that change handler, so that the room type changer doesn't unset them
+            assignDepAtStart.Checked    := getScriptPropDefault(existingMiscScript, 'bAssignDepartmentToRoomAtStartOfAction', assignDepAtStart.Checked);
+            assignDepAtEnd.Checked      := getScriptPropDefault(existingMiscScript, 'bAssignDepartmentToRoomAtEndOfAction', assignDepAtEnd.Checked);
+            disableClutter.Checked      := getScriptPropDefault(existingMiscScript, 'bDisableClutter_OnCompletion', disableClutter.Checked);
+            disableGarbarge.Checked     := getScriptPropDefault(existingMiscScript, 'bDisableGarbage_OnCompletion', disableGarbarge.Checked);
+            defaultConstMarkers.Checked := getScriptPropDefault(existingMiscScript, 'bUseDefaultConstructionMarkers', defaultConstMarkers.Checked);
+            realTimeTimer.Checked       := getScriptPropDefault(existingMiscScript, 'RealTimeTimer', realTimeTimer.Checked);
+
+            // find the cobj keyword, aka submenu
+            fillCobjKeywordFromExisting(selectCobjKeyword, existingCobj);
+        end else begin
+            // new object creation
+            roomUpgradeTypeChanged(btnOk);
         end;
-        roomUpgradeTypeChanged(btnOk);
         showRoomUpradeDialog2UpdateOk(btnOk);
+
+
 
 		resultCode := frm.ShowModal();
 		if(resultCode = mrYes) then begin
@@ -6353,10 +6390,9 @@ unit ImportHqRoom;
 		updateRoomUpgrade1OkBtn(btnOk);
 
 		resultCode := frm.ShowModal();
-        AddMessage('WTF ');
+
 		if(resultCode = mrYes) then begin
 			Result := ObjectToElement(listRoomConfigs.Objects[selectRoomConfig.ItemIndex]);
-            AddMessage('Trying this: '+EditorID(Result));
 		end;
 		frm.free();
 	end;
