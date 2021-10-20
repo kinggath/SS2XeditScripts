@@ -2,33 +2,21 @@
     Run on Room Config to update. Run on anything else to generate a new
 
 	TODO:
-    For the first 3, perhaps a pop-up for filling all this in, since it's all related to just giving the player information.
 
 
-
+    3. Yeah the Other thing is still happening. I think I know why though - its when running an update on a record that hasn't been saved yet.
 
 
     Maybe later:
 	- Allow not selecting slot for a layout. generate a new KW then
     - Maybe add config file, at least for prefix
 	DONE:
-    5. Make this work on overrides
-    1.  Field for the designer's name. For this we'll need to create a MiscObject named that, and plug that into the DesignerNameHolder property on each of the layouts.
-        Probably should come up with a standard name scheme so you can search it up by EDID and avoid creating duplicates.
-        So something like SS2C2_NameHolder_Designer_<alphanumeric characters from the designer's name field>.
+    1. Uncheck the Register Room Upgrade box when using the script to update.
 
-    2. A mechanics description field, this should be used for the COBJ's DESC section.
-
-    3. A design description field, this should be used to create a Message form and plugged into the InformationMessage property of the layouts.
-    4.  This one should probably go on the main form, a dropdown box to select which recipe filter keyword to use on the COBJs,
-        any keyword starting with SS2_WorkshopMenu_HQ_Facilities_Construction_ for Construction, and any starting with SS2_WorkshopMenu_HQ_Facilities_Upgrades_ for those.
-        We were using the same keyword for all Upgrades and one for Construction before, but its becoming a mess.
-    - QoL Feature Request (ie lower priority) - ability to copy resource costs from another upgrade record. There will be a lot of similar upgrades and it would save having to write down all the details.
-    1. For the ActionType keyword, looks like it's adding it even if already there - had an action I updated with the keyword on the misc twice.
-    2. The newly created miscs are being called RoomUpgrade in their EDID, even when Construction. Let's call the construction ones RoomConstruction.
-    3. An empty array property of AdditionalUpgradeSlots is being added when we skip adding those.
-    4. bAssignDepartmentToRoomAtEnd and bAssignDepartmentToRoomAtStart properties are misnamed - should be: Both need "OfAction" added to the end of what you have. (My fault - I mistyped them in the script goals document)
-
+    2. Add a button to rebuild the Mechanics Description from the current room functionality.
+        I like how it works now where it doesn't overwrite the description after its been manually edited - that's a good feature you added,
+        but sometimes I'm just using the original generated text anyway, so would be nice to be able to force it to update and match the current room
+        functionality text with one click instead of having to type up the changes manually.
 }
 unit ImportHqRoom;
 	uses 'SS2\SS2Lib'; // uses praUtil
@@ -111,6 +99,8 @@ unit ImportHqRoom;
         // hacks because xedit sux
         currentOpenMenu: TPopupMenu;
         currentUpgradeDescriptionData: TJsonObject;
+        
+        currentUpgradeDialog: TForm;
 
 
     function getStringAfter(str, separator: string): string;
@@ -3649,6 +3639,32 @@ unit ImportHqRoom;
 
         Result := descriptionText;
     end;
+    
+    procedure regenerateMechancisDescription(sender: TObject);
+    var
+        dialogParent: TForm;
+        inputMechanics: TMemo; //CreateMultilineInput
+        resourceBox: TListBox;
+        inputDuration: TEdit;
+        roomFuncsGroup :TGroupBox;
+        duration: float;
+    begin
+        dialogParent := findComponentParentWindow(sender);
+        inputMechanics := TMemo(dialogParent.findComponent('inputMechanics'));
+        
+        resourceBox := TListBox(currentUpgradeDialog.FindComponent('roomFuncsBox'));
+        inputDuration := TEdit(currentUpgradeDialog.FindComponent('inputDuration'));
+        
+        if(resourceBox = nil) then begin
+            roomFuncsGroup := TGroupBox(currentUpgradeDialog.FindComponent('roomFuncsGroup'));
+            if(nil <> roomFuncsGroup) then begin
+                resourceBox := TListBox(roomFuncsGroup.FindComponent('roomFuncsBox'));
+            end;
+        end;
+        
+        duration := tryToParseFloat(inputDuration.Text);
+        inputMechanics.Text := generateUpgradeDescription(duration, resourceBox.Items);
+    end;
 
     procedure showDescriptionEditDialog(sender: TObject);
     var
@@ -3663,8 +3679,11 @@ unit ImportHqRoom;
 
         duration: float;
         inputDuration: TEdit;
+        
+        regenMechanicsbtn: TButton;
     begin
         dialogParent := findComponentParentWindow(sender);
+        currentUpgradeDialog := dialogParent;
         AddMessage(dialogParent.ClassName + ' ' + dialogParent.Name);
 
 
@@ -3676,10 +3695,14 @@ unit ImportHqRoom;
 
         yOffset := yOffset + 50;
 
-        CreateLabel(frm, 10, yOffset, 'Mechanics description:');
-        inputMechanics := CreateMultilineInput(frm, 10, yOffset+16, 380, 80, escapeString(currentUpgradeDescriptionData.S['mechanicsDesc']));
+        CreateLabel(frm, 10, yOffset+7, 'Mechanics description:');
+        inputMechanics := CreateMultilineInput(frm, 10, yOffset+32, 380, 80, escapeString(currentUpgradeDescriptionData.S['mechanicsDesc']));
+        inputMechanics.Name := 'inputMechanics';
+        regenMechanicsbtn := CreateButton(frm, 130, yOffset, 'Regenerate');
+        regenMechanicsbtn.onclick := regenerateMechancisDescription;
+        
 
-        yOffset := yOffset + 110;
+        yOffset := yOffset + 120;
         CreateLabel(frm, 10, yOffset, 'Design description:');
         inputDesign := CreateMultilineInput(frm, 10, yOffset+16, 380, 80, escapeString(currentUpgradeDescriptionData.S['designDesc']));
 
@@ -3709,12 +3732,10 @@ unit ImportHqRoom;
             end;
         end;
         if(resourceBox <> nil) then begin
-
             if(inputMechanics.Text = '') then begin
                 // autofill here
                 inputMechanics.Text := generateUpgradeDescription(duration, resourceBox.Items);
             end;
-
         end;
 
         resultCode := frm.ShowModal();
@@ -4247,10 +4268,9 @@ unit ImportHqRoom;
 
         // update fields if updating
         if(assigned(existingElem)) then begin
-            if(not IsMaster(existingElem)) then begin
-                doRegisterCb.checked := false;
-                doRegisterCb.enabled := false;
-            end;
+            doRegisterCb.checked := false;
+            doRegisterCb.enabled := false;
+
             inputPrefix.Text := findEditorIdPrefix(existingElem);
 
             inputName.Text := GetElementEditValues(existingElem, 'FULL');
@@ -6120,7 +6140,7 @@ unit ImportHqRoom;
         // at least remove the data from the leftovers, if we have them
         for i:=0 to layouts.count-1 do begin
             curLayout := ObjectToElement(layouts.Objects[i]);
-            recycleLayout(curLayout);
+            recycleLayout(curLayout, i);
         end;
     end;
 
