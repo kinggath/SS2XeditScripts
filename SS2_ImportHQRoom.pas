@@ -99,7 +99,7 @@ unit ImportHqRoom;
         // hacks because xedit sux
         currentOpenMenu: TPopupMenu;
         currentUpgradeDescriptionData: TJsonObject;
-        
+
         currentUpgradeDialog: TForm;
 
 
@@ -3639,7 +3639,7 @@ unit ImportHqRoom;
 
         Result := descriptionText;
     end;
-    
+
     procedure regenerateMechancisDescription(sender: TObject);
     var
         dialogParent: TForm;
@@ -3651,17 +3651,17 @@ unit ImportHqRoom;
     begin
         dialogParent := findComponentParentWindow(sender);
         inputMechanics := TMemo(dialogParent.findComponent('inputMechanics'));
-        
+
         resourceBox := TListBox(currentUpgradeDialog.FindComponent('roomFuncsBox'));
         inputDuration := TEdit(currentUpgradeDialog.FindComponent('inputDuration'));
-        
+
         if(resourceBox = nil) then begin
             roomFuncsGroup := TGroupBox(currentUpgradeDialog.FindComponent('roomFuncsGroup'));
             if(nil <> roomFuncsGroup) then begin
                 resourceBox := TListBox(roomFuncsGroup.FindComponent('roomFuncsBox'));
             end;
         end;
-        
+
         duration := tryToParseFloat(inputDuration.Text);
         inputMechanics.Text := generateUpgradeDescription(duration, resourceBox.Items);
     end;
@@ -3679,7 +3679,7 @@ unit ImportHqRoom;
 
         duration: float;
         inputDuration: TEdit;
-        
+
         regenMechanicsbtn: TButton;
     begin
         dialogParent := findComponentParentWindow(sender);
@@ -3700,7 +3700,7 @@ unit ImportHqRoom;
         inputMechanics.Name := 'inputMechanics';
         regenMechanicsbtn := CreateButton(frm, 130, yOffset, 'Regenerate');
         regenMechanicsbtn.onclick := regenerateMechancisDescription;
-        
+
 
         yOffset := yOffset + 120;
         CreateLabel(frm, 10, yOffset, 'Design description:');
@@ -4683,10 +4683,10 @@ unit ImportHqRoom;
 
         // update fields if updating
         if(assigned(existingElem)) then begin
-            if(not IsMaster(existingElem)) then begin
-                doRegisterCb.checked := false;
-                doRegisterCb.enabled := false;
-            end;
+
+            doRegisterCb.checked := false;
+            doRegisterCb.enabled := false;
+
             inputPrefix.Text := findEditorIdPrefix(existingElem);
 
             inputName.Text := GetElementEditValues(existingElem, 'FULL');
@@ -4765,9 +4765,17 @@ unit ImportHqRoom;
 			upgradeDuration := tryToParseFloat(inputDuration.Text);
 			//upgradeSlot := ObjectToElement(currentListOfUpgradeSlots.Objects[selectUpgradeSlot.ItemIndex]);
 
-			actionGroup := ObjectToElement(selectActionGroup.Items.Objects[selectActionGroup.ItemIndex]);
+            if(selectActionGroup.ItemIndex >= 0) then begin
+                actionGroup := ObjectToElement(selectActionGroup.Items.Objects[selectActionGroup.ItemIndex]);
+            end else begin
+                actionGroup := nil;
+            end;
 
-			putDownSound := ObjectToElement(selectPutDownSound.Items.Objects[selectPutDownSound.ItemIndex]);
+            if(selectPutDownSound.ItemIndex >= 0) then begin
+                putDownSound := ObjectToElement(selectPutDownSound.Items.Objects[selectPutDownSound.ItemIndex]);
+            end else begin
+                putDownSound := nil;
+            end;
 
             roomUpgradeMisc := createTechResearchMisc(
                 existingElem,
@@ -4781,7 +4789,7 @@ unit ImportHqRoom;
                 actionGroup
             );
 
-            AddMessage('cobjKeyword = '+EditorID(cobjKeyword)+' '+IntToStr(selectCobjKeyword.ItemIndex));
+            // AddMessage('cobjKeyword = '+EditorID(cobjKeyword)+' '+IntToStr(selectCobjKeyword.ItemIndex));
 
             createRoomUpgradeActivatorsAndCobjs(
                 actiData,
