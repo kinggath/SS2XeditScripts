@@ -4596,6 +4596,7 @@ unit ImportHqRoom;
         selectCobjKeyword := CreateComboBox(frm, 100, 8+curY, 200, listKeywordsTech);
 		selectCobjKeyword.Style := csDropDownList;
 		selectCobjKeyword.Name := 'selectCobjKeyword';
+		selectCobjKeyword.onchange := showTechResearchDialog2UpdateOk;
         //curY := curY + 24;
 
         CreateLabel(frm, secondRowOffset+10, 10+curY, 'Putdown sound:');
@@ -5818,8 +5819,16 @@ unit ImportHqRoom;
                 clearScriptProp(script, 'NewDepartmentOnCompletion');
             end;
         end;
+        
+        ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', upgradeNameSpaceless);
+        ActionAvailableGlobal := nil;
 
-        if(not assigned(existingElem)) then begin
+        if(assigned(existingElem)) then begin
+            ActionAvailableGlobal := getScriptProp(script, 'ActionAvailableGlobal');
+        end;
+        
+
+        if(not assigned(ActionAvailableGlobal)) then begin
             // make ActionAvailableGlobal
             // if updating, assume this exists already
             ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', upgradeNameSpaceless);
@@ -6077,10 +6086,15 @@ unit ImportHqRoom;
         end;
         }
 
-        if(not assigned(existingElem)) then begin
+        ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', upgradeNameSpaceless);
+        ActionAvailableGlobal := nil;
+
+        if(assigned(existingElem)) then begin
+            ActionAvailableGlobal := getScriptProp(script, 'ActionAvailableGlobal');
+        end;
+
+        if(not assigned(ActionAvailableGlobal)) then begin
             // make ActionAvailableGlobal
-            // if updating, assume this exists already
-            ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', upgradeNameSpaceless);
             ActionAvailableGlobal := getCopyOfTemplateOA(targetFile, versionGlobalTemplate, ActionAvailableGlobalEdid);
             // how do I remove the CONST flag?
             SetElementEditValues(ActionAvailableGlobal, 'Record Header\Record Flags\Constant', '0');
@@ -6089,15 +6103,6 @@ unit ImportHqRoom;
             setScriptProp(script, 'ActionAvailableGlobal', ActionAvailableGlobal);
         end;
 
-        // ensureKeywordByPath(upgradeResult, roomShapeKeyword, 'KWDA');
-{
-        oldUpgradeSlot := getScriptProp(script, 'TargetUpgradeSlot');
-        if(assigned(oldUpgradeSlot)) then begin
-            // upgradeSlotKw, oldUpgradeSlotKw, oldUpgradeSlot
-            oldUpgradeSlotKw := findSlotKeywordFromSlotMisc(oldUpgradeSlot);
-            removeKeywordByPath(upgradeResult, oldUpgradeSlotKw, 'KWDA');
-        end;
-        }
 
         //upgradeSlotKw := findSlotKeywordFromSlotMisc(upgradeSlot);
 
@@ -6593,10 +6598,10 @@ unit ImportHqRoom;
 
 		// change some stuff, if we are updating
 		if(assigned(existingElem)) then begin
-            if(not isMaster(existingElem)) then begin
-                doRegisterCb.checked := false;
-                doRegisterCb.enabled := false;
-            end;
+
+            doRegisterCb.checked := false;
+            doRegisterCb.enabled := false;
+
 			inputName.Text := GetElementEditValues(existingElem, 'FULL');
 			// existing roomshape
 			existingRoomshape := findKeywordByList(existingElem, listRoomShapes);
