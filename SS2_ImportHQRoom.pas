@@ -4394,13 +4394,12 @@ unit ImportHqRoom;
                 trim(currentUpgradeDescriptionData.S['designDesc'])
 			);
 
-            AddMessage('cobjKeyword = '+EditorID(cobjKeyword)+' '+IntToStr(selectCobjKeyword.ItemIndex));
-
             createRoomUpgradeActivatorsAndCobjs(
                 actiData,
                 roomUpgradeMisc,
                 targetHQ,
                 upgradeName,
+                shapeKeywordBase,
                 modelStr,
                 resourceBox.Items,
                 upgradeDuration,
@@ -4797,6 +4796,7 @@ unit ImportHqRoom;
                 roomUpgradeMisc,
                 targetHQ,
                 upgradeName,
+                '',
                 modelStr,
                 resourceBox.Items,
                 upgradeDuration,
@@ -5317,7 +5317,7 @@ unit ImportHqRoom;
     procedure createRoomUpgradeActivatorsAndCobjs(
         existingData: TJsonObject;
         roomUpgradeMisc, forHq: IInterface;
-        upgradeName, modelStr: string;
+        upgradeName, roomConfigName, modelStr: string;
         resources: TStringList;
         completionTime: float;
         ArtObjEdid: string;
@@ -5339,7 +5339,15 @@ unit ImportHqRoom;
         end;
 
         availableGlobal := getActionAvailableGlobal(roomUpgradeMisc);
-        upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
+        // get the room shape
+
+
+
+        if(roomConfigName <> '') then begin
+            upgradeNameSpaceless := cleanStringForEditorID(roomConfigName+'_'+upgradeName);
+        end else begin
+            upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
+        end;
         acti1 := nil;
         acti2 := nil;
         acti3 := nil;
@@ -5358,19 +5366,20 @@ unit ImportHqRoom;
             if(existingData.O['3'].S['cobj'] <> '') then cobj3 := StrToForm(existingData.O['3'].S['cobj']);
         end;
 
-        acti1 := createRoomUpgradeActivator(acti1, roomUpgradeMisc, forHq, upgradeName, modelStr, RESOURCE_COMPLEXITY_MINIMAL);
-        acti2 := createRoomUpgradeActivator(acti2, roomUpgradeMisc, forHq, upgradeName, modelStr, RESOURCE_COMPLEXITY_CATEGORY);
-        acti3 := createRoomUpgradeActivator(acti3, roomUpgradeMisc, forHq, upgradeName, modelStr, RESOURCE_COMPLEXITY_FULL);
 
-        // now the COBJs
         edidBase := globalNewFormPrefix+'HQ'+findHqNameShort(forHq)+'_BuildableAction_'+upgradeNameSpaceless;
 
+        acti1 := createRoomUpgradeActivator(acti1, roomUpgradeMisc, forHq, upgradeName, edidBase, modelStr, RESOURCE_COMPLEXITY_MINIMAL);
+        acti2 := createRoomUpgradeActivator(acti2, roomUpgradeMisc, forHq, upgradeName, edidBase, modelStr, RESOURCE_COMPLEXITY_CATEGORY);
+        acti3 := createRoomUpgradeActivator(acti3, roomUpgradeMisc, forHq, upgradeName, edidBase, modelStr, RESOURCE_COMPLEXITY_FULL);
+
+        // now the COBJs
 		cobj1 := createRoomUpgradeCOBJ(cobj1, edidBase, descriptionText, RESOURCE_COMPLEXITY_MINIMAL,  acti1, availableGlobal, resources, artObject, cobjKeyword, roomMode, putDownSound);
 		cobj2 := createRoomUpgradeCOBJ(cobj2, edidBase, descriptionText, RESOURCE_COMPLEXITY_CATEGORY, acti2, availableGlobal, resources, artObject, cobjKeyword, roomMode, putDownSound);
-		cobj3 := createRoomUpgradeCOBJ(cobj3, edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	acti3, availableGlobal, resources, artObject, cobjKeyword, roomMode, putDownSound);
+		cobj3 := createRoomUpgradeCOBJ(cobj3, edidBase, descriptionText, RESOURCE_COMPLEXITY_FULL, 	   acti3, availableGlobal, resources, artObject, cobjKeyword, roomMode, putDownSound);
     end;
 
-	function createRoomUpgradeActivator(existingElem, roomUpgradeMisc, forHq: IInterface; upgradeName, modelStr: string; resourceComplexity: integer): IInterface;
+	function createRoomUpgradeActivator(existingElem, roomUpgradeMisc, forHq: IInterface; upgradeName, edidBase, modelStr: string; resourceComplexity: integer): IInterface;
 	var
 		upgradeNameSpaceless, edid: string;
 		hqManager, script: IInterface;
@@ -5382,7 +5391,7 @@ unit ImportHqRoom;
 
         if(not assigned(existingElem)) then begin
             upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
-            edid := generateEdid('HQ'+findHqNameShort(forHq)+'_BuildableAction_', upgradeNameSpaceless+'_ac_'+IntToStr(resourceComplexity));
+            edid := generateEdid(edidBase, '_ac_'+IntToStr(resourceComplexity));
             Result := getCopyOfTemplateOA(targetFile, SS2_HQBuildableAction_Template, edid);
         end else begin
             Result := getOrCreateElementOverride(existingElem, targetFile);
@@ -5819,14 +5828,14 @@ unit ImportHqRoom;
                 clearScriptProp(script, 'NewDepartmentOnCompletion');
             end;
         end;
-        
+
         ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', upgradeNameSpaceless);
         ActionAvailableGlobal := nil;
 
         if(assigned(existingElem)) then begin
             ActionAvailableGlobal := getScriptProp(script, 'ActionAvailableGlobal');
         end;
-        
+
 
         if(not assigned(ActionAvailableGlobal)) then begin
             // make ActionAvailableGlobal
