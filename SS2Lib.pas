@@ -267,9 +267,13 @@ unit SS2Lib;
         SS2_PlotTypeSubClass_Municipal_WaterPlant_Advanced,
         SS2_PlotTypeSubClass_Municipal_WaterPlant_Basic,
         SS2_PlotTypeSubClass_Municipal_WaterPlant_HighTech,
+        SS2_PlotTypeSubClass_Municipal_Cemetery,
+        SS2_PlotTypeSubClass_Municipal_Hospital,
+        SS2_PlotTypeSubClass_Municipal_Sanitation,
+
         // recreational
         SS2_PlotTypeSubClass_Recreational_AgilityTraining,
-        SS2_PlotTypeSubClass_Recreational_Cemetery,
+        //SS2_PlotTypeSubClass_Recreational_Cemetery,
         SS2_PlotTypeSubClass_Recreational_CharismaTraining,
         SS2_PlotTypeSubClass_Recreational_Default_Relaxation,
         SS2_PlotTypeSubClass_Recreational_EnduranceTraining,
@@ -346,6 +350,10 @@ unit SS2Lib;
         PLOT_SC_MUN_WaterPlant_Advanced,
         PLOT_SC_MUN_WaterPlant_Basic,
         PLOT_SC_MUN_WaterPlant_HighTech,
+        PLOT_SC_MUN_Cemetery,
+        PLOT_SC_MUN_Sanitation,
+        PLOT_SC_MUN_Hospital,
+
         // recreational
         PLOT_SC_REC_AgilityTraining,
         PLOT_SC_REC_Cemetery,
@@ -1766,8 +1774,13 @@ unit SS2Lib;
         SS2_PlotTypeSubClass_Municipal_WaterPlant_Advanced              := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_WaterPlant_Advanced');
         SS2_PlotTypeSubClass_Municipal_WaterPlant_Basic                 := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_WaterPlant_Basic');
         SS2_PlotTypeSubClass_Municipal_WaterPlant_HighTech              := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_WaterPlant_HighTech');
+        SS2_PlotTypeSubClass_Municipal_Cemetery                         := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Cemetery');
+        SS2_PlotTypeSubClass_Municipal_Sanitation                       := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Sanitation');
+        SS2_PlotTypeSubClass_Municipal_Hospital                         := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Hospital');
+
+
         SS2_PlotTypeSubClass_Recreational_AgilityTraining               := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_AgilityTraining');
-        SS2_PlotTypeSubClass_Recreational_Cemetery                      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_Cemetery');
+        // SS2_PlotTypeSubClass_Recreational_Cemetery                      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_Cemetery');
         SS2_PlotTypeSubClass_Recreational_CharismaTraining              := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_CharismaTraining');
         SS2_PlotTypeSubClass_Recreational_Default_Relaxation            := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_Default_Relaxation');
         SS2_PlotTypeSubClass_Recreational_EnduranceTraining             := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_EnduranceTraining');
@@ -1914,9 +1927,12 @@ unit SS2Lib;
         PLOT_SC_MUN_WaterPlant_Basic        := plotSubtypeNames.add('Waterplant (Basic)');
         PLOT_SC_MUN_WaterPlant_Advanced     := plotSubtypeNames.add('Waterplant (Advanced)');
         PLOT_SC_MUN_WaterPlant_HighTech     := plotSubtypeNames.add('Waterplant (High-Tech)');
+        PLOT_SC_MUN_Cemetery                := plotSubtypeNames.add('Cemetery');
+        PLOT_SC_MUN_Sanitation              := plotSubtypeNames.add('Sanitation');
+        PLOT_SC_MUN_Hospital                := plotSubtypeNames.add('Hospital');
         // recreational
         PLOT_SC_REC_Default_Relaxation          := plotSubtypeNames.add('Default Relaxation');
-        PLOT_SC_REC_Cemetery                    := plotSubtypeNames.add('Cemetery');
+        //PLOT_SC_REC_Cemetery                    := plotSubtypeNames.add('Cemetery (Recreational)');
 
         PLOT_SC_REC_StrengthTraining            := plotSubtypeNames.add('Training (Strength)');
         PLOT_SC_REC_PerceptionTraining          := plotSubtypeNames.add('Training (Perception)');
@@ -1984,9 +2000,12 @@ unit SS2Lib;
         stArr_mun.add(PLOT_SC_MUN_WaterPlant_Basic);
         stArr_mun.add(PLOT_SC_MUN_WaterPlant_Advanced);
         stArr_mun.add(PLOT_SC_MUN_WaterPlant_HighTech);
+        stArr_mun.add(PLOT_SC_MUN_Cemetery);
+        stArr_mun.add(PLOT_SC_MUN_Sanitation);
+        stArr_mun.add(PLOT_SC_MUN_Hospital);
 
         stArr_rec.add(PLOT_SC_REC_Default_Relaxation);
-        stArr_rec.add(PLOT_SC_REC_Cemetery);
+        //stArr_rec.add(PLOT_SC_REC_Cemetery);
 
         stArr_rec.add(PLOT_SC_REC_StrengthTraining);
         stArr_rec.add(PLOT_SC_REC_PerceptionTraining);
@@ -2773,8 +2792,12 @@ unit SS2Lib;
             PLOT_SC_MUN_WaterPlant_Advanced:     Result := '[Advanced Water Plant]'+STRING_LINE_BREAK+'[Requires Skilled Perception]';
             PLOT_SC_MUN_WaterPlant_Basic:        Result := '[Basic Water Plant]';
             PLOT_SC_MUN_WaterPlant_HighTech:     Result := '[Hi-Tech Water Plant]'+STRING_LINE_BREAK+'[Requires Gifted Perception]';
+
+            PLOT_SC_MUN_Cemetery:               Result := '[Cemetery]';
+            PLOT_SC_MUN_Sanitation:             Result := '[Sanitation]';
+            PLOT_SC_MUN_Hospital:               Result := '[Hospital]';
         // recreational
-            PLOT_SC_REC_Cemetery:             Result := '[Cemetery]';
+            //PLOT_SC_REC_Cemetery:             Result := '[Cemetery]';
             PLOT_SC_REC_Default_Relaxation:   Result := '[Relaxation]';
 
             PLOT_SC_REC_StrengthTraining:     Result := '[Strength Training]';
@@ -4097,9 +4120,13 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             PLOT_SC_MUN_WaterPlant_Basic:           Result := SS2_PlotTypeSubClass_Municipal_WaterPlant_Basic;
             PLOT_SC_MUN_WaterPlant_Advanced:        Result := SS2_PlotTypeSubClass_Municipal_WaterPlant_Advanced;
             PLOT_SC_MUN_WaterPlant_HighTech:        Result := SS2_PlotTypeSubClass_Municipal_WaterPlant_HighTech;
+            PLOT_SC_MUN_Cemetery:                   Result := SS2_PlotTypeSubClass_Municipal_Cemetery;
+            PLOT_SC_MUN_Sanitation:                 Result := SS2_PlotTypeSubClass_Municipal_Sanitation;
+            PLOT_SC_MUN_Hospital:                   Result := SS2_PlotTypeSubClass_Municipal_Hospital;
+
             // recreational
             PLOT_SC_REC_Default_Relaxation:         Result := SS2_PlotTypeSubClass_Recreational_Default_Relaxation;
-            PLOT_SC_REC_Cemetery:                   Result := SS2_PlotTypeSubClass_Recreational_Cemetery;
+            // PLOT_SC_REC_Cemetery:                   Result := SS2_PlotTypeSubClass_Recreational_Cemetery;
 
             PLOT_SC_REC_StrengthTraining:           Result := SS2_PlotTypeSubClass_Recreational_StrengthTraining;
             PLOT_SC_REC_PerceptionTraining:         Result := SS2_PlotTypeSubClass_Recreational_PerceptionTraining;
@@ -4289,15 +4316,31 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result := PLOT_SC_MUN_WaterPlant_HighTech;
             exit;
         end;
+
+        if(edid = 'SS2_PlotTypeSubClass_Municipal_Cemetery') then begin
+            Result := PLOT_SC_MUN_Cemetery;
+            exit;
+        end;
+        if(edid = 'SS2_PlotTypeSubClass_Municipal_Sanitation') then begin
+            Result := PLOT_SC_MUN_Sanitation;
+            exit;
+        end;
+        if(edid = 'SS2_PlotTypeSubClass_Municipal_Hospital') then begin
+            Result := PLOT_SC_MUN_Hospital;
+            exit;
+        end;
+
         // recreational
         if(edid = 'SS2_PlotTypeSubClass_Recreational_Default_Relaxation') then begin
             Result := PLOT_SC_REC_Default_Relaxation;
             exit;
         end;
+        {
         if(edid = 'SS2_PlotTypeSubClass_Recreational_Cemetery') then begin
             Result := PLOT_SC_REC_Cemetery;
             exit;
         end;
+        }
 
         if(edid = 'SS2_PlotTypeSubClass_Recreational_StrengthTraining') then begin
             Result := PLOT_SC_REC_StrengthTraining;
