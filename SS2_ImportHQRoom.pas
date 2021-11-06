@@ -5391,7 +5391,7 @@ unit ImportHqRoom;
 
         if(not assigned(existingElem)) then begin
             upgradeNameSpaceless := cleanStringForEditorID(upgradeName);
-            edid := generateEdid(edidBase, '_ac_'+IntToStr(resourceComplexity));
+            edid := shortenEdid(edidBase+'_ac_'+IntToStr(resourceComplexity));
             Result := getCopyOfTemplateOA(targetFile, SS2_HQBuildableAction_Template, edid);
         end else begin
             Result := getOrCreateElementOverride(existingElem, targetFile);
