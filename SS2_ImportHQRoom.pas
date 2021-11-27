@@ -25,7 +25,7 @@ unit ImportHqRoom;
 
 	const
 		cacheFile = ProgramPath + 'Edit Scripts\SS2\HqRoomCache.json';
-        cacheFileVersion = 8;
+        cacheFileVersion = 9;
 		fakeClipboardFile = ProgramPath + 'Edit Scripts\SS2\HqRoomClipboard.txt';
 
 		progressBarChar = '|';
@@ -1212,13 +1212,11 @@ unit ImportHqRoom;
 			end;
 
 			if(strStartsWithSS2(edid, 'HQRoomFunctionality_')) then begin
-				curScript := getScript(curRec, 'SimSettlementsV2:HQ:Library:MiscObjects:HQRoomFunctionality');
-				if(assigned(curScript)) then begin
-					curName := GetElementEditValues(curRec, 'FULL');
-					addObjectDupIgnore(listRoomFuncs, curName, curRec);
-				end;
+                // meh, just believe it's correct, no script check. we don't really need the script here.
+                curName := GetElementEditValues(curRec, 'FULL');
+                addObjectDupIgnore(listRoomFuncs, curName, curRec);
+
                 continue;
-				// SimSettlementsV2:HQ:Library:MiscObjects:HQRoomFunctionality
 			end;
 
 			if(strStartsWithSS2(edid, 'HQResourceToken_WorkEnergy_')) then begin
@@ -3326,7 +3324,8 @@ unit ImportHqRoom;
     procedure fillRoomFunctionsFromExisting(roomFuncsBox: TListBox; script: IInterface);
     var
         i, roomFuncIndex: integer;
-        ProvidedFunctionality, curRoomFunc: IInterface;
+        ProvidedFunctionality, curRoomFunc, gotRoomFunc: IInterface;
+        gotRoomFuncStr: string;
     begin
         ProvidedFunctionality := getScriptProp(script, 'ProvidedFunctionality');
         if(not assigned(ProvidedFunctionality)) then begin
@@ -3335,10 +3334,21 @@ unit ImportHqRoom;
 
         for i:=0 to ElementCount(ProvidedFunctionality)-1 do begin
             curRoomFunc := getObjectFromProperty(ProvidedFunctionality, i);
+            if(not assigned(curRoomFunc)) then begin
+                AddMessage('WARNING: empty entry in list of room functions, skipping.');
+                continue;
+            end;
 
             roomFuncIndex := indexOfElement(listRoomFuncs, curRoomFunc);
+            if(roomFuncIndex < 0) then begin
+                AddMessage('WARNING: failed to find '+EditorID(curRoomFunc)+' in list of room functions, adding.');
+                gotRoomFuncStr := GetElementEditValues(curRoomFunc, 'FULL');
+                addObjectDupIgnore(listRoomFuncs, gotRoomFuncStr, curRoomFunc);
+            end else begin
+                gotRoomFuncStr := listRoomFuncs[roomFuncIndex];
+            end;
 
-            roomFuncsBox.Items.AddObject(listRoomFuncs[roomFuncIndex], listRoomFuncs.Objects[roomFuncIndex]);
+            roomFuncsBox.Items.AddObject(gotRoomFuncStr, curRoomFunc);
         end;
     end;
 
@@ -4284,7 +4294,7 @@ unit ImportHqRoom;
             setItemIndexByForm(selectActionGroup, actionGroup);
 
             upgradeSlot := getScriptProp(existingMiscScript, 'TargetUpgradeSlot');
-            AddMessage('upgradeSlot='+FullPath(upgradeSlot));
+
             setItemIndexByForm(selectUpgradeSlot, upgradeSlot);
 
             targetDepartment := getScriptProp(existingMiscScript, 'NewDepartmentOnCompletion');
