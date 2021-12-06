@@ -619,17 +619,6 @@ unit SS2Lib;
         end;
     end;
 
-	function testConcat(l: TStringList): string;
-	var
-		i: integer;
-	begin
-		Result := '';
-
-		for i:=0 to l.count-1 do begin
-			Result := Result + l[i];
-		end;
-	end;
-
 	function loadMiscsFromCache(targetFile: IInterface): boolean;
 	var
 		jsonData, curData, curSpawnData, curEntry, filesEntry: TJsonObject;
@@ -642,18 +631,18 @@ unit SS2Lib;
 	begin
 		spawnMiscDataLoaded := true;
 		AddMessage('Loading Spawn Misc cache from '+miscItemCacheFileName);
-		tempStringList := TStringList.create;
+        {
+            tempStringList := TStringList.create;
+            tempStringList.LoadFromFile(miscItemCacheFileName);
+            testwhat := testConcat(tempStringList);
+            spawnMiscData := spawnMiscData.parse(testwhat);
+        }
 
-		tempStringList.LoadFromFile(miscItemCacheFileName);
+        spawnMiscData.LoadFromFile(miscItemCacheFileName);
 
-		//jsonData := TJsonObject.create;
-		//tempStringList.Delimiter := #10;
-		testwhat := testConcat(tempStringList);
-		//AddMessage(testwhat);
-		spawnMiscData := spawnMiscData.parse(testwhat);
 
-		tempStringList.free();
-        
+		// tempStringList.free();
+
         // miscItemCacheFileVersion
         cacheFileVersion := spawnMiscData.O['meta'].I['version'];
         if(cacheFileVersion < miscItemCacheFileVersion) then begin
@@ -662,7 +651,7 @@ unit SS2Lib;
             Result := true;
             exit;
         end;
-        
+
         filesEntry := spawnMiscData.O['files'];
 
 		if(not assigned(targetFile)) then begin
@@ -745,14 +734,9 @@ unit SS2Lib;
 		end;
 
 		tempStringList := TStringList.create;
-        
+
         spawnMiscData.O['meta'].I['version'] := miscItemCacheFileVersion;
-
-		tempStringList.add(spawnMiscData.toString());
-		tempStringList.saveToFile(miscItemCacheFileName);
-
-		tempStringList.free();
-		//jsonData.free();
+        spawnMiscData.SaveToFile(miscItemCacheFileName, false);
 	end;
 
     procedure loadRecycledMiscs(targetFile: IInterface; deprecated: boolean);
