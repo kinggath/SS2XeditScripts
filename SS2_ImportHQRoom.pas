@@ -1396,13 +1396,8 @@ unit ImportHqRoom;
 	end;
 
     procedure saveCacheFile();
-    var
-		fileContents: TStringList;
     begin
-        fileContents := TStringList.create;
-		fileContents.add(currentCacheFile.toString());
-		fileContents.saveToFile(cacheFile);
-		fileContents.free();
+        currentCacheFile.SaveToFile(cacheFile, false);
     end;
 
     function joinLines(l: TStringList; separator: string): string;
@@ -1537,8 +1532,6 @@ unit ImportHqRoom;
 	}
 	function loadListsFromCache(forFiles: TStringList): TJsonObject;
 	var
-		listData: TStringList;
-
 		i, j, eqPos: integer;
 		curStr, formIdPart, fileNamePart, hqKey, curFileName: string;
 		curFormId: cardinal;
@@ -1557,12 +1550,13 @@ unit ImportHqRoom;
 		end;
 
 		AddMessage('Loading cache '+cacheFile);
-		listData := TStringList.create;
-		listData.loadFromFile(cacheFile);
+		//listData := TStringList.create;
+		//listData.loadFromFile(cacheFile);
 
-		currentCacheFile := TJsonObject.parse(concatLines(listData));
+		//currentCacheFile := TJsonObject.parse(concatLines(listData));
+        currentCacheFile := getFileAsJson(cacheFile);
 
-		listData.free();
+		//listData.free();
 
 
 		if(currentCacheFile = nil) then begin

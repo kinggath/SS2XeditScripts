@@ -581,6 +581,45 @@ unit PraUtil;
         ms.Free;
     end;
 
+    procedure WriteElementRecursive(e: IInterface; bw: TBinaryWriter; index: integer);
+    var
+        i: Integer;
+        child: IInterface;
+    begin
+        for i := 0 to ElementCount(e)-1 do begin
+            child := ElementByIndex(e, i);
+            // no clue how much is actually necessary here...
+            bw.Write(IntToStr(index));
+            bw.Write(';');
+            bw.Write(DisplayName(child));
+            bw.Write(';');
+            bw.Write(GetEditValue(child));
+
+            WriteElementRecursive(child, bw, index+1);
+        end;
+
+    end;
+
+
+    function ElementCRC32(e: IInterface): string;
+    var
+        ms: TMemoryStream;
+        bw: TBinaryWriter;
+        br: TBinaryReader;
+    begin
+        ms := TMemoryStream.Create;
+        bw := TBinaryWriter.Create(ms);
+
+        WriteElementRecursive(e, bw, 0);
+
+        bw.Free;
+        ms.Position := 0;
+        br := TBinaryReader.Create(ms);
+        Result := wbCRC32Data(br.ReadBytes(ms.Size));
+        br.Free;
+        ms.Free;
+    end;
+
     {
         Copypasta of the above, just using the MD5 function
 
@@ -640,6 +679,25 @@ unit PraUtil;
         Result := curPart;
 
         helper.free();
+    end;
+
+    function getFileAsJson(fullPath: string): TJsonObject;
+    begin
+        Result := TJsonObject.create();
+
+        try
+            Result.LoadFromFile(fullPath);
+        except
+            on E: Exception do begin
+                AddMessage('Failed to parse '+fullPath+': '+E.Message);
+            end;
+            else begin
+                AddMessage('Failed to parse '+fullPath+'.');
+            end;
+            Result.free();
+            Result := nil;
+            exit;
+        end;
     end;
 
     {
@@ -1787,6 +1845,40 @@ unit PraUtil;
             etStringListTerminator: Result := 'etStringListTerminator';
             etUnion:                Result := 'etUnion';
             else                    Result := '';
+        end;
+    end;
+
+    function getVarTypeString(x: variant): string;
+    var
+        basicType  : Integer;
+    begin
+        basicType := VarType(x);// and VarTypeMask;
+
+        // Set a string to match the type
+        case basicType of
+            varEmpty     : Result := 'varEmpty';
+            varNull      : Result := 'varNull';
+            varSmallInt  : Result := 'varSmallInt';
+            varInteger   : Result := 'varInteger';
+            varSingle    : Result := 'varSingle';
+            varDouble    : Result := 'varDouble';
+            varCurrency  : Result := 'varCurrency';
+            varDate      : Result := 'varDate';
+            varOleStr    : Result := 'varOleStr';
+            varDispatch  : Result := 'varDispatch';
+            varError     : Result := 'varError';
+            varBoolean   : Result := 'varBoolean';
+            varVariant   : Result := 'varVariant';
+            varUnknown   : Result := 'varUnknown';
+            varByte      : Result := 'varByte';
+            varWord      : Result := 'varWord';
+            varLongWord  : Result := 'varLongWord';
+            vart64       : Result := 'vart64';
+            varStrArg    : Result := 'varStrArg';
+            varString    : Result := 'varString';
+            varAny       : Result := 'varAny';
+            varTypeMask  : Result := 'varTypeMask';
+            else:       Result := IntToStr(basicType);
         end;
     end;
 
