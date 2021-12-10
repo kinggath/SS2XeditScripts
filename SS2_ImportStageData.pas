@@ -579,6 +579,7 @@ begin
 
         curEditorId := trim(csvCols[0]);
         if(curEditorId = '') then begin
+            AddMessage('Line "'+curLine+'" cannot be imported, skipping');
             continue;
         end;
 
@@ -670,7 +671,7 @@ begin
 
             curSpawnObj := spawnsArr.addObject();
 
-            curSpawnObj.S['Form'] := FormToStr(curElement);//IntToStr(GetLoadOrderFormID(curElement));
+            curSpawnObj.S['Form'] := FormToStr(curElement);
             curSpawnObj.F['posX'] := StrToFloat(csvCols.Strings[1]);
             curSpawnObj.F['posY'] := StrToFloat(csvCols.Strings[2]);
             curSpawnObj.F['posZ'] := StrToFloat(csvCols.Strings[3]);
@@ -742,67 +743,12 @@ begin
             curSpawnObj.I['startStage'] := stage;
         end;
 
-        {
-        if(stageEnd = maxStage) then begin
-            curSpawnObj.I['endStage'] := -1;
-        end else begin
-            curSpawnObj.I['endStage'] := stageEnd;
-        end;
-        }
         curSpawnObj.I['endStage'] := stageEnd;
 
         csvCols.free();
     end;
     csvLines.free();
     plotData.B['hasItems'] := true;
-end;
-
-{
-    propName: StageItemSpawns, ReplaceStageItemSpawns, AdditionalStageItemSpawns
-}
-procedure fillSpawns(levelBlueprint, curLevelBlueprintScript: IInterface; propName: string; spawnsArray: TJsonArray);
-var
-    reqForm: IInterface;
-begin
-    AddMessage('+++ Filling Spawns for '+EditorID(levelBlueprint) + ' +++');
-    newItemSpawns := createRawScriptProp(curLevelBlueprintScript, propName);
-    SetEditValueByPath(newItemSpawns, 'Type', 'Array of Struct');
-    cleanItemSpawns(newItemSpawns);
-
-    for i:=0 to spawnsArray.count-1 do begin
-        curSpawnObj := spawnsArray.O[i];
-
-
-        curSpawnForm := StrToForm(curSpawnObj.S['Form']);//getFormByLoadOrderFormID(StrToInt(curSpawnObj.S['Form']));
-        addRequiredMastersSilent(curSpawnForm, targetFile);
-        AddMessage('Adding Spawn '+EditorID(curSpawnForm));
-
-        reqForm := nil;
-        if(curSpawnObj.S['Requirements'] <> '') then begin
-            reqForm := StrToForm(curSpawnObj.S['Requirements']);//getFormByLoadOrderFormID(StrToInt(curSpawnObj.S['Requirements']));
-        end;
-
-        addStageItemReqs(
-            targetFile,
-            levelBlueprint,
-            'spawn_'+IntToStr(i),
-            curSpawnForm,
-            curSpawnObj.F['posX'],
-            curSpawnObj.F['posY'],
-            curSpawnObj.F['posZ'],
-            curSpawnObj.F['rotX'],
-            curSpawnObj.F['rotY'],
-            curSpawnObj.F['rotZ'],
-            curSpawnObj.F['scale'],
-            curSpawnObj.I['type'],
-            curSpawnObj.I['startStage'],
-            curSpawnObj.I['endStage'],
-            curSpawnObj.I['ownerNumber'],
-            curSpawnObj.S['spawnName'],
-            reqForm
-        );
-    end;
-    AddMessage('+++ Filling Spawns complete +++');
 end;
 
 function getSpawnManager(spawnManagerEdid: string): IInterface;
@@ -959,6 +905,10 @@ begin
 
 
             curSpawnForm := StrToForm(curSpawnObj.S['Form']);//getFormByLoadOrderFormID(StrToInt(curSpawnObj.S['Form']));
+            if(not assigned(curSpawnForm)) then begin
+                AddMessage('=== ERROR: Failed to find form for '+curSpawnObj.S['Form']+'. This is a bug!');
+                continue;
+            end;
             addRequiredMastersSilent(curSpawnForm, targetFile);
 
             reqForm := nil;
@@ -1334,7 +1284,11 @@ begin
                     setStructMember(curStruct, 'iOwnerNumber', curSpawnObj.I['ownerNumber']);
                 end;
 
-                formToSpawn := StrToForm(curSpawnObj.S['Form']);//getFormByLoadOrderFormID(StrToInt(curSpawnObj.S['Form']));
+                formToSpawn := StrToForm(curSpawnObj.S['Form']);
+                if(not assigned(formToSpawn)) then begin
+                    AddMessage('=== ERROR: Failed to find form for '+curSpawnObj.S['Form']+'. This is a bug!');
+                    continue;
+                end;
 
                 itemSpawnEdid := generateStageItemEdid(
                     EditorID(formToSpawn),

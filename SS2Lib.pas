@@ -592,9 +592,9 @@ unit SS2Lib;
         AddMessage('-> Looking for MISC: '+key+' in '+curFileName);
 		curArray := spawnMiscData.O['files'].O[curFileName].O['spawns'];
 		//i := curArray.IndexOfName(key);
-        if (curArray.S[key] = '') then exit;
+        if (curArray.O[key].count = 0) then exit;
 
-        AddMessage('should have it '+curArray.S[key]);
+        // AddMessage('should have it '+curArray.S[key]);
 		Result := getFormByFileAndFormID(targetFile, StrToInt(curArray.O[key].S['FormID']));
     end;
 
@@ -676,7 +676,7 @@ unit SS2Lib;
 		for i:=0 to recycled.count-1 do begin
             curEntry := recycled.O[i];
 			curFormId := StrToInt(curEntry.S['FormID']);
-            curFileHash := StrToInt(curEntry.S['Hash']);
+            curFileHash := curEntry.S['Hash'];
 
 			curForm := getFormByFileAndFormID(targetFile, curFormId);
 			if(not assigned(curForm)) then begin
@@ -698,7 +698,7 @@ unit SS2Lib;
             curEntry := spawns.O[curKey];
 
 			curFormId := StrToInt(curEntry.S['FormID']);
-            curFileHash := StrToInt(curEntry.S['Hash']);
+            curFileHash := curEntry.S['Hash'];
 			curForm := getFormByFileAndFormID(targetFile, curFormId);
 			if(not assigned(curForm)) then begin
 				AddMessage('Cache file is not valid, it will be rebuilt.');
@@ -880,7 +880,7 @@ unit SS2Lib;
 		//i := curArray.IndexOfName(key);
 
 		//i := miscItemLookupTable.indexOf(key);
-		if(curArray.S[key] <> '') then begin
+		if(curArray.O[key].count > 0) then begin
 			AddMessage('Deleting spawn '+key+' from used list');
 			curArray.delete(curArray.indexOf(key));
 		end;
