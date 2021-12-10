@@ -384,6 +384,25 @@ unit PraUtil;
         }
     end;
 
+    function GetFirstNonOverrideElement(theFile: IwbFile): IInterface;
+    var
+        curGroup, curRecord: IInterface;
+        iSigs, i: integer;
+    begin
+        for iSigs:=0 to ElementCount(theFile)-1 do begin
+            curGroup := ElementByIndex(theFile, iSigs);
+            if (Signature(curGroup) = 'GRUP') then begin
+                for i:=0 to ElementCount(curGroup)-1 do begin
+                    curRecord := ElementByIndex(curGroup, i);
+                    if(IsMaster(curRecord)) then begin
+                        Result := curRecord;
+                        exit;
+                    end;
+                end;
+            end;
+        end;
+    end;
+
     {
         Returns a formID with the value zero, but all the load order prefixes
         This is because xEdit has absolutely no way whatsoever to actually get the true load order of a file, even less so for ESLs.
@@ -392,12 +411,26 @@ unit PraUtil;
     function GetZeroFormID(theFile: IwbFile): cardinal;
     var
         numMasters: integer;
-        relativeFormID: cardinal;
-        fileHeader : IInterface;
+        elemFormId, relativeFormID: cardinal;
+        firstElem: IInterface;
     begin
-        numMasters := MasterCount(theFile);
-        relativeFormID := (numMasters shl 24) and $FF000000;
-        Result := FileFormIDtoLoadOrderFormID(theFile, relativeFormID);
+        Result := 0;
+        if(wbVersionNumber < 67109888) then begin // what does this magic number mean? WHO KNOWS?! But it's what 4.0.4 returns
+            numMasters := MasterCount(theFile);
+            relativeFormID := (numMasters shl 24) and $FF000000;
+            // this no longer works with xedit 4.0.4
+            Result := FileFormIDtoLoadOrderFormID(theFile, relativeFormID);
+        end else begin
+            // try getting the first record in the thing
+            firstElem := GetFirstNonOverrideElement(theFile);
+
+            if(not assigned(firstElem)) then begin
+                exit;
+            end;
+            elemFormId := GetLoadOrderFormID(firstElem);
+
+            Result := getLoadOrderPrefix(theFile, elemFormId);
+        end;
     end;
 
     {
@@ -407,9 +440,21 @@ unit PraUtil;
     begin
         if(isFileLight(theFile)) then begin
             Result := $00000FFF and id;
-            exit;
+        end else begin;
+            Result := $00FFFFFF and id;
         end;
-        Result := $00FFFFFF and id;
+    end;
+
+    {
+        Strips the actual ID part from a FormID, leaving only the LO part
+    }
+    function getLoadOrderPrefix(theFile: IwbFile; id: cardinal): cardinal;
+    begin
+        if (isFileLight(theFile)) then begin
+            Result := $FFFFF000 and id;
+        end else begin
+            Result := $FF000000 and id;
+        end;
     end;
 
 	function getElementLocalFormId(e: IInterface): cardinal;
@@ -419,7 +464,6 @@ unit PraUtil;
 
     {
         An actually functional version of FileFormIDtoLoadOrderFormID.
-        Assumes the given ID exists within the file.
     }
     function FileToLoadOrderFormID(theFile: IwbFile; id: cardinal): cardinal;
     var
@@ -473,6 +517,7 @@ unit PraUtil;
             curFile := FileByIndex(i);
 
             id := GetZeroFormID(curFile);
+
             mainLO := ($FF000000 and id) shr 24;
             if(mainLO <> $FE) then begin
                 continue;
@@ -486,6 +531,7 @@ unit PraUtil;
             end;
         end;
     end;
+
 
     function getFormByLoadOrderFormID(id: cardinal): IInterface;
     var
@@ -511,31 +557,11 @@ unit PraUtil;
         if(not assigned(theFile)) then begin
             exit;
         end;
-
-        // why do I need to do this? NO IDEA!
-        fixedId := ($FF000000 and id) or ($00FFFFFF and id);
-        localFormId := fixedId;
-        // for some reason, I had this in the code. but it seems to be a) not necessary and b) exploding on ESL files
-        // localFormId := FileFormIDtoLoadOrderFormID(theFile, fixedId);
-
-        try
-            Result := RecordByFormID(theFile, localFormId, false);
-        except
-            // xEdit is a fucking mess, have I mentioned that?
-            fileIndex := GetLoadOrder(theFile);
-            // AddMessage(IntToStr(fileIndex));
-            if(isLight) then begin
-                anotherFormId := $00000FFF and localFormId;
-            end else begin
-                anotherFormId := $00FFFFFF and localFormId;
-            end;
-
-
-            anotherFormId := (fileIndex shl 28) or anotherFormId;
-            // AddMessage(IntToHex(anotherFormId, 8))
-            Result := RecordByFormID(theFile, anotherFormId, false);
-        end;
+        
+        Result := getFormByFileAndFormID(theFile, id);
     end;
+
+
 
     {
         Returns a record by it's prefix-less form ID and a file, like Game.GetFormFromFile does
@@ -543,18 +569,24 @@ unit PraUtil;
     function getFormByFileAndFormID(theFile: IInterface; id: cardinal): IInterface;
     var
         numMasters: integer;
-        localFormId, fixedId, loadOrderPrefix: cardinal;
+        localFormId, fixedId, fileIndex: cardinal;
     begin
-        loadOrderPrefix := GetLoadOrder(theFile);
-        loadOrderPrefix := (loadOrderPrefix shl 24) and $FF000000;
-
-        if(isFileLight(theFile)) then begin
-            fixedId := loadOrderPrefix or ($00000FFF and id);
-        end else begin
-            fixedId := loadOrderPrefix or ($00FFFFFF and id);
+        Result := nil;
+        // It seems like RecordByFormID doesn't care about the real load order prefix.
+        // Instead, it expects the first byte to contain the index of the file.
+        // Since RecordByFormID also expects that very same format, I suspect that
+        // xEdit uses correct light FormIDs for display only, but still gives them a full slot internally.
+        fileIndex := GetLoadOrder(theFile);
+        
+        if(fileIndex > 255) then begin
+            AddMessage('ERROR: Cannot resolve FormID '+IntToHex(id, 8)+' for file '+GetFileName(theFile)+', because you have more than 255 files loaded. xEdit doesn''t actually support this.');
+            exit;
         end;
+        
+        fileIndex := (fileIndex shl 24) and $FF000000;
+        
+        fixedId := fileIndex or getLocalFormId(theFile, id);
 
-        // at this point, I have no idea how this function really works...
         Result := RecordByFormID(theFile, fixedId, false);
     end;
 
