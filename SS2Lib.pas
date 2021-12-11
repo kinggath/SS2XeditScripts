@@ -389,6 +389,8 @@ unit SS2Lib;
         PlotEdidInputRequired: boolean;
         stageModelInput, itemSpawnInput, plotEdidInput: TEdit;
 
+        isUpdatingExistingBlueprint: boolean;
+
         // these are configurabe, and can be set by the script
 
         // if not empty, this will be removed when forms are converted
@@ -3087,10 +3089,10 @@ unit SS2Lib;
 
         // set the various strings
         SetEditValueByPath(newRoot, 'FULL - Name', fullName);
-        if(isNewElement) then begin
-            setBlueprintDescription(newRoot, description);
-            setBlueprintConfirmation(newRoot, confirmation);
-        end;
+        //if(isNewElement) then begin
+        setBlueprintDescription(newRoot, description);
+        setBlueprintConfirmation(newRoot, confirmation);
+        //end;
 
         //AddMessage('3 Have NewRoot, edid '+EditorID(newRoot));
         Result := newRoot;
@@ -3203,6 +3205,73 @@ unit SS2Lib;
         SetPathLinksTo(include, 'Mod', omod);
     end;
 
+    function stripSubtypePrefix(descrText: string): string;
+    var
+        i: integer;
+        tempList: TStringList;
+        curLine: string;
+    begin
+        Result := descrText;
+        tempList := TStringList.create;
+        tempList.delimiter := STRING_LINE_BREAK;
+        tempList.Text := descrText;
+        if(tempList.count = 0) then exit;
+
+        while(true) do begin
+            curLine := trim(tempList[0]);
+            if (curLine[1] <> '[') or (curLine[length(curLine)] <> ']') then begin
+                break;
+            end;
+            tempList.delete(0);
+        end;
+
+        Result := tempList.Text;
+    end;
+
+
+    function FindBlueprintDescription(e: IInterface): string;
+    var
+        script, descrOmod: IInterface;
+        text: string;
+    begin
+        Result := '';
+        script := getScript(e, 'SimSettlementsV2:Weapons:BuildingPlan');
+        if(not assigned(script)) then begin
+            exit;
+        end;
+
+        descrOmod := getScriptProp(script, 'BuildingPlanDescription');
+        if(not assigned(descrOmod)) then begin
+            exit;
+        end;
+
+        text := getElementEditValues(descrOmod, 'DESC');
+        if(text = '') then begin
+            exit;
+        end;
+
+        Result := stripSubtypePrefix(text);
+    end;
+
+    function FindBlueprintConfirmation(e: IInterface): string;
+    var
+        script, confirmMsg: IInterface;
+        lastPos : integer;
+    begin
+        Result := '';
+        script := getScript(e, 'SimSettlementsV2:Weapons:BuildingPlan');
+        if(not assigned(script)) then begin
+            exit;
+        end;
+
+        confirmMsg := getScriptProp(script, 'BuildingPlanConfirm');
+        if(not assigned(confirmMsg)) then begin
+            exit;
+        end;
+
+        Result := trim(getElementEditValues(confirmMsg, 'DESC'));
+    end;
+
     procedure setBlueprintDescription(blueprint: IInterface; descr: string);
     var
         bpScript, omod, templateCombi: IInterface;
@@ -3227,12 +3296,12 @@ unit SS2Lib;
             omod := getCopyOfTemplate(targetFile, descriptionTemplate, omodEditorID);
             setScriptProp(bpScript, propName, omod);
             SetEditValueByPath(omod, 'FULL', geev(blueprint, 'FULL')+' Description OMOD');
+
+            // Now generate the template, assume these already exist for updating
+            generateTemplateCombination(blueprint, omod);
         end;
 
         SetEditValueByPath(omod, 'DESC', descr);
-
-        // Now generate the template
-        generateTemplateCombination(blueprint, omod);
     end;
 
     procedure setBlueprintConfirmation(blueprint: IInterface; confirmation: string);
@@ -5185,6 +5254,11 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             exit;
         end;
 
+        if(isUpdatingExistingBlueprint) then begin
+            // just allow clicking OK for update at this point
+            exit;
+        end;
+
         stageModelStr := trim(stageModelInput.text);
         stageItemStr  := trim(itemSpawnInput.text);
 
@@ -5201,6 +5275,17 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         end;
 
         Result := true;
+    end;
+
+    procedure confirmationMsgAutoChangeHandler(sender: TObject);
+    var
+        confirmationInput: TMemo;
+        checkBox: TCheckBox;
+    begin
+        checkBox := TCheckBox(sender);
+        confirmationInput := TMemo(sender.parent.FindComponent('confirmationInput'));
+
+        confirmationInput.enabled := (not checkBox.checked);
     end;
 
     procedure updatePlotDialogOkBtnState(sender: TObject);
@@ -5395,7 +5480,13 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         initialModPrefix: foo_
 
     }
-    function ShowPlotCreateDialog(title, text, initialPlotName, initialPlotId, initialModPrefix: string; packedPlotType: integer; requireStageModels, isFullPlot: boolean; initialThemes: TStringList; autoRegister, makePreview, setupStacking, showDescription: boolean): TJsonObject;
+    function ShowPlotCreateDialog(
+        title, text, initialPlotName, description, confirmation, initialPlotId, initialModPrefix: string;
+        packedPlotType: integer;
+        requireStageModels, isFullPlot: boolean;
+        initialThemes: TStringList;
+        autoRegister, makePreview, setupStacking, isNewEntry: boolean
+    ): TJsonObject;
     var
         frm: TForm;
         btnBrowseModel, btnBrowseItems, btnOk, btnCancel, btnThemes: TButton;
@@ -5405,11 +5496,12 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         selectedMainType, selectedSize, selectedSubType: integer;
         packedResultType: integer;
         descrLabel, themesLabel: TLabel;
-        registerCb, previewCb, stackCb: TCheckBox;
+        registerCb, previewCb, stackCb, confirmationAutoCb: TCheckBox;
         themesInitialText: string;
-        descriptionInput: TMemo;
+        descriptionInput, confirmationInput: TMemo;
     begin
         Result := nil;
+        isUpdatingExistingBlueprint := (not isNewEntry);
 
         StageModelFileRequired := requireStageModels;
         isConvertDialogActive := false;
@@ -5473,30 +5565,52 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
         descriptionInput := nil;
 
-        if (showDescription) and (isFullPlot) then begin
+        if (isFullPlot) then begin
 
 
             descriptionInput := TMemo.create(frm);
 
-            descrLabel := CreateLabel(frm, 10, yOffset,
-                'Description' + STRING_LINE_BREAK +
-                '(Without subtype prefix)'
-            );
+            descrLabel := CreateLabel(frm, 10, yOffset, 'Description');
 
             descriptionInput.Parent := frm;
-            descriptionInput.Left := 150;
-            descriptionInput.Top := yOffset;
-            descriptionInput.Width := 290;
-            descriptionInput.height := 50;
-            // descriptionInput.Text := escapeString(text);
+            descriptionInput.Left := 10;
+            descriptionInput.Top := yOffset+16;
+            descriptionInput.Width := 230;
+            descriptionInput.height := 70;
+            descriptionInput.Text := escapeString(description);
+            descriptionInput.ScrollBars := ssVertical;
 
-            descrLabel.AutoSize := False;
-            descrLabel.WordWrap := True;
-            descrLabel.Width := 120;
-            descrLabel.Height := 60;
+            CreateLabel(frm, 10, yOffset+90, '(Without subtype prefix)');
 
-            yOffset := yOffset + 60;
-            frm.height := (frm.height + 60);
+            CreateLabel(frm, 250, yOffset, 'Confirmation Message');
+            //descrLabel.AutoSize := False;
+            //descrLabel.WordWrap := True;
+            //descrLabel.Width := 120;
+            //descrLabel.Height := 60;
+            confirmationInput := TMemo.create(frm);
+            confirmationInput.Parent := frm;
+            confirmationInput.Left := 250;
+            confirmationInput.Top := yOffset+16;
+            confirmationInput.Width := 230;
+            confirmationInput.height := 70;
+            confirmationInput.Text := escapeString(confirmation);
+            confirmationInput.ScrollBars := ssVertical;
+            confirmationInput.Name := 'confirmationInput';
+
+            confirmationAutoCb := CreateCheckbox(frm, 250, yOffset+88, 'Generate from Name + Description');
+            if(confirmation <> '') then begin
+                confirmationAutoCb.checked := false;
+                confirmationInput.enabled := true;
+            end else begin
+                confirmationAutoCb.checked := true;
+                confirmationInput.enabled := false;
+            end;
+            confirmationAutoCb.onclick := confirmationMsgAutoChangeHandler;
+
+            yOffset := yOffset + 120;
+            frm.height := (frm.height + 120);
+
+            //confirmationInput confirmationAutoCb
         end;
 
         registerCb := CreateCheckbox(frm, 10, yOffset+2, 'Register Building Plan');
@@ -5556,15 +5670,6 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         if(resultCode = mrYes) then begin
             Result := TJsonObject.create;
 
-
-
-            //stageFilePath := Trim(stageModelInput.Text);
-            //itemFilePath  := Trim(itemSpawnInput.Text);
-
-            //plotName        := Trim(inputName.text);
-            //plotId          := Trim(inputPlotEdid.text);
-            //modPrefix       := Trim(inputModPrefix.text);
-
             if(packedPlotType >= 0) then begin
                 selectedMainType := plotMainTypeCombobox.ItemIndex;
                 selectedSize     := plotSizeCombobox.ItemIndex;
@@ -5586,9 +5691,13 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
             if(descriptionInput <> nil) then begin
                 Result.S['description'] := descriptionInput.Text;
-
             end;
 
+            if(confirmationInput <> nil) then begin
+                if (not confirmationAutoCb.checked) then begin
+                    Result.S['confirmation'] := confirmationInput.Text;
+                end;
+            end;
         end;
 
         frm.free();

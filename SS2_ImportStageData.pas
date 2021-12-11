@@ -20,7 +20,7 @@ var
     stageFilePath, itemFilePath: string;
     skinSpawnsMode, setupStacking: boolean;
 
-    plotName, plotId, modPrefix, plotEdidBase, descriptionBase: string;
+    plotName, plotId, modPrefix, plotEdidBase, descriptionBase, confirmationString: string;
 
     plotData: TJsonObject;
 
@@ -203,10 +203,11 @@ begin
     frm.free();
 end;
 
+
 function showConfigDialog(): boolean;
 var
     resultData: TJsonObject;
-    dialogLabel, skinTargetEdid: string;
+    dialogLabel, skinTargetEdid, plotDescription, plotConfirm: string;
     plotType: integer;
 //    plotThemes: TStringList;
     requreStageModels, isSkin, showThemeSelector, hasSkinTarget, isNewEntry: boolean;
@@ -241,6 +242,10 @@ begin
 
         plotName := DisplayName(targetElem);
         plotId := EditorId(targetElem);
+
+        plotDescription := FindBlueprintDescription(targetElem);
+        plotConfirm := FindBlueprintConfirmation(targetElem);
+
         modPrefix := findPrefix(plotId);
         plotType := -1;
         requreStageModels := false;
@@ -352,6 +357,8 @@ begin
                 'Plot Data Import',
                 dialogLabel,
                 plotName,
+                plotDescription,
+                plotConfirm,
                 plotId,
                 modPrefix,
                 plotType,
@@ -370,7 +377,7 @@ begin
             exit;
         end;
 
-        AddMessage(resultData.ToString());
+        // AddMessage(resultData.ToString());
 
         stageFilePath := resultData.S['modelsFile'];
         itemFilePath  := resultData.S['itemsFile'];
@@ -384,6 +391,7 @@ begin
         setupStacking    := resultData.B['setupStacking'];
 
         descriptionBase := resultData.S['description'];
+        confirmationString := resultData.S['confirmation'];
 
         // resultData
 
@@ -997,18 +1005,20 @@ begin
     {plotName, plotId, modPrefix, plotDescription}
     AddMessage('Preparing blueprint root');
 
-    // descriptionBase
-//getSubtypeDescriptionString
-// currentType
     subType := extractPlotSubtype(currentType);
     descrString := getSubtypeDescriptionString(subType) + descrString;
-    confirmString := '';
+    confirmString := confirmationString;
+    //confirmationString
     if(descriptionBase <> '') then begin
         descrString := descrString + descriptionBase;
-        confirmString := plotName + STRING_LINE_BREAK + descriptionBase;
+        if(confirmationString = '') then begin
+            confirmString := plotName + STRING_LINE_BREAK + descriptionBase;
+        end;
     end else begin
         descrString := descrString + plotName;
-        confirmString := plotName;
+        if(confirmationString = '') then begin
+            confirmString := plotName;
+        end;
     end;
 
     bpRoot := prepareBlueprintRoot(targetFile, targetBlueprintElem, plotId, plotName, descrString, confirmString);
