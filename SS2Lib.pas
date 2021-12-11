@@ -505,7 +505,7 @@ unit SS2Lib;
         Result := getMiscLookupKey(GetFile(miscScript), formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, iType, spawnName, reqItem);
     end;
 
-    procedure addMiscToLookup(misc, miscScript: IInterface);
+    procedure addMiscToLookupVerbose(misc, miscScript: IInterface; verbose: boolean);
     var
         oldScript, curFile: IInterface;
 
@@ -549,14 +549,20 @@ unit SS2Lib;
             exit;
 		end;
 
-        // otherwise put it in
-		AddMessage('Adding misc to lookup: '+EditorID(misc)+' -> '+lookupString+' file: '+curFileName);
-		// curArray.S[hashedString] := IntToStr(getLocalFormId(curFile, FormID(misc)));
+        if(verbose) then begin
+            AddMessage('Adding misc to lookup: '+EditorID(misc)+' -> '+lookupString+' file: '+curFileName);
+        end;
+
 		dataEntry := curArray.O[lookupString];
         dataEntry.S['FormID']   := IntToStr(getLocalFormId(curFile, FormID(misc)));
         dataEntry.S['Hash']     := ElementCRC32(misc);
 
         //miscItemLookupTable.AddObject(hashedString, misc);
+    end;
+    
+    procedure addMiscToLookup(misc, miscScript: IInterface);
+    begin
+        addMiscToLookupVerbose(misc, miscScript, false);
     end;
 
 	procedure addMiscToRecycled(misc: IInterface);

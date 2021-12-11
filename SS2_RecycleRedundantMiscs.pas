@@ -1,5 +1,6 @@
 {
-    Run on your MISCs
+    This will scan the target file for redundant spawn MISCs, and recycle then.
+    Run on anything within the target file.
 }
 unit RecycleRedundantMiscs;
     uses 'SS2\SS2Lib';
