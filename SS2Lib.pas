@@ -5599,9 +5599,9 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             confirmationInput.Top := yOffset+16;
             confirmationInput.Width := 230;
             confirmationInput.height := 70;
-            confirmationInput.Text := escapeString(confirmation);
             confirmationInput.ScrollBars := ssVertical;
             confirmationInput.Name := 'confirmationInput';
+            confirmationInput.Text := escapeString(confirmation);
 
             confirmationAutoCb := CreateCheckbox(frm, 250, yOffset+88, 'Generate from Name + Description');
             if(confirmation <> '') then begin
