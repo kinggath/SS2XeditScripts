@@ -5570,6 +5570,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         yOffset := yOffset+35;
 
         descriptionInput := nil;
+        confirmationInput := nil;
 
         if (isFullPlot) then begin
 
