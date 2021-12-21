@@ -3223,7 +3223,7 @@ unit SS2Lib;
         tempList.Text := descrText;
         if(tempList.count = 0) then exit;
 
-        while(true) do begin
+        for i:=0 to tempList.count-1 do begin
             curLine := trim(tempList[0]);
             if (curLine[1] <> '[') or (curLine[length(curLine)] <> ']') then begin
                 break;
