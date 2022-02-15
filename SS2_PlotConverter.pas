@@ -1254,6 +1254,81 @@ unit PlotConverter;
         );
     end;
 
+    function getNewStageItem2(edid, suffix: string; oldSpawnEntry: IInterface; offsetX, offsetY, offsetZ: float): IInterface;
+    var
+		curFormId: cardinal;
+		spawnName, curFileName, itemEdid: string;
+        formToSpawn: IInterface;
+	begin
+		formToSpawn := getStructMember(oldSpawnEntry, 'FormToSpawn');
+		if(not assigned(formToSpawn)) then begin
+
+            // try formID/filename
+            curFormId := getStructMemberDefault(oldSpawnEntry, 'iExternalFormID', 0);
+            curFileName := getStructMemberDefault(oldSpawnEntry, 'sExternalPlugin', '');
+            if(curFormId <= 0) or (curFileName = '') then begin
+                //Result := getFormByFilenameAndFormID(curFileName, curFormId);
+                AddMessage('getNewStageItem failed: found no form to spawn');
+                exit;
+            end;
+		end;
+
+        spawnName := getStructMemberDefault(oldSpawnEntry, 'sSpawnName', '');
+
+        if(assigned(formToSpawn)) then begin
+            formToSpawn := translateForm(formToSpawn);
+
+            itemEdid := generateStageItemEdid(
+                EditorID(formToSpawn),
+                stripPrefix(oldFormPrefix, edid),
+                suffix,
+                spawnName
+            );
+
+
+            Result := createStageItemForm(
+                targetFile,
+                itemEdid,
+                formToSpawn,
+                getStructMemberDefault(oldSpawnEntry, 'fOffsetX', 0.0)+offsetX,
+                getStructMemberDefault(oldSpawnEntry, 'fOffsetY', 0.0)+offsetY,
+                getStructMemberDefault(oldSpawnEntry, 'fOffsetZ', 0.0)+offsetZ,
+                getStructMemberDefault(oldSpawnEntry, 'fRotationX', 0.0),
+                getStructMemberDefault(oldSpawnEntry, 'fRotationY', 0.0),
+                getStructMemberDefault(oldSpawnEntry, 'fRotationZ', 0.0),
+                getStructMemberDefault(oldSpawnEntry, 'fScale', 1.0),
+                getStructMemberDefault(oldSpawnEntry, 'iType', 0.0),
+                '',
+                nil
+            );
+            exit;
+        end;
+
+        itemEdid := generateStageItemEdid(
+            curFileName+'_'+IntToHex(curFormId, 8),
+            stripPrefix(oldFormPrefix, edid),
+            suffix,
+            spawnName
+        );
+
+        Result := createExternalStageItemForm(
+            targetFile,
+            itemEdid,
+            curFormId,
+            curFileName,
+            getStructMemberDefault(oldSpawnEntry, 'fOffsetX', 0.0)+offsetX,
+            getStructMemberDefault(oldSpawnEntry, 'fOffsetY', 0.0)+offsetY,
+            getStructMemberDefault(oldSpawnEntry, 'fOffsetZ', 0.0)+offsetZ,
+            getStructMemberDefault(oldSpawnEntry, 'fRotationX', 0.0),
+            getStructMemberDefault(oldSpawnEntry, 'fRotationY', 0.0),
+            getStructMemberDefault(oldSpawnEntry, 'fRotationZ', 0.0),
+            getStructMemberDefault(oldSpawnEntry, 'fScale', 1.0),
+            getStructMemberDefault(oldSpawnEntry, 'iType', 0.0),
+            '',
+            nil
+        );
+    end;
+
     function isBuildLimitHelper(oldSpawnEntry: IInterface): boolean;
     var
         edid: string;
@@ -1305,7 +1380,7 @@ unit PlotConverter;
         end;
 
         // create item
-        spawnItem := getNewStageItem(baseBlueprintEdid, suffix, oldSpawnEntry, itemOffsetX, itemOffsetY, itemOffsetZ);
+        spawnItem := getNewStageItem2(baseBlueprintEdid, suffix, oldSpawnEntry, itemOffsetX, itemOffsetY, itemOffsetZ);
         if(not assigned(spawnItem)) then begin
             // skip
             exit;
@@ -2086,8 +2161,9 @@ unit PlotConverter;
     var
         script, extraInfo, newRoot, formList, descrOmod, confirmMesg: IInterface;
         newScript: IInterface;
-        bpEdId, planEditBase: string;
+        bpEdId, planEditBase, oldDesc, newDesc, newConfirm, oldName: string;
         buildPlanPaths: IInterface;
+        subType: integer;
     begin
         Result := false;
         script := getScript(e, 'SimSettlements:SimBuildingPlan');
@@ -2131,8 +2207,17 @@ unit PlotConverter;
 
         bpEdId := GenerateEdid(buildingPlanPrefix, planEditBase);
 
+        oldName := GetElementEditValues(e, 'FULL - Name');
+        oldDesc := GetElementEditValues(extraInfo, 'DESC - Description');
+        oldDesc := trim(StringReplace(oldDesc, STRING_LINE_BREAK + STRING_LINE_BREAK, STRING_LINE_BREAK, [rfReplaceAll]));
 
-        newRoot := prepareBlueprintRoot(targetFile, nil, bpEdId, GetElementEditValues(e, 'FULL - Name'), GetElementEditValues(extraInfo, 'DESC - Description'), GetElementEditValues(extraInfo, 'DESC - Description'));
+
+        subType  := extractPlotSubtype(currentPlotType);
+
+        newDesc := getSubtypeDescriptionString(subType) + oldDesc;
+        newConfirm := oldName + STRING_LINE_BREAK + oldDesc;
+
+        newRoot := prepareBlueprintRoot(targetFile, nil, bpEdId, oldName, newDesc, newConfirm);
 
         convertStages(e, newRoot, planEditBase);
 		AddMessage('Converting Stages finished');
@@ -2178,7 +2263,7 @@ unit PlotConverter;
                 newArray := getOrCreateScriptProp(newLevelSkinScript, propertyName, 'Array of Struct');
 
                 newStruct := appendStructToProperty(newArray);
-
+{
                 itemSpawnEdid := generateStageItemEdid(
                     EditorID(formToSpawn),
                     stripPrefix(oldFormPrefix, edidBase),
@@ -2209,6 +2294,9 @@ unit PlotConverter;
                     '',
                     nil
                 );
+}
+                newItemSpawn := getNewStageItem2(edidBase, IntToStr(forLevel)+'_'+IntToStr(j), curOld, 0, 0, 0);
+                //edid, suffix: string; oldSpawnEntry: IInterface; offsetX, offsetY, offsetZ: float): IInterface;
 
                 //newItemSpawn := getNewStageItem();
                 setStructMember(newStruct, 'StageItemDetails', newItemSpawn);
@@ -4023,6 +4111,87 @@ unit PlotConverter;
 
     end;
 
+    function getPlotMappingData(): TJsonObject;
+	var
+		csvLines, csvCols: TStringList;
+		i: integer;
+		curLine, search, replace: string;
+		replacePlot, plotScript: IInterface;
+	begin
+        Result := TJsonObject.create;
+		if(not FileExists(plotMappingFile)) then begin
+			exit;
+		end;
+
+
+		plotMapping := TStringList.create;
+		plotMapping.CaseSensitive := false;
+		plotMapping.Duplicates := dupIgnore;
+
+		AddMessage('Loading plot mapping from '+plotMappingFile);
+
+		csvLines := TStringList.create;
+		csvLines.LoadFromFile(plotMappingFile);
+		for i:=0 to csvLines.count-1 do begin
+			curLine := trim(csvLines.Strings[i]);
+			if(curLine = '') then begin
+				continue;
+			end;
+
+			csvCols := TStringList.create;
+
+			csvCols.Delimiter := ',';
+			csvCols.StrictDelimiter := TRUE;
+			csvCols.DelimitedText := curLine;
+
+			if (csvCols.count >= 2) then begin
+				search  := trim(csvCols.Strings[0]);
+				replace := trim(csvCols.Strings[1]);
+
+				if(search <> '') and (replace <>'') then begin
+					Result.S[search]:= replace;
+				end;
+			end;
+
+			csvCols.free();
+        end;
+
+		csvLines.free();
+	end;
+
+    procedure writePlotMapping();
+    var
+        i: integer;
+        oldEdid, newEdid: string;
+        newPlot: IInterface;
+        list: TStringList;
+        curData: TJsonObject;
+    begin
+        if(formMappingCache.count = 0) then exit;
+        curData := getPlotMappingData();
+
+        for i:=0 to formMappingCache.count-1 do begin
+            oldEdid := formMappingCache[i];
+            newPlot := ObjectToElement(formMappingCache.Objects[i]);
+            newEdid := EditorID(newPlot);
+
+            curData.S[oldEdid] := newEdid;
+        end;
+
+
+        list := TStringList.create();
+        for i:=0 to curData.count -1 do begin
+            oldEdid := curData.Names[i];
+            list.add(oldEdid+','+curData.S[oldEdid]);
+        end;
+
+        list.SaveToFile(plotMappingFile);
+
+
+        list.free();
+        curData.free();
+    end;
+
     // Called after processing
     // You can remove it if script doesn't require finalization code
     function Finalize: integer;
@@ -4041,6 +4210,8 @@ unit PlotConverter;
             AddMessage('Cleaning masters of '+GetFileName(targetFile));
             CleanMasters(targetFile);
         end;
+
+        writePlotMapping();
 
 		Result := 0;
 

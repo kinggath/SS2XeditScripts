@@ -437,15 +437,12 @@ unit SS2Lib;
         Result := IntToStr(Round(x * 10000));
     end;
 
-    function getMiscLookupKey(targetFile, formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): string;
+    function getMiscLookupKeyExternal(targetFile: IInterface; iFormID: cardinal; sPluginName: string; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): string;
     var
-        formToSpawnId, reqItemId, curFileName: string;
-		curFile: IInterface;
+        formToSpawnId, reqItemId: string;
     begin
-		curFile := GetFile(formToSpawn);
-		curFileName := GetFileName(curFile);
         // formToSpawnId := IntToHex(getLocalFormId(curFile, FormID(formToSpawn)), 8);
-        formToSpawnId := IntToStr(getLocalFormId(curFile, FormID(formToSpawn)));
+        formToSpawnId := '0x'+IntToHex(iFormID, 8);//IntToStr(getLocalFormId(curFile, FormID(formToSpawn)));
 
         reqItemId := '';
         if(assigned(requirementsItem)) then begin
@@ -453,6 +450,35 @@ unit SS2Lib;
         end;
 
         // F4 uses at most 4 decimals, rounding them if necessary
+
+        Result :=
+            sPluginName+'-'+
+            formToSpawnId+'-'+
+            normalizeKeyFloat(posX)+'-'+
+            normalizeKeyFloat(posY)+'-'+
+            normalizeKeyFloat(posZ)+'-'+
+            normalizeKeyFloat(rotX)+'-'+
+            normalizeKeyFloat(rotY)+'-'+
+            normalizeKeyFloat(rotZ)+'-'+
+            normalizeKeyFloat(scale)+'-'+
+            IntToStr(iType)+'-'+spawnName+'-'+reqItemid;
+
+        // just return it without hashing...
+    end;
+
+    function getMiscLookupKey(targetFile, formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): string;
+    var
+        formToSpawnId, reqItemId, curFileName: string;
+		curFile: IInterface;
+    begin
+		curFile := GetFile(formToSpawn);
+		curFileName := GetFileName(curFile);
+        formToSpawnId := IntToStr(getLocalFormId(curFile, FormID(formToSpawn)));
+
+        reqItemId := '';
+        if(assigned(requirementsItem)) then begin
+            reqItemId := IntToHex(FormID(requirementsItem), 8);
+        end;
 
         Result :=
 			curFileName+'-'+
@@ -474,18 +500,13 @@ unit SS2Lib;
         spawnDetails, formToSpawn: IInterface;
         posX, posY, posZ, rotX, rotY, rotZ, scale: float;
         iType: integer;
-        spawnName: string;
+        iFormID: cardinal;
+        sPluginName, spawnName: string;
         reqItem: IInterface;
     begin
         spawnDetails := getScriptProp(miscScript, 'SpawnDetails');
         if (not assigned(spawnDetails(spawnDetails))) then begin
             AddMessage('No SpawnDetails in a spawn misc, this shouldn''t happen');
-            exit;
-        end;
-
-        formToSpawn := getStructMemberDefault(spawnDetails, 'ObjectForm', nil);
-        if (not assigned(spawnDetails(formToSpawn))) then begin
-            AddMessage('No formToSpawn in a spawn misc, this shouldn''t happen');
             exit;
         end;
 
@@ -501,6 +522,23 @@ unit SS2Lib;
         iType := getScriptPropDefault(miscScript, 'iType', 0);
         spawnName := getScriptPropDefault(miscScript, 'sSpawnName', '');
         reqItem := getScriptPropDefault(miscScript, 'Requirements', nil);
+
+        formToSpawn := getStructMemberDefault(spawnDetails, 'ObjectForm', nil);
+        if (not assigned(formToSpawn)) then begin
+            // alternatively, try iFormID and sPluginName
+            iFormID := getStructMemberDefault(spawnDetails, 'iFormID', 0);
+            sPluginName := getStructMemberDefault(spawnDetails, 'sPluginName', '');
+
+            if (iFormID <= 0) or (sPluginName = '') then begin
+                dumpElem(spawnDetails);
+                AddMessage('No formToSpawn or iFormID/sPluginName in a spawn misc, this shouldn''t happen');
+                exit;
+            end;
+
+            Result := getMiscLookupKeyExternal(GetFile(miscScript), iFormID, sPluginName, posX, posY, posZ, rotX, rotY, rotZ, scale, iType, spawnName, reqItem);
+            AddMessage('Yes, alternative, got '+Result);
+            exit;
+        end;
 
         Result := getMiscLookupKey(GetFile(miscScript), formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, iType, spawnName, reqItem);
     end;
@@ -556,10 +594,12 @@ unit SS2Lib;
 		dataEntry := curArray.O[lookupString];
         dataEntry.S['FormID']   := IntToStr(getLocalFormId(curFile, FormID(misc)));
         dataEntry.S['Hash']     := ElementCRC32(misc);
+        
+        AddMessage('Wrote this: '+lookupString+' -> '+dataEntry.toString());
 
         //miscItemLookupTable.AddObject(hashedString, misc);
     end;
-    
+
     procedure addMiscToLookup(misc, miscScript: IInterface);
     begin
         addMiscToLookupVerbose(misc, miscScript, false);
@@ -583,6 +623,28 @@ unit SS2Lib;
         dataEntry.S['FormID'] := IntToStr(curFormId);
         dataEntry.S['Hash']   := ElementCRC32(misc);
 	end;
+
+    function getExternalSpawnMiscByParams(targetFile: IInterface; iFormID: cardinal; sPluginName: string; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): IInterface;
+    var
+        key: string;
+		curFileName: string;
+        i: integer;
+		curArray: TJsonObject;
+    begin
+        Result := nil;
+        //if(miscItemLookupTable = nil) then exit;
+        key := getMiscLookupKeyExternal(targetFile, iFormID, sPluginName, posX, posY, posZ, rotX, rotY, rotZ, scale, iType, spawnName, requirementsItem);
+
+		curFileName := GetFileName(targetFile);
+
+        AddMessage('-> Looking for MISC: '+key+' in '+curFileName);
+		curArray := spawnMiscData.O['files'].O[curFileName].O['spawns'];
+		//i := curArray.IndexOfName(key);
+        if (curArray.O[key].count = 0) then exit;
+
+        // AddMessage('should have it '+curArray.S[key]);
+		Result := getFormByFileAndFormID(targetFile, StrToInt(curArray.O[key].S['FormID']));
+    end;
 
     function getSpawnMiscByParams(targetFile, formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): IInterface;
     var
@@ -2780,6 +2842,60 @@ unit SS2Lib;
     end;
 
     {
+        Creates a stageItemSpawn for formId/filename combination
+    }
+    function createExternalStageItemForm(targetFile: IInterface; edid: string; iFormID: cardinal; sPluginName: string; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; spawnType: integer; spawnName: string; requirementsItem: IInterface): IInterface;
+    var
+        spawnItemScript, spawnDetails, requirements, vipReqItem: IInterface;
+        existingKey: string;
+        isNewForm: boolean;
+    begin
+		if(iFormID <= 0) or (sPluginName = '') then begin
+			Result := nil;
+			AddMessage('ERROR: createExternalStageItemForm called without formId/filename');
+			break_on_purpose();
+			exit;
+		end;
+        isNewForm := false;
+        // before even trying, see if we have an equivalent already
+        // getMiscLookupKey(formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): string;
+        //getExternalSpawnMiscByParams
+        Result := getExternalSpawnMiscByParams(targetFile, iFormID, sPluginName, posX, posY, posZ, rotX, rotY, rotZ, scale, spawnType, spawnName, requirementsItem);
+        if(assigned(Result)) then begin
+            AddMessage('Reusing spawn misc '+EditorID(Result));
+            exit;
+        end;
+
+        Result := getRecycledMisc(targetFile);
+
+        if(not assigned(Result)) then begin
+            isNewForm := true;
+            Result := getCopyOfTemplate(targetFile, stageItemTemplate, edid);
+        end else begin
+            AddMessage('Reusing recycled '+EditorID(Result));
+            SetElementEditValues(Result, 'EDID', edid);
+        end;
+
+        // add script
+        spawnItemScript := getScript(Result, 'SimSettlementsV2:MiscObjects:StageItem');
+
+        spawnDetails := createRawScriptProp(spawnItemScript, 'SpawnDetails');
+        SetEditValueByPath(spawnDetails, 'Type', 'Struct');
+        spawnDetails := ebp(spawnDetails, 'Value\Struct');
+
+        // setStructMember(spawnDetails, 'ObjectForm', formToSpawn);
+        setStructMember(spawnDetails, 'iFormID', iFormID);
+        setStructMember(spawnDetails, 'sPluginName', sPluginName);
+
+        {iFormID := getScriptPropDefault(spawnDetails, 'iFormID', 0);
+            sPluginName := getScriptPropDefault(spawnDetails, 'sPluginName', '');}
+
+        fillStageItemForm(spawnItemScript, spawnDetails, posX, posY, posZ, rotX, rotY, rotZ, scale, spawnType, spawnName, requirementsItem);
+
+        addMiscToLookup(Result, spawnItemScript);
+    end;
+
+    {
         Creates a stageItemSpawn
     }
     function createStageItemForm(targetFile: IInterface; edid: string; formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; spawnType: integer; spawnName: string; requirementsItem: IInterface): IInterface;
@@ -2791,12 +2907,13 @@ unit SS2Lib;
 		if(not assigned(formToSpawn)) then begin
 			Result := nil;
 			AddMessage('ERROR: createStageItemForm called with empty form');
-			assert(false);
+			break_on_purpose();
 			exit;
 		end;
         isNewForm := false;
         // before even trying, see if we have an equivalent already
         // getMiscLookupKey(formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): string;
+        //getExternalSpawnMiscByParams
         Result := getSpawnMiscByParams(targetFile, formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, spawnType, spawnName, requirementsItem);
         if(assigned(Result)) then begin
             AddMessage('Reusing spawn misc '+EditorID(Result));
@@ -2821,6 +2938,14 @@ unit SS2Lib;
         spawnDetails := ebp(spawnDetails, 'Value\Struct');
 
         setStructMember(spawnDetails, 'ObjectForm', formToSpawn);
+
+        fillStageItemForm(spawnItemScript, spawnDetails, posX, posY, posZ, rotX, rotY, rotZ, scale, spawnType, spawnName, requirementsItem);
+
+        addMiscToLookup(Result, spawnItemScript);
+    end;
+
+    function fillStageItemForm(spawnItemScript, spawnDetails: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; spawnType: integer; spawnName: string; requirementsItem: IInterface): IInterface;
+    begin
 
         if(posX <> 0.0) then setStructMember(spawnDetails, 'fPosX', posX);
         if(posY <> 0.0) then setStructMember(spawnDetails, 'fPosY', posY);
@@ -2847,8 +2972,6 @@ unit SS2Lib;
         end else begin
             deleteScriptProp(spawnItemScript, 'Requirements');
         end;
-
-        addMiscToLookup(Result, spawnItemScript);
     end;
 
     {

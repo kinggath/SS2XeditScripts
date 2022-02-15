@@ -413,8 +413,6 @@ begin
     Result := true;
 end;
 
-
-
 function importModelData(modelsSheet: string): boolean;
 var
     csvLines, csvCols: TStringList;
