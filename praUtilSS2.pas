@@ -6,6 +6,18 @@ unit PraUtil;
 
     const STRING_LINE_BREAK = #13#10;
 
+    const
+        JSON_TYPE_NONE      = 0; // none
+        JSON_TYPE_STRING    = 1; // string
+        JSON_TYPE_INT       = 2; // int
+        JSON_TYPE_LONG      = 3; // long
+        JSON_TYPE_ULONG     = 4; // ulong
+        JSON_TYPE_FLOAT     = 5; // float
+        JSON_TYPE_DATETIME  = 6; // datetime
+        JSON_TYPE_BOOL      = 7; // bool
+        JSON_TYPE_ARRAY     = 8; // array
+        JSON_TYPE_OBJECT    = 9; // object
+
     // generic stuff
     {
         Check if two file variables are referring to the same file
@@ -432,6 +444,71 @@ unit PraUtil;
             Result := getLoadOrderPrefix(theFile, elemFormId);
         end;
     end;
+    
+    {
+        Returns the FormID of e with the LO prefix replaced with the corresponding master index in theFile.
+        That is, if the record 0x00001234 is from the second master, this will return 0x01001234
+    }
+    function getRelativeFormId(theFile: IwbFile; e: IInterface): cardinal;
+    var
+        numMasters, i: integer;
+        curMaster, mainRec, mainFile: IInterface;
+    begin
+        Result := 0;
+        mainRec := MasterOrSelf(e);
+        mainFile := GetFile(mainRec);
+        numMasters := MasterCount(theFile);
+        if(isSameFile(mainFile, theFile)) then begin
+            // my own file
+            Result := getLocalFormId(theFile, FormID(e)) or (numMasters shl 24);
+            exit;
+        end;
+        
+        for i:=0 to numMasters-1 do begin
+            curMaster := MasterByIndex(theFile, i);
+            if(isSameFile(mainFile, curMaster)) then begin
+                // this file
+                Result := getLocalFormId(theFile, FormID(e)) or (i shl 24);
+                exit;
+            end;
+        end;
+    end;
+    
+    {
+        Returns an element by a formId, which is relative to the given file's master list.
+        That is, if theFile has at least 2 masters and the given id is 0x01001234, it will
+        try to find 0x00001234 in the second master.
+        If applicable, will return the corresponding override from theFile
+    }
+    function elementByRelativeFormId(theFile: IwbFile; id: cardinal): IInterface;
+    var
+        numMasters, prefix, baseId: integer;
+        targetMaster, formMaster: IInterface;
+    begin
+        Result := nil;
+        numMasters := MasterCount(theFile);
+        prefix := (id and $FF000000) shr 24;
+        baseId := (id and $00FFFFFF);
+        if(prefix > numMasters) then begin
+            // bad
+            exit;
+        end;
+        if(prefix = numMasters) then begin
+            // from theFile itself
+            Result := getFormByFileAndFormID(theFile, baseId);
+            exit;
+        end;
+        
+        // otherwise, from a master
+        targetMaster := MasterByIndex(theFile, prefix);
+
+        formMaster := getFormByFileAndFormID(targetMaster, baseId);
+
+        Result := getExistingElementOverride(formMaster, theFile);
+        if(not assigned(Result)) then begin
+            Result := formMaster;
+        end;
+    end;
 
     {
         Strips the LO prefix from a FormID
@@ -557,7 +634,7 @@ unit PraUtil;
         if(not assigned(theFile)) then begin
             exit;
         end;
-        
+
         Result := getFormByFileAndFormID(theFile, id);
     end;
 
@@ -577,14 +654,41 @@ unit PraUtil;
         // Since RecordByFormID also expects that very same format, I suspect that
         // xEdit uses correct light FormIDs for display only, but still gives them a full slot internally.
         fileIndex := GetLoadOrder(theFile);
-        
+
         if(fileIndex > 255) then begin
             AddMessage('ERROR: Cannot resolve FormID '+IntToHex(id, 8)+' for file '+GetFileName(theFile)+', because you have more than 255 files loaded. xEdit doesn''t actually support this.');
             exit;
         end;
-        
+
         fileIndex := (fileIndex shl 24) and $FF000000;
-        
+
+        fixedId := fileIndex or getLocalFormId(theFile, id);
+
+        Result := RecordByFormID(theFile, fixedId, false);
+    end;
+    
+    {
+        Returns a record by it's form ID and a file. This should also work 
+    }
+    function getFormByFileAndPrefixedFormID(theFile: IInterface; id: cardinal): IInterface;
+    var
+        numMasters: integer;
+        localFormId, fixedId, fileIndex: cardinal;
+    begin
+        Result := nil;
+        // It seems like RecordByFormID doesn't care about the real load order prefix.
+        // Instead, it expects the first byte to contain the index of the file.
+        // Since RecordByFormID also expects that very same format, I suspect that
+        // xEdit uses correct light FormIDs for display only, but still gives them a full slot internally.
+        fileIndex := GetLoadOrder(theFile);
+
+        if(fileIndex > 255) then begin
+            AddMessage('ERROR: Cannot resolve FormID '+IntToHex(id, 8)+' for file '+GetFileName(theFile)+', because you have more than 255 files loaded. xEdit doesn''t actually support this.');
+            exit;
+        end;
+
+        fileIndex := (fileIndex shl 24) and $FF000000;
+
         fixedId := fileIndex or getLocalFormId(theFile, id);
 
         Result := RecordByFormID(theFile, fixedId, false);
@@ -720,7 +824,7 @@ unit PraUtil;
         try
             Result.LoadFromFile(fullPath);
         except
-            
+
             on E: Exception do begin
                 AddMessage('Failed to parse '+fullPath+': '+E.Message);
                 Result.free();
@@ -730,7 +834,7 @@ unit PraUtil;
                 Result.free();
                 Result := nil;
             end;
-            
+
             // code here seems to be unreachable
         end;
     end;
