@@ -3443,7 +3443,10 @@ unit SS2Lib;
 
         rootScript := getScript(rootBlueprint, 'SimSettlementsV2:Weapons:BuildingPlan');
         lvlFormList := getScriptProp(rootScript, 'LevelPlansList');
-        lvlFormList := getOverriddenForm(Result, lvlFormList);
+        lvlFormList := getOverriddenForm(lvlFormList, targetFile);
+        
+        AddMessage('lvlFormList=');
+        dumpElem(lvlFormList);
 
         Result := generateBuildingPlanForLevel(targetFile, rootBlueprint, edidBase, lvlNr);
         Result := getOverriddenForm(Result, targetFile);
