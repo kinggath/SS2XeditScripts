@@ -32,6 +32,8 @@ var
 
     autoRegister, makePreviews: boolean;
 
+    occupantsOnLevel1, occupantsOnLevel2, occupantsOnLevel3: integer;
+
 
 
 
@@ -213,10 +215,21 @@ var
     plotType: integer;
 //    plotThemes: TStringList;
     requreStageModels, isSkin, showThemeSelector, hasSkinTarget, isNewEntry: boolean;
+    numOcc1, numOcc2, numOcc3: integer;
+    plotLevelScript: IInterface;
+    plotLevelNr, plotLevelOcc: integer;
 begin
     Result := false;
 
     isSkin := false;
+    
+    occupantsOnLevel1 := 0;
+    occupantsOnLevel2 := 0;
+    occupantsOnLevel3 := 0;
+
+    numOcc1 := 0;
+    numOcc2 := 0;
+    numOcc3 := 0;
 
     if(currentMode = 0) then begin
         if(not showTypeSelectDialog()) then begin
@@ -256,8 +269,24 @@ begin
             plotType := getNewPlotType(targetElem);
             existingPlotThemes := getPlotThemes(targetElem);
             dialogLabel := 'Selected Blueprint: '+plotId;
+
+            numOcc1 := getNumOccupants(targetElem, 1);
+            numOcc2 := getNumOccupants(targetElem, 2);
+            numOcc3 := getNumOccupants(targetElem, 3);
+
         end else if(currentMode = MODE_BP_LEVEL) then begin
             dialogLabel := 'Selected Blueprint Level: '+plotId;
+            plotLevelScript := getScript(targetElem, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
+
+            plotLevelNr := getScriptProp(plotLevelScript, 'iRequiredLevel');
+            plotLevelOcc := getScriptPropDefault(plotLevelScript, 'iMaxOccupants', 1);
+            
+            case plotLevelNr of
+                1: numOcc1 := plotLevelOcc;
+                2: numOcc2 := plotLevelOcc;
+                3: numOcc3 := plotLevelOcc;
+            end;
+
             showThemeSelector := false;
         end else if(currentMode = MODE_SKIN_ROOT) then begin
             existingPlotThemes := getPlotThemes(targetElem);
@@ -309,7 +338,8 @@ begin
             existingPlotThemes,            // initial themes
             autoRegister,           // autoRegister
             makePreviews,            // make previews
-            setupStacking
+            setupStacking,
+            isNewEntry
         );
 
         if(not assigned(resultData)) then begin
@@ -370,7 +400,8 @@ begin
                 autoRegister,
                 makePreviews,
                 setupStacking,
-                isNewEntry
+                isNewEntry,
+                numOcc1, numOcc2, numOcc3
             );
 
         // selectedThemeTagList
@@ -394,6 +425,10 @@ begin
 
         descriptionBase := resultData.S['description'];
         confirmationString := resultData.S['confirmation'];
+
+        occupantsOnLevel1 := resultData.I['occupants1'];
+        occupantsOnLevel2 := resultData.I['occupants2'];
+        occupantsOnLevel3 := resultData.I['occupants3'];
 
         // resultData
 
@@ -857,7 +892,7 @@ end;
 
 procedure fillLevelBlueprint(levelBlueprint: IInterface; levelObj: TJsonObject; hasModels, hasSpawns: boolean; bpRoot: IInterface; edidBase: string; curLevel: integer);
 var
-    i, levelNr: integer;
+    i, levelNr, numOccupants: integer;
     curSpawnObj: TJsonObject;
     spawnsArray, modelsArray: TJsonArray;
     curModelElem, newStageModels, newItemSpawns, curLevelBlueprintScript, curSpawnForm, reqForm: IInterface;
@@ -871,10 +906,21 @@ begin
             levelBlueprint := getBuildingPlanForLevel(targetFile, edidBase, curLevel);
         end;
     end;
-
+    
+    numOccupants := 0;
+    case curLevel of
+        1: numOccupants := occupantsOnLevel1;
+        2: numOccupants := occupantsOnLevel2;
+        3: numOccupants := occupantsOnLevel3;
+    end;
+    
     levelBlueprint := getOverriddenForm(levelBlueprint, targetFile);
 
     curLevelBlueprintScript := getScript(levelBlueprint, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
+    if(numOccupants > 1) then begin
+        //iMaxOccupants
+        setScriptProp(curLevelBlueprintScript, 'iMaxOccupants', numOccupants);
+    end;
 
     if(hasModels) then begin
         AddMessage('+++ Filling Models for '+EditorID(levelBlueprint) + ' +++');
@@ -1262,7 +1308,7 @@ begin
         if(curLevelModels.count > 0) then begin
             curModelElem := StrToForm(curLevelModels.S[curLevelModels.count-1]);
             curModelElem := GetOverriddenForm(curModelElem, targetFile);
-            
+
             setScriptProp(currentLevelScript, 'ReplaceStageModel', curModelElem);
 
             addToStackEnabledListIfEnabled(curModelElem);

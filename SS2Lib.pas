@@ -1561,6 +1561,24 @@ unit SS2Lib;
             end;
         end;
     end;
+    
+    function getNumOccupants(plot: IInterface; num: integer): integer;
+    var
+        levelPlan, curLvlScript: IInterface;
+    begin
+        Result := 1;
+        levelPlan := getLevelBuildingPlan(plot, num);
+        if(not assigned(levelPlan)) then begin
+            exit;
+        end;
+        levelPlan := getOverriddenForm(levelPlan, targetFile);
+        
+        curLvlScript :=  getScript(levelPlan, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
+        //curLvlNr := getScriptProp(curLvlScript, 'iRequiredLevel');
+        //iMaxOccupants
+        Result := getScriptPropDefault(curLvlScript, 'iMaxOccupants', 1);
+        
+    end;
 
     function getPlotThemes(plot: IInterface): TStringList;
     var
@@ -5500,6 +5518,11 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
                 exit;
             end;
         end;
+        
+        if(isUpdatingExistingBlueprint) then begin
+            // just allow clicking OK for update at this point
+            exit;
+        end;
 
         if (stageModelStr = '') and (stageItemStr = '') then begin
             Result := false;
@@ -5768,13 +5791,14 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         packedPlotType: integer;
         requireStageModels, isFullPlot: boolean;
         initialThemes: TStringList;
-        autoRegister, makePreview, setupStacking, isNewEntry: boolean
+        autoRegister, makePreview, setupStacking, isNewEntry: boolean;
+        initOcc1, initOcc2, initOcc3: integer
     ): TJsonObject;
     var
         frm: TForm;
         btnBrowseModel, btnBrowseItems, btnOk, btnCancel, btnThemes: TButton;
         resultCode, yOffset: integer;
-        inputName, inputPlotEdid, inputModPrefix: TEdit;
+        inputName, inputPlotEdid, inputModPrefix, inputNumOccupants1, inputNumOccupants2, inputNumOccupants3: TEdit;
         descrElem: IInterface;
         selectedMainType, selectedSize, selectedSubType: integer;
         packedResultType: integer;
@@ -5782,6 +5806,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         registerCb, previewCb, stackCb, confirmationAutoCb: TCheckBox;
         themesInitialText: string;
         descriptionInput, confirmationInput: TMemo;
+        occ1, occ2, occ3: integer;
     begin
         Result := nil;
         isUpdatingExistingBlueprint := (not isNewEntry);
@@ -5789,7 +5814,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         StageModelFileRequired := requireStageModels;
         isConvertDialogActive := false;
         Result := false;
-        frm := CreateDialog(title, 500, 360);
+        frm := CreateDialog(title, 500, 400);
 
         CreateLabel(frm, 10, 6, text);
 
@@ -5891,11 +5916,41 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             end;
             confirmationAutoCb.onclick := confirmationMsgAutoChangeHandler;
 
-            yOffset := yOffset + 120;
-            frm.height := (frm.height + 120);
+            yOffset := yOffset + 110;
+            frm.height := (frm.height + 110);
 
             //confirmationInput confirmationAutoCb
         end;
+        
+        
+        
+        CreateLabel(frm, 150, yOffset, 'L1');
+        CreateLabel(frm, 200, yOffset, 'L2');
+        CreateLabel(frm, 250, yOffset, 'L3');
+        yOffset := yOffset + 15;
+        CreateLabel(frm, 10, yOffset, 'Occupants per Level:');
+        inputNumOccupants1 := CreateInput(frm, 150, yOffset, IntToStr(initOcc1));
+        inputNumOccupants2 := CreateInput(frm, 200, yOffset, IntToStr(initOcc2));
+        inputNumOccupants3 := CreateInput(frm, 250, yOffset, IntToStr(initOcc3));
+        
+        inputNumOccupants1.width := 40;
+        inputNumOccupants2.width := 40;
+        inputNumOccupants3.width := 40;
+        
+        if(initOcc1 <= 0) then begin
+            inputNumOccupants1.enabled := false;
+        end;
+        
+        if(initOcc2 <= 0) then begin
+            inputNumOccupants2.enabled := false;
+        end;
+        
+        if(initOcc3 <= 0) then begin
+            inputNumOccupants3.enabled := false;
+        end;
+        
+        yOffset := yOffset + 25;
+        
 
         registerCb := CreateCheckbox(frm, 10, yOffset+2, 'Register Building Plan');
         previewCb  := CreateCheckbox(frm, 160, yOffset+2, 'Setup building previews');
@@ -5972,6 +6027,17 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result.B['registerPlot'] := registerCb.checked;
             Result.B['makePreview'] := previewCb.checked;
             Result.B['setupStacking'] := stackCb.checked;
+            
+            //occ1 := curIndex := tryToParseInt(substr);
+            occ1 := tryToParseInt(inputNumOccupants1.Text);
+            occ2 := tryToParseInt(inputNumOccupants2.Text);
+            occ3 := tryToParseInt(inputNumOccupants3.Text);
+            if(occ1 <= 0) then occ1 := 1;
+            if(occ2 <= 0) then occ2 := 1;
+            if(occ3 <= 0) then occ3 := 1;
+            Result.I['occupants1'] := occ1;
+            Result.I['occupants2'] := occ2;
+            Result.I['occupants3'] := occ3;
 
             if(descriptionInput <> nil) then begin
                 Result.S['description'] := descriptionInput.Text;
@@ -5990,7 +6056,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
 
     ///AAA
-    function ShowSkinCreateDialog(title, text, initialPlotName, initialPlotId, initialModPrefix: string; existingPlotTarget: IInterface; isFullSkin: boolean; initialThemes: TStringList; autoRegister, makePreview, setupStacking: boolean): TJsonObject;
+    function ShowSkinCreateDialog(title, text, initialPlotName, initialPlotId, initialModPrefix: string; existingPlotTarget: IInterface; isFullSkin: boolean; initialThemes: TStringList; autoRegister, makePreview, setupStacking, isNewEntry: boolean): TJsonObject;
     var
         frm: TForm;
         btnBrowseModel, btnBrowseItems, btnBrowsePlots, btnOk, btnCancel, btnThemes: TButton;
@@ -6010,6 +6076,9 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         if (assigned(existingPlotTarget) or (not isFullSkin)) then begin
             PlotEdidInputRequired := false;
         end;
+        
+        isUpdatingExistingBlueprint := (not isNewEntry);
+        
         StageModelFileRequired := false;
         isConvertDialogActive := false;
         Result := false;
