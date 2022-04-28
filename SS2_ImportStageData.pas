@@ -32,6 +32,10 @@ var
 
     autoRegister, makePreviews: boolean;
 
+    occupantsOnLevel1, occupantsOnLevel2, occupantsOnLevel3: integer;
+
+
+
 
 function isSkinMode(): boolean;
 begin
@@ -211,10 +215,21 @@ var
     plotType: integer;
 //    plotThemes: TStringList;
     requreStageModels, isSkin, showThemeSelector, hasSkinTarget, isNewEntry: boolean;
+    numOcc1, numOcc2, numOcc3: integer;
+    plotLevelScript: IInterface;
+    plotLevelNr, plotLevelOcc: integer;
 begin
     Result := false;
 
     isSkin := false;
+    
+    occupantsOnLevel1 := 0;
+    occupantsOnLevel2 := 0;
+    occupantsOnLevel3 := 0;
+
+    numOcc1 := 0;
+    numOcc2 := 0;
+    numOcc3 := 0;
 
     if(currentMode = 0) then begin
         if(not showTypeSelectDialog()) then begin
@@ -254,8 +269,24 @@ begin
             plotType := getNewPlotType(targetElem);
             existingPlotThemes := getPlotThemes(targetElem);
             dialogLabel := 'Selected Blueprint: '+plotId;
+
+            numOcc1 := getNumOccupants(targetElem, 1);
+            numOcc2 := getNumOccupants(targetElem, 2);
+            numOcc3 := getNumOccupants(targetElem, 3);
+
         end else if(currentMode = MODE_BP_LEVEL) then begin
             dialogLabel := 'Selected Blueprint Level: '+plotId;
+            plotLevelScript := getScript(targetElem, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
+
+            plotLevelNr := getScriptProp(plotLevelScript, 'iRequiredLevel');
+            plotLevelOcc := getScriptPropDefault(plotLevelScript, 'iMaxOccupants', 1);
+            
+            case plotLevelNr of
+                1: numOcc1 := plotLevelOcc;
+                2: numOcc2 := plotLevelOcc;
+                3: numOcc3 := plotLevelOcc;
+            end;
+
             showThemeSelector := false;
         end else if(currentMode = MODE_SKIN_ROOT) then begin
             existingPlotThemes := getPlotThemes(targetElem);
@@ -307,7 +338,8 @@ begin
             existingPlotThemes,            // initial themes
             autoRegister,           // autoRegister
             makePreviews,            // make previews
-            setupStacking
+            setupStacking,
+            isNewEntry
         );
 
         if(not assigned(resultData)) then begin
@@ -368,7 +400,8 @@ begin
                 autoRegister,
                 makePreviews,
                 setupStacking,
-                isNewEntry
+                isNewEntry,
+                numOcc1, numOcc2, numOcc3
             );
 
         // selectedThemeTagList
@@ -392,6 +425,10 @@ begin
 
         descriptionBase := resultData.S['description'];
         confirmationString := resultData.S['confirmation'];
+
+        occupantsOnLevel1 := resultData.I['occupants1'];
+        occupantsOnLevel2 := resultData.I['occupants2'];
+        occupantsOnLevel3 := resultData.I['occupants3'];
 
         // resultData
 
@@ -613,7 +650,8 @@ begin
             continue;
         end;
 //Line "praSS2_CustomChairMarkerSitAndEat_BackONly001,51.0000,-132.0000,0.0000,0.0000,-0.0000,90.0000,1.0000,,,,,,,1,," is not valid, skipping
-
+//Line "NpcBedSleepingBagChildLay01001,65.2019,180.7893,3.4545,0,-0,245.4087,1,,1,5" is not valid, skipping
+//Line "NpcBedSleepingBagSleep01001,71.0656,73.3275,3.4546,0,-0,91.6733,1,,1,5" is not valid, skipping
         // find correct level and stage
         lvl := StrToInt(csvCols.Strings[8]);
         lvlObj := plotData.O['levels'].O[lvl];
@@ -804,7 +842,7 @@ begin
                     // at this point, generate the manager for it
                     spawnManagerEdid := generateEdid(plotEdidBase, '_'+ridpSuffix+'_'+IntToStr(stageStart)+'_'+IntToStr(stageEnd)+'_'+vendorType+'_'+IntToStr(vendorLevel));
 
-                    spawnManager := getSpawnManager(spawnManagerEdid);
+                    spawnManager := getOverriddenForm(getSpawnManager(spawnManagerEdid), targetFile);
 
                     spawnManagerScript := getScript(spawnManager, 'WorkshopFramework:ObjectRefs:RealInventoryDisplay');
 
@@ -854,11 +892,13 @@ end;
 
 procedure fillLevelBlueprint(levelBlueprint: IInterface; levelObj: TJsonObject; hasModels, hasSpawns: boolean; bpRoot: IInterface; edidBase: string; curLevel: integer);
 var
-    i, levelNr: integer;
+    i, levelNr, numOccupants: integer;
     curSpawnObj: TJsonObject;
     spawnsArray, modelsArray: TJsonArray;
     curModelElem, newStageModels, newItemSpawns, curLevelBlueprintScript, curSpawnForm, reqForm: IInterface;
 begin
+    // using global targetFile here
+
     if(not assigned(levelBlueprint)) then begin
         if(assigned(bpRoot)) then begin
             levelBlueprint := getOrCreateBuildingPlanForLevel(targetFile, bpRoot, edidBase, curLevel);
@@ -866,8 +906,21 @@ begin
             levelBlueprint := getBuildingPlanForLevel(targetFile, edidBase, curLevel);
         end;
     end;
+    
+    numOccupants := 0;
+    case curLevel of
+        1: numOccupants := occupantsOnLevel1;
+        2: numOccupants := occupantsOnLevel2;
+        3: numOccupants := occupantsOnLevel3;
+    end;
+    
+    levelBlueprint := getOverriddenForm(levelBlueprint, targetFile);
 
     curLevelBlueprintScript := getScript(levelBlueprint, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
+    if(numOccupants > 1) then begin
+        //iMaxOccupants
+        setScriptProp(curLevelBlueprintScript, 'iMaxOccupants', numOccupants);
+    end;
 
     if(hasModels) then begin
         AddMessage('+++ Filling Models for '+EditorID(levelBlueprint) + ' +++');
@@ -877,12 +930,11 @@ begin
 
         modelsArray := levelObj.A['models'];
         for i:=0 to modelsArray.count-1 do begin
-            curModelElem := StrToForm(modelsArray.S[i]);//getFormByLoadOrderFormID(StrToInt(modelsArray.S[i]));
+            curModelElem := getOverriddenForm(StrToForm(modelsArray.S[i]), targetFile);
             addRequiredMastersSilent(curModelElem, targetFile);
             AddMessage('Adding Model '+EditorID(curModelElem));
             addToStackEnabledListIfEnabled(curModelElem);
             appendObjectToProperty(newStageModels, curModelElem);
-
 
             // these are previews
             if(makePreviews) then begin
@@ -903,14 +955,14 @@ begin
         AddMessage('+++ Filling Spawns for '+EditorID(levelBlueprint) + ' +++');
         newItemSpawns := createRawScriptProp(curLevelBlueprintScript, 'StageItemSpawns');
         SetEditValueByPath(newItemSpawns, 'Type', 'Array of Struct');
-        cleanItemSpawns(newItemSpawns);
+        cleanItemSpawnsForRoot(newItemSpawns, levelBlueprint, targetFile);
 
         spawnsArray := levelObj.A['spawns'];
         for i:=0 to spawnsArray.count-1 do begin
             curSpawnObj := spawnsArray.O[i];
 
 
-            curSpawnForm := StrToForm(curSpawnObj.S['Form']);//getFormByLoadOrderFormID(StrToInt(curSpawnObj.S['Form']));
+            curSpawnForm := getOverriddenForm(StrToForm(curSpawnObj.S['Form']), targetFile);//getFormByLoadOrderFormID(StrToInt(curSpawnObj.S['Form']));
             if(not assigned(curSpawnForm)) then begin
                 AddMessage('=== ERROR: Failed to find form for '+curSpawnObj.S['Form']+'. This is a bug!');
                 continue;
@@ -1035,8 +1087,8 @@ begin
         // only if we have models can we ever have build mats
         buildMatsString := plotData.S['buildMats'];
         if (buildMatsString <> '') then begin
-            // AddMessage('YES BUILDMATS AAAH ' + plotData.S['buildMats']);
-            buildMatsElem := StrToForm(buildMatsString);//getFormByLoadOrderFormID(StrToInt(buildMatsString));
+
+            buildMatsElem := StrToForm(buildMatsString);
             if(assigned(buildMatsElem)) then begin
                 // AddMessage('Assigned');
                 // dumpElem(buildMatsElem);
@@ -1056,7 +1108,7 @@ begin
     for i:=0 to levelsObj.count-1 do begin
         curLevelString := levelsObj.names[i];
         curLevel := StrToInt(curLevelString);
-        levelObj := levelsObj.O[curLevelString];
+        levelObj := getOverriddenForm(levelsObj.O[curLevelString], targetFile);
 
 
         curLevelBlueprint := getOrCreateBuildingPlanForLevel(targetFile, bpRoot, edidBase, curLevel);
@@ -1084,13 +1136,15 @@ begin
         stripTypeKeywords(bpRoot);
         setTypeKeywords(bpRoot, currentType);
 
-        if(autoRegister) then begin
-            // register
-            AddMessage('Registering plot');
-            flstKeyword := getPlotKeywordForPackedPlotType(currentType);
-            registerAddonContent(targetFile, bpRoot, flstKeyword);
-        end else begin
-            AddMessage('NOTICE: plot will not be registered');
+        if(not isUpdatingOverride) then begin
+            if(autoRegister) then begin
+                // register
+                AddMessage('Registering blueprint');
+                flstKeyword := getPlotKeywordForPackedPlotType(currentType);
+                registerAddonContent(targetFile, bpRoot, flstKeyword);
+            end else begin
+                AddMessage('NOTICE: blueprint will not be registered');
+            end;
         end;
     end else begin
 
@@ -1252,7 +1306,9 @@ begin
         // what do we have for this?
         curLevelModels := plotData.O['levels'].O[levelNr].A['models'];
         if(curLevelModels.count > 0) then begin
-            curModelElem := StrToForm(curLevelModels.S[curLevelModels.count-1]);//getFormByLoadOrderFormID(curLevelModels.I[curLevelModels.count-1]);
+            curModelElem := StrToForm(curLevelModels.S[curLevelModels.count-1]);
+            curModelElem := GetOverriddenForm(curModelElem, targetFile);
+
             setScriptProp(currentLevelScript, 'ReplaceStageModel', curModelElem);
 
             addToStackEnabledListIfEnabled(curModelElem);
@@ -1272,8 +1328,8 @@ begin
 
 
     if (hasItems) then begin
-        cleanItemSpawns(getRawScriptProp(currentLevelScript, 'ReplaceStageItemSpawns'));
-        cleanItemSpawns(getRawScriptProp(currentLevelScript, 'AdditionalStageItemSpawns'));
+        cleanItemSpawnsForRoot(getRawScriptProp(currentLevelScript, 'ReplaceStageItemSpawns'), currentLevelSkin, targetFile);
+        cleanItemSpawnsForRoot(getRawScriptProp(currentLevelScript, 'AdditionalStageItemSpawns'), currentLevelSkin, targetFile);
 
         curLevelSpawns := plotData.O['levels'].O[levelNr].A['spawns'];
 
@@ -1292,7 +1348,7 @@ begin
                     setStructMember(curStruct, 'iOwnerNumber', curSpawnObj.I['ownerNumber']);
                 end;
 
-                formToSpawn := StrToForm(curSpawnObj.S['Form']);
+                formToSpawn := getOverriddenForm(StrToForm(curSpawnObj.S['Form']), targetFile);
                 if(not assigned(formToSpawn)) then begin
                     AddMessage('=== ERROR: Failed to find form for '+curSpawnObj.S['Form']+'. This is a bug!');
                     continue;
@@ -1437,14 +1493,16 @@ begin
     // target
     setScriptProp(skinScript, 'TargetBuildingPlan', skinTargetBuildingPlan);
 
-    if(autoRegister) then begin
-        // register
-        AddMessage('Registering skin');
-        targetPlotType := getPlotType(skinTargetBuildingPlan);
-        flstKeyword := getSkinKeywordForPackedPlotType(targetPlotType);
-        registerAddonContent(targetFile, skinRoot, flstKeyword);
-    end else begin
-        AddMessage('NOTICE: skin will not be registered');
+    if(not isUpdatingOverride) then begin
+        if(autoRegister) then begin
+            // register
+            AddMessage('Registering skin');
+            targetPlotType := getPlotType(skinTargetBuildingPlan);
+            flstKeyword := getSkinKeywordForPackedPlotType(targetPlotType);
+            registerAddonContent(targetFile, skinRoot, flstKeyword);
+        end else begin
+            AddMessage('NOTICE: skin will not be registered');
+        end;
     end;
     // skinTargetBuildingPlan
 
@@ -1514,7 +1572,8 @@ begin
     if(assigned(targetElem)) then begin
         // is this an override?
         if(not IsMaster(targetElem)) then begin
-            AddMessage('=== WARNING === this script might not work properly on an override');
+            AddMessage('Target is an override, trying to do override processing');
+            initOverrideUpdating(GetFile(Master(targetElem)));
         end;
     end;
 
@@ -1522,6 +1581,8 @@ begin
         AddMessage('Item spawn data was imported, building caches now');
         loadRecycledMiscs(targetFile, true);
     end;
+
+
 
     if(currentMode = MODE_BP_ROOT) then begin
         generateBlueprint(targetElem);

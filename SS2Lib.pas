@@ -55,7 +55,7 @@ unit SS2Lib;
         enableOutpostSubtype = false;
 
 		miscItemCacheFileName = ProgramPath + 'Edit Scripts\SS2\PlotMiscItemCache.json';
-        miscItemCacheFileVersion = 1;
+        miscItemCacheFileVersion = 2;
 
     // variables, templates and such
     var
@@ -431,6 +431,40 @@ unit SS2Lib;
         SS2_PlotType_Agricultural, SS2_PlotType_Commercial, SS2_PlotType_Industrial, SS2_PlotType_Martial: IInterface;
         SS2_PlotType_Municipal, SS2_PlotType_Recreational, SS2_PlotType_Residential: IInterface;
 
+        // hack for override processing...
+        isUpdatingOverride: boolean;
+        //overrideTargetFile: IInterface;
+        overrideSourceFile: IInterface;
+
+    ////////////////////// OVERRIDE STUFF ///////////////////////////////
+    procedure initOverrideUpdating(ovrSource: IInterface);
+    begin
+        if(assigned(ovrSource)) then begin
+            isUpdatingOverride := true;
+            overrideSourceFile := ovrSource;
+            //overrideTargetFile := ovrTarget;
+        end else begin
+            isUpdatingOverride := false;
+            overrideSourceFile := nil;
+            //overrideTargetFile := nil;
+        end;
+    end;
+
+    function getOverriddenForm(e, targetFile: IInterface): IInterface;
+    var
+        eFile: IInterface;
+    begin
+        Result := e;
+        if(not assigned(e)) then exit;
+        if(isUpdatingOverride) then begin
+            eFile := GetFile(MasterOrSelf(e));
+            if(FilesEqual(eFile, overrideSourceFile)) then begin
+                Result := getOrCreateElementOverride(e, targetFile);
+            end;
+        end;
+    end;
+
+
     ////////////////////// MISC RECYCLING FUNCTIONS /////////////////////
     function normalizeKeyFloat(x: float): string;
     begin
@@ -567,7 +601,7 @@ unit SS2Lib;
 		curArray := spawnMiscData.O['files'].O[curFileName].O['spawns'];
 
 		if(curArray.O[lookupString].S['FormID'] <> '') then begin
-			oldMisc := getFormByFileAndFormID(curFile, StrToInt(curArray.O[lookupString].S['FormID']));
+			oldMisc := elementByRelativeFormId(curFile, StrToInt(curArray.O[lookupString].S['FormID']));
             //otherElemHash := ElementCRC32(oldMisc);
 
 			if(Equals(oldMisc, misc)) then begin
@@ -592,10 +626,10 @@ unit SS2Lib;
         end;
 
 		dataEntry := curArray.O[lookupString];
-        dataEntry.S['FormID']   := IntToStr(getLocalFormId(curFile, FormID(misc)));
+        dataEntry.S['FormID']   := IntToStr(getRelativeFormId(curFile, misc));
         dataEntry.S['Hash']     := ElementCRC32(misc);
-        
-        AddMessage('Wrote this: '+lookupString+' -> '+dataEntry.toString());
+
+        // AddMessage('Wrote this: '+lookupString+' -> '+dataEntry.toString());
 
         //miscItemLookupTable.AddObject(hashedString, misc);
     end;
@@ -608,20 +642,26 @@ unit SS2Lib;
 	procedure addMiscToRecycled(misc: IInterface);
 	var
 		curFile: IInterface;
-		curFileName: string;
+		curFileName, fId, hash: string;
 		curFormId: cardinal;
         dataEntry: TJsonObject;
 	begin
 
 		curFile := GetFile(misc);
 		curFileName := GetFileName(curFile);
-		curFormId := getLocalFormId(curFile, FormID(misc));
+		curFormId := getRelativeFormId(curFile, misc);//getLocalFormId(curFile, FormID(misc));
 
 		//spawnMiscData.O[curFileName].A['recycled'].add(IntToStr(curFormId));
 		dataEntry := spawnMiscData.O['files'].O[curFileName].A['recycled'].addObject();
 
-        dataEntry.S['FormID'] := IntToStr(curFormId);
-        dataEntry.S['Hash']   := ElementCRC32(misc);
+        fId := IntToStr(curFormId);
+        hash := ElementCRC32(misc);
+        AddMessage('Adding for '+curFileName+': '+fId+', '+hash);
+
+        dataEntry.S['FormID'] := fId;
+        dataEntry.S['Hash']   := hash;
+
+        AddMessage(spawnMiscData.O['files'].O[curFileName].A['recycled'].toString());
 	end;
 
     function getExternalSpawnMiscByParams(targetFile: IInterface; iFormID: cardinal; sPluginName: string; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): IInterface;
@@ -630,6 +670,7 @@ unit SS2Lib;
 		curFileName: string;
         i: integer;
 		curArray: TJsonObject;
+        elem: IInterface;
     begin
         Result := nil;
         //if(miscItemLookupTable = nil) then exit;
@@ -640,10 +681,12 @@ unit SS2Lib;
         AddMessage('-> Looking for MISC: '+key+' in '+curFileName);
 		curArray := spawnMiscData.O['files'].O[curFileName].O['spawns'];
 		//i := curArray.IndexOfName(key);
+        if (curArray.Types[key] <> JSON_TYPE_OBJECT) then exit;
         if (curArray.O[key].count = 0) then exit;
 
         // AddMessage('should have it '+curArray.S[key]);
-		Result := getFormByFileAndFormID(targetFile, StrToInt(curArray.O[key].S['FormID']));
+        elem := elementByRelativeFormId(targetFile, StrToInt(curArray.O[key].S['FormID']));
+		Result := getOverriddenForm(elem, targetFile);//getFormByFileAndFormID(targetFile, StrToInt(curArray.O[key].S['FormID']));
     end;
 
     function getSpawnMiscByParams(targetFile, formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): IInterface;
@@ -662,6 +705,7 @@ unit SS2Lib;
         AddMessage('-> Looking for MISC: '+key+' in '+curFileName);
 		curArray := spawnMiscData.O['files'].O[curFileName].O['spawns'];
 		//i := curArray.IndexOfName(key);
+        if (curArray.Types[key] <> JSON_TYPE_OBJECT) then exit;
         if (curArray.O[key].count = 0) then exit;
 
         // AddMessage('should have it '+curArray.S[key]);
@@ -766,6 +810,11 @@ unit SS2Lib;
 		for i:=0 to spawns.count-1 do begin
 			curKey := spawns.names[i];
             curEntry := spawns.O[curKey];
+            if('' = curEntry.S['FormID']) then begin
+                //AddMessage('Cache file is not valid, it will be rebuilt.');
+				//Result := true;
+				continue;
+            end;
 
 			curFormId := StrToInt(curEntry.S['FormID']);
             curFileHash := curEntry.S['Hash'];
@@ -891,21 +940,25 @@ unit SS2Lib;
     var
         lastIndex: index;
 
-		curFileName: string;
+		curFileName, formIdStr: string;
 		curFormId: cardinal;
 		curArray: TJsonArray;
 	begin
         Result := nil;
 		curFileName := GetFileName(targetFile);
-
+        AddMessage('Trying to get a recycled for '+curFileName);
 		curArray := spawnMiscData.O['files'].O[curFileName].A['recycled'];
 		if(curArray.count = 0) then begin
+            AddMessage('it''s empty now');
 			exit;
 		end;
 
 		lastIndex := curArray.count - 1;
 
-		Result := getFormByFileAndFormID(targetFile, StrToInt(curArray.O[lastIndex].S['FormID']));
+        formIdStr := curArray.O[lastIndex].S['FormID'];
+//        AddMessage('Got this formID: '+formIdStr);
+
+		Result := elementByRelativeFormId(targetFile, StrToInt(formIdStr));
 
 		curArray.delete(lastIndex);
     end;
@@ -914,15 +967,50 @@ unit SS2Lib;
     begin
         miscItemLastIndex := miscItemLastIndex + 1;
         SetElementEditValues(misc, 'EDID', recycleableMiscPrefix + IntToStr(miscItemLastIndex));
-        // if(miscItemCache = nil) then exit;
+
         addMiscToRecycled(misc);
     end;
 
-    procedure recycleSpawnMiscIfPossible(misc: IInterface);
+    function isSpawnMiscUsed(misc, lvlRoot: IInterface): boolean;
+    var
+        i, numRefs: integer;
+        curRef: IInterface;
+    begin
+        numRefs := ReferencedByCount(misc);
+        if(not isUpdatingOverride) then begin
+            Result := (numRefs > 0);
+            exit;
+        end;
+
+        if(nil = lvlRoot) then begin
+            raise Exception.Create('=== ERROR: isSpawnMiscUsed called without lvlRoot in override mode! This is a bug!');
+        end;
+
+        // now, like this:
+        // - if used by sameform as lvlRoot:
+        //  - is current ref literally the same as lvlRoot? then yes
+        //  - if it's used by another override, then it doesn't count
+        // - anything else counts as usage
+        Result := true;
+        for i:=0 to numRefs-1 do begin
+            curRef := ReferencedByIndex(misc, i);
+
+            if(isSameForm(curRef, lvlRoot)) then begin
+                if(Equals(curRef, lvlRoot)) then begin
+                    exit; // return true
+                end;// otherwise, it doesn't count as usage
+            end else begin
+                exit; // return true
+            end;
+        end;
+        Result := false;
+    end;
+
+    procedure recycleSpawnMiscIfPossible(misc, lvlRoot, targetFile: IInterface);
     var
         curSpawnScript, curFile: IInterface;
         key, curFileName: string;
-        i: index;
+
 		curArray: TJsonObject;
     begin
         if(not assigned(misc)) then begin
@@ -930,12 +1018,16 @@ unit SS2Lib;
             exit;
         end;
 
-        if(ReferencedByCount(misc) > 0) then begin
+        if(isSpawnMiscUsed(misc, lvlRoot)) then begin
             AddMessage('Spawn Misc '+EditorID(misc)+' is still used, NOT recycling');
             exit;
         end;
 
         // AddMessage('Spawn Misc '+EditorID(misc)+' is no longer used, recycling');
+
+        if(nil <> targetFile) then begin
+            misc := getOverriddenForm(misc, targetFile);
+        end;
 
         curSpawnScript := getScript(misc, 'SimSettlementsV2:MiscObjects:StageItem');
 
@@ -1469,6 +1561,24 @@ unit SS2Lib;
             end;
         end;
     end;
+    
+    function getNumOccupants(plot: IInterface; num: integer): integer;
+    var
+        levelPlan, curLvlScript: IInterface;
+    begin
+        Result := 1;
+        levelPlan := getLevelBuildingPlan(plot, num);
+        if(not assigned(levelPlan)) then begin
+            exit;
+        end;
+        levelPlan := getOverriddenForm(levelPlan, targetFile);
+        
+        curLvlScript :=  getScript(levelPlan, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
+        //curLvlNr := getScriptProp(curLvlScript, 'iRequiredLevel');
+        //iMaxOccupants
+        Result := getScriptPropDefault(curLvlScript, 'iMaxOccupants', 1);
+        
+    end;
 
     function getPlotThemes(plot: IInterface): TStringList;
     var
@@ -1792,6 +1902,7 @@ unit SS2Lib;
     var
         f4File, miscGroup, kywdGroup, weapGroup, armoGroup, staticGroup, msttGroup, cobjGroup, omodGroup, actiGroup, wsfrMasterFile: IInterface;
     begin
+        initOverrideUpdating(nil);
         Result := true;
 
 		//miscItemCache := nil;
@@ -2584,6 +2695,26 @@ unit SS2Lib;
         // Result := (c = '[') or (c = ']') or (c = '|') or (c = '{') or (c = '}') or (c = '(') or (c = ')');
     end;
 
+    function getExistingStackEnabledFormList(targetFile: IInterface): IInterface;
+    var
+        formlistEdid, cobjEdid, sig: string;
+        group, newElem: IInterface;
+        targetCobj, targetFlst: IInterface;
+    begin
+        Result := nil;
+
+        sig := 'FLST';
+        formlistEdid := globalNewFormPrefix + stackEnableFlstBase;
+
+        group := GroupBySignature(targetFile, sig);
+
+        if(not assigned(group)) then begin
+            exit;
+        end;
+
+        Result := MainRecordByEditorID(group, formlistEdid);
+    end;
+
     function getStackEnabledFormList(targetFile: IInterface): IInterface;
     var
         formlistEdid, cobjEdid, sig: string;
@@ -2594,19 +2725,28 @@ unit SS2Lib;
             Result := stackedFormlistCache;
             exit;
         end;
-        //stackedFormlistCache: IInterface;
 
-        sig := 'FLST';
-        formlistEdid := globalNewFormPrefix + stackEnableFlstBase;
-        group := GroupBySignature(targetFile, sig);
-
-        if(not assigned(group)) then begin
-            group := Add(targetFile, sig, True);
+        if(isUpdatingOverride) then begin
+            targetFlst := getExistingStackEnabledFormList(overrideSourceFile);
+            if(assigned(targetFlst)) then begin
+                targetFlst := getOverriddenForm(targetFlst, targetFile);
+            end else begin
+                targetFlst := getExistingStackEnabledFormList(targetFile);
+            end;
+        end else begin
+            targetFlst := getExistingStackEnabledFormList(targetFile);
         end;
 
-        targetFlst := MainRecordByEditorID(group, formlistEdid);
-
         if(not assigned(targetFlst)) then begin
+            sig := 'FLST';
+            formlistEdid := globalNewFormPrefix + stackEnableFlstBase;
+
+            group := GroupBySignature(targetFile, sig);
+
+            if(not assigned(group)) then begin
+                group := Add(targetFile, sig, True);
+            end;
+
             targetFlst := Add(group, sig, true);
             if(not assigned(targetFlst)) then begin
                 targetFlst := Add(group, sig, true); // stolen from dubhFunctions
@@ -2619,7 +2759,10 @@ unit SS2Lib;
             targetCobj := getCopyOfTemplate(targetFile, stackingCobjTemplate, cobjEdid);
 
             setPathLinksTo(targetCobj, 'CNAM', targetFlst);
+
         end;
+
+        //targetFlst := getOverriddenForm(targetFlst, targetFile);
 
         stackedFormlistCache := targetFlst;
         Result := targetFlst;
@@ -2635,11 +2778,7 @@ unit SS2Lib;
 
         targetFlst := getStackEnabledFormList(targetFile);
         addToFormlist(targetFlst, model);
-        // SS2_co_StackEnable_SS
-        // curFlst := getElemByEdidAndSig(formListEdid, 'FLST', targetFile);
-        // stackingCobjTemplate
-        // stackEnableFlstBase = 'EnableStackedParenting_';
-		// stackEnableCobjBase = 'co_StackEnable_';
+
     end;
 
     {
@@ -2831,13 +2970,34 @@ unit SS2Lib;
             exit;
         end;
 
-        newItemSpawns := ebp(newItemSpawns, 'Value\Array of Struct');
+        newItemSpawns := ElementByPath(newItemSpawns, 'Value\Array of Struct');
         for i:=0 to ElementCount(newItemSpawns)-1 do begin
             curSpawn := ElementByIndex(newItemSpawns, 0);
             curSpawnItem := getStructMember(curSpawn, 'StageItemDetails');
             RemoveElement(newItemSpawns, curSpawn);
 
-            recycleSpawnMiscIfPossible(curSpawnItem);
+            recycleSpawnMiscIfPossible(curSpawnItem, nil, nil);
+        end;
+    end;
+
+    procedure cleanItemSpawnsForRoot(newItemSpawns, lvlRoot, targetFile: IInterface);
+    var
+        i : integer;
+        curSpawn: IInterface;
+        curSpawnItem, curSpawnScript: IInterface;
+    begin
+        // clear the list and erase all the items in it
+        if(not assigned(newItemSpawns)) then begin
+            exit;
+        end;
+
+        newItemSpawns := ElementByPath(newItemSpawns, 'Value\Array of Struct');
+        for i:=0 to ElementCount(newItemSpawns)-1 do begin
+            curSpawn := ElementByIndex(newItemSpawns, 0);
+            curSpawnItem := getStructMember(curSpawn, 'StageItemDetails');
+            RemoveElement(newItemSpawns, curSpawn);
+
+            recycleSpawnMiscIfPossible(curSpawnItem, lvlRoot, targetFile);
         end;
     end;
 
@@ -2912,8 +3072,7 @@ unit SS2Lib;
 		end;
         isNewForm := false;
         // before even trying, see if we have an equivalent already
-        // getMiscLookupKey(formToSpawn: IInterface; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): string;
-        //getExternalSpawnMiscByParams
+        // this won't reuse them if we're running on an override, but this is how it is for now
         Result := getSpawnMiscByParams(targetFile, formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, spawnType, spawnName, requirementsItem);
         if(assigned(Result)) then begin
             AddMessage('Reusing spawn misc '+EditorID(Result));
@@ -3197,7 +3356,7 @@ unit SS2Lib;
             // AddMessage('Would be creating blueprint root');
             newRoot := getCopyOfTemplate(targetFile, buildingPlanTemplate, bpEdid);
         end else begin
-            newRoot := existingElem;
+            newRoot := getOverriddenForm(existingElem, targetFile);
 
             bpEdid := EditorID(newRoot);
         end;
@@ -3219,8 +3378,8 @@ unit SS2Lib;
         // set the various strings
         SetEditValueByPath(newRoot, 'FULL - Name', fullName);
         //if(isNewElement) then begin
-        setBlueprintDescription(newRoot, description);
-        setBlueprintConfirmation(newRoot, confirmation);
+        setBlueprintDescription(newRoot, description, targetFile);
+        setBlueprintConfirmation(newRoot, confirmation, targetFile);
         //end;
 
         //AddMessage('3 Have NewRoot, edid '+EditorID(newRoot));
@@ -3250,7 +3409,7 @@ unit SS2Lib;
 
         Result := getBuildingPlanForLevel(targetFile, edid, lvlNr);
 
-        SetEditValueByPath(Result, 'FULL', geev(rootBlueprint, 'FULL')+' Level '+IntToStr(lvlNr));
+        SetEditValueByPath(Result, 'FULL', GetElementEditValues(rootBlueprint, 'FULL')+' Level '+IntToStr(lvlNr));
 
         script := getScript(Result, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
         setScriptProp(script, 'iRequiredLevel', lvlNr);
@@ -3296,13 +3455,19 @@ unit SS2Lib;
     begin
         Result := getLevelBuildingPlan(rootBlueprint, lvlNr);
         if(assigned(Result)) then begin
+            Result := getOverriddenForm(Result, targetFile);
             exit;
         end;
 
         rootScript := getScript(rootBlueprint, 'SimSettlementsV2:Weapons:BuildingPlan');
         lvlFormList := getScriptProp(rootScript, 'LevelPlansList');
+        lvlFormList := getOverriddenForm(lvlFormList, targetFile);
+        
+        AddMessage('lvlFormList=');
+        dumpElem(lvlFormList);
 
         Result := generateBuildingPlanForLevel(targetFile, rootBlueprint, edidBase, lvlNr);
+        Result := getOverriddenForm(Result, targetFile);
         addToFormlist(lvlFormList, Result);
     end;
 
@@ -3401,7 +3566,7 @@ unit SS2Lib;
         Result := trim(getElementEditValues(confirmMsg, 'DESC'));
     end;
 
-    procedure setBlueprintDescription(blueprint: IInterface; descr: string);
+    procedure setBlueprintDescription(blueprint: IInterface; descr: string; targetFile: IInterface);
     var
         bpScript, omod, templateCombi: IInterface;
         propName, omodEditorID, omodEditorIDPrefix: string;
@@ -3424,16 +3589,18 @@ unit SS2Lib;
             omodEditorID := generateEdid(omodEditorIDPrefix, EditorID(blueprint));
             omod := getCopyOfTemplate(targetFile, descriptionTemplate, omodEditorID);
             setScriptProp(bpScript, propName, omod);
-            SetEditValueByPath(omod, 'FULL', geev(blueprint, 'FULL')+' Description OMOD');
 
             // Now generate the template, assume these already exist for updating
             generateTemplateCombination(blueprint, omod);
+        end else begin
+            omod := GetOverriddenForm(omod, targetFile);
         end;
 
+        SetEditValueByPath(omod, 'FULL', getElementEditValues(blueprint, 'FULL')+' Description');
         SetEditValueByPath(omod, 'DESC', descr);
     end;
 
-    procedure setBlueprintConfirmation(blueprint: IInterface; confirmation: string);
+    procedure setBlueprintConfirmation(blueprint: IInterface; confirmation: string; targetFile: IInterface);
     var
         bpScript, mesg: IInterface;
         propName, messageEdid, messageEdidPrefix: string;
@@ -3457,9 +3624,11 @@ unit SS2Lib;
 
             mesg := getCopyOfTemplate(targetFile, confirmMessageTemplate, messageEdid);
             setScriptProp(bpScript, propName, mesg);
-            SetEditValueByPath(mesg, 'FULL', geev(blueprint, 'FULL')+' Confirmation MESG');
+        end else begin
+            mesg := GetOverriddenForm(mesg, targetFile);
         end;
 
+        SetEditValueByPath(mesg, 'FULL', getElementEditValues(blueprint, 'FULL')+' Confirmation');
         SetEditValueByPath(mesg, 'DESC', confirmation);
     end;
 
@@ -3917,7 +4086,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         if(not assigned(existingElem)) then begin
             Result := getCopyOfTemplate(targetFile, buildingSkinTemplate, rootEdid);
         end else begin
-            Result := existingElem;
+            Result := getOverriddenForm(existingElem, targetFile);
         end;
         newScript := getScript(Result, 'SimSettlementsV2:Weapons:BuildingSkin');
         SetElementEditValues(Result, 'FULL', fullName);
@@ -3926,6 +4095,8 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         if(not assigned(newDescription)) then begin
             newDescription := getCopyOfTemplate(targetFile, descriptionTemplate, generateEdid(buildingSkinDescriptionPrefix, edid+'_descr'));
             setScriptProp(newScript, 'BuildingPlanSkinDescription', newDescription);
+        end else begin
+            newDescription := getOverriddenForm(newDescription, targetFile);
         end;
         SetElementEditValues(newDescription, 'FULL', fullName);
         SetElementEditValues(newDescription, 'DESC', fullName);
@@ -3997,6 +4168,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
     begin
         Result := getLevelSkin(rootSkin, lvlNr);
         if(assigned(Result)) then begin
+            Result := getOverriddenForm(Result, targetFile);
             exit;
         end;
 
@@ -5346,6 +5518,11 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
                 exit;
             end;
         end;
+        
+        if(isUpdatingExistingBlueprint) then begin
+            // just allow clicking OK for update at this point
+            exit;
+        end;
 
         if (stageModelStr = '') and (stageItemStr = '') then begin
             Result := false;
@@ -5614,13 +5791,14 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         packedPlotType: integer;
         requireStageModels, isFullPlot: boolean;
         initialThemes: TStringList;
-        autoRegister, makePreview, setupStacking, isNewEntry: boolean
+        autoRegister, makePreview, setupStacking, isNewEntry: boolean;
+        initOcc1, initOcc2, initOcc3: integer
     ): TJsonObject;
     var
         frm: TForm;
         btnBrowseModel, btnBrowseItems, btnOk, btnCancel, btnThemes: TButton;
         resultCode, yOffset: integer;
-        inputName, inputPlotEdid, inputModPrefix: TEdit;
+        inputName, inputPlotEdid, inputModPrefix, inputNumOccupants1, inputNumOccupants2, inputNumOccupants3: TEdit;
         descrElem: IInterface;
         selectedMainType, selectedSize, selectedSubType: integer;
         packedResultType: integer;
@@ -5628,6 +5806,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         registerCb, previewCb, stackCb, confirmationAutoCb: TCheckBox;
         themesInitialText: string;
         descriptionInput, confirmationInput: TMemo;
+        occ1, occ2, occ3: integer;
     begin
         Result := nil;
         isUpdatingExistingBlueprint := (not isNewEntry);
@@ -5635,7 +5814,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         StageModelFileRequired := requireStageModels;
         isConvertDialogActive := false;
         Result := false;
-        frm := CreateDialog(title, 500, 360);
+        frm := CreateDialog(title, 500, 400);
 
         CreateLabel(frm, 10, 6, text);
 
@@ -5737,11 +5916,41 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             end;
             confirmationAutoCb.onclick := confirmationMsgAutoChangeHandler;
 
-            yOffset := yOffset + 120;
-            frm.height := (frm.height + 120);
+            yOffset := yOffset + 110;
+            frm.height := (frm.height + 110);
 
             //confirmationInput confirmationAutoCb
         end;
+        
+        
+        
+        CreateLabel(frm, 150, yOffset, 'L1');
+        CreateLabel(frm, 200, yOffset, 'L2');
+        CreateLabel(frm, 250, yOffset, 'L3');
+        yOffset := yOffset + 15;
+        CreateLabel(frm, 10, yOffset, 'Occupants per Level:');
+        inputNumOccupants1 := CreateInput(frm, 150, yOffset, IntToStr(initOcc1));
+        inputNumOccupants2 := CreateInput(frm, 200, yOffset, IntToStr(initOcc2));
+        inputNumOccupants3 := CreateInput(frm, 250, yOffset, IntToStr(initOcc3));
+        
+        inputNumOccupants1.width := 40;
+        inputNumOccupants2.width := 40;
+        inputNumOccupants3.width := 40;
+        
+        if(initOcc1 <= 0) then begin
+            inputNumOccupants1.enabled := false;
+        end;
+        
+        if(initOcc2 <= 0) then begin
+            inputNumOccupants2.enabled := false;
+        end;
+        
+        if(initOcc3 <= 0) then begin
+            inputNumOccupants3.enabled := false;
+        end;
+        
+        yOffset := yOffset + 25;
+        
 
         registerCb := CreateCheckbox(frm, 10, yOffset+2, 'Register Building Plan');
         previewCb  := CreateCheckbox(frm, 160, yOffset+2, 'Setup building previews');
@@ -5818,6 +6027,17 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result.B['registerPlot'] := registerCb.checked;
             Result.B['makePreview'] := previewCb.checked;
             Result.B['setupStacking'] := stackCb.checked;
+            
+            //occ1 := curIndex := tryToParseInt(substr);
+            occ1 := tryToParseInt(inputNumOccupants1.Text);
+            occ2 := tryToParseInt(inputNumOccupants2.Text);
+            occ3 := tryToParseInt(inputNumOccupants3.Text);
+            if(occ1 <= 0) then occ1 := 1;
+            if(occ2 <= 0) then occ2 := 1;
+            if(occ3 <= 0) then occ3 := 1;
+            Result.I['occupants1'] := occ1;
+            Result.I['occupants2'] := occ2;
+            Result.I['occupants3'] := occ3;
 
             if(descriptionInput <> nil) then begin
                 Result.S['description'] := descriptionInput.Text;
@@ -5836,7 +6056,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
 
     ///AAA
-    function ShowSkinCreateDialog(title, text, initialPlotName, initialPlotId, initialModPrefix: string; existingPlotTarget: IInterface; isFullSkin: boolean; initialThemes: TStringList; autoRegister, makePreview, setupStacking: boolean): TJsonObject;
+    function ShowSkinCreateDialog(title, text, initialPlotName, initialPlotId, initialModPrefix: string; existingPlotTarget: IInterface; isFullSkin: boolean; initialThemes: TStringList; autoRegister, makePreview, setupStacking, isNewEntry: boolean): TJsonObject;
     var
         frm: TForm;
         btnBrowseModel, btnBrowseItems, btnBrowsePlots, btnOk, btnCancel, btnThemes: TButton;
@@ -5856,6 +6076,9 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         if (assigned(existingPlotTarget) or (not isFullSkin)) then begin
             PlotEdidInputRequired := false;
         end;
+        
+        isUpdatingExistingBlueprint := (not isNewEntry);
+        
         StageModelFileRequired := false;
         isConvertDialogActive := false;
         Result := false;

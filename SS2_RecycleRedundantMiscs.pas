@@ -79,7 +79,7 @@ unit RecycleRedundantMiscs;
         end;
 
         AddMessage('Recycling '+EditorID(e));
-        recycleSpawnMiscIfPossible(e);
+        recycleSpawnMiscIfPossible(e, nil);
 
     end;
 

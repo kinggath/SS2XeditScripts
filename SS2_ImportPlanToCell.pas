@@ -8,6 +8,20 @@ unit ImportCsvToCell;
         csvLines: TStringList;
         groupsToSearch: TStringList;
         selectedCell: IInterface;
+        
+    function getOverriddenForm(e, targetFile: IInterface): IInterface;
+    var
+        eFile: IInterface;
+    begin
+        Result := e;
+        if(not assigned(e)) then exit;
+        
+        eFile := GetFile(MasterOrSelf(e));
+        if(not FilesEqual(eFile, targetFile)) then begin
+            Result := getOrCreateElementOverride(e, targetFile);
+        end;
+    
+    end;
 
     function AddGroupBySignature(const f: IwbFile; const s: String): IInterface;
     begin
@@ -26,7 +40,8 @@ unit ImportCsvToCell;
         Result := nil;
 
         if(assigned(foundLayer)) then begin
-            Result := foundLayer;
+            Result := getOverriddenForm(foundLayer, inFile);
+            //Result := foundLayer;
             exit;
         end;
 
@@ -37,8 +52,9 @@ unit ImportCsvToCell;
                 curMaster := MasterByIndex(inFile, i);
 
                 foundLayer := MainRecordByEditorID(GroupBySignature(curMaster, 'LAYR'), layerName);
+                
                 if (assigned(foundLayer)) then begin
-                    Result := foundLayer;
+                    Result := getOverriddenForm(foundLayer, inFile);
                     exit;
                 end;
 
@@ -215,6 +231,7 @@ unit ImportCsvToCell;
 
         curLevelLayer := getLayer(targetFile, rootLayerEdid, true);
         curLayer := getLayer(targetFile, stageLayerEdid, true);
+        
 
         SetElementEditValues(curLayer, 'PNAM', IntToHex(GetLoadOrderFormID(curLevelLayer), 8));
 

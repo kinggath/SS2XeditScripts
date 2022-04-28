@@ -1856,7 +1856,7 @@ unit PlotConverter;
 
             levelBlueprintEdid := GenerateEdid(levelPlanPrefix, levelEdidBase);
 
- 		    AddMessage('Processing '+geev(curOldBlueprint, 'FULL')+' as Level '+IntToStr(curLevel+1)+' Variant '+IntToStr(i+1));
+ 		    AddMessage('Processing '+getElementEditValues(curOldBlueprint, 'FULL')+' as Level '+IntToStr(curLevel+1)+' Variant '+IntToStr(i+1));
 
 
             //getOrCreateBuildingPlanForLevel(targetFile, newBlueprint, planEdidBase, curLevelNr+1);
@@ -1865,7 +1865,7 @@ unit PlotConverter;
 
             curLevelBlueprintScript := getScript(curLevelBlueprint, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
 
-            SetEditValueByPath(curLevelBlueprint, 'FULL', geev(curOldBlueprint, 'FULL'));
+            SetEditValueByPath(curLevelBlueprint, 'FULL', getElementEditValues(curOldBlueprint, 'FULL'));
 
             addToFormList(levelBlueprints, curLevelBlueprint);
 
@@ -1875,11 +1875,11 @@ unit PlotConverter;
             ExtraPlaqueInfo := getScriptProp(curOldBlueprintScript, 'ExtraPlaqueInfo');
 
             if(assigned(ExtraPlaqueInfo)) then begin
-                setBlueprintDescription(curLevelBlueprint, geev(ExtraPlaqueInfo, 'DESC'));
-                setBlueprintConfirmation(curLevelBlueprint, geev(ExtraPlaqueInfo, 'DESC'));
+                setBlueprintDescription(curLevelBlueprint, getElementEditValues(ExtraPlaqueInfo, 'DESC'), targetFile);
+                setBlueprintConfirmation(curLevelBlueprint, getElementEditValues(ExtraPlaqueInfo, 'DESC'), targetFile);
                 if (curLevel = 0) and (i = 0) then begin
-                    setBlueprintDescription(blueprintRoot, geev(ExtraPlaqueInfo, 'DESC'));
-                    setBlueprintConfirmation(blueprintRoot, geev(ExtraPlaqueInfo, 'DESC'));
+                    setBlueprintDescription(blueprintRoot, getElementEditValues(ExtraPlaqueInfo, 'DESC'), targetFile);
+                    setBlueprintConfirmation(blueprintRoot, getElementEditValues(ExtraPlaqueInfo, 'DESC'), targetFile);
                 end;
             end;
 
