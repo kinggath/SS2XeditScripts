@@ -592,7 +592,10 @@ end;
 function getArrayElemDefault(arr: TStringList; index: integer; default: string): string;
 begin
     if(arr.count > index) then begin
-        Result := arr[index];
+        Result := trim(arr[index]);
+        if(Result = '') then begin
+            Result := default;
+        end;
         exit;
     end;
 
