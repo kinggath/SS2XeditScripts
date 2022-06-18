@@ -602,6 +602,15 @@ begin
     Result := default;
 end;
 
+function isCsvLineEmpty(line: string): boolean;
+var
+    lineRest: string;
+begin
+    lineRest := trim(StringReplace(line, ',', '', [rfReplaceAll]));
+    
+    Result := (lineRest = '');
+end;
+
 function importItemData(itemsSheet: string; skinReplace: boolean): boolean;
 var
     csvLines, csvCols: TStringList;
@@ -632,7 +641,9 @@ begin
 
         curEditorId := trim(csvCols[0]);
         if(curEditorId = '') then begin
-            AddMessage('Line "'+curLine+'" cannot be imported, skipping');
+            if(not isCsvLineEmpty(curLine)) then begin
+                AddMessage('Line "'+curLine+'" cannot be imported, skipping');
+            end;
             continue;
         end;
 
@@ -1172,6 +1183,26 @@ begin
     AddMessage('BLUEPRINT GENERATION COMPLETE');
 end;
 
+procedure checkSpawnItems();
+var
+    i: integer;
+    levels: TJsonObject;
+    spawnsArr: TJsonArray;
+    curLvlStr: string;
+begin
+    //lvlObj := plotData.O['levels'].O[lvl];
+    levels := plotData.O['levels'];
+    for i:=0 to levels.count-1 do begin
+        curLvlStr := levels.names[i];
+        spawnsArr := levels.O[curLvlStr].A['spawns'];
+        if(spawnsArr.count > 128) then begin
+            AddMessage('!!! WARNING !!!');
+            AddMessage('You have '+IntToStr(spawnsArr.count)+' spawns on Level '+curLvlStr+'!');
+            AddMessage('Items past 128 will not spawn! Skins which add spawns will not work!');
+        end;
+    end;
+end;
+
 function importSpreadsheetsToJson(modelsSheet, itemsSheet: string; spawnsMode: boolean): boolean;
 begin
     Result := true;
@@ -1196,6 +1227,11 @@ begin
     end;
 
     AddMessage('=== CSV data import complete ===');
+    // validate stuff
+    if(plotData.B['hasItems']) then begin
+        checkSpawnItems();
+    end;
+    
 
 
     //AddMessage('=== DEBUG: intermediate json ===');
