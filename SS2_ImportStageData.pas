@@ -234,9 +234,9 @@ begin
     occupantsOnLevel2 := 0;
     occupantsOnLevel3 := 0;
 
-    numOcc1 := 0;
-    numOcc2 := 0;
-    numOcc3 := 0;
+    numOcc1 := 1;
+    numOcc2 := 1;
+    numOcc3 := 1;
 
     if(currentMode = 0) then begin
         if(not showTypeSelectDialog()) then begin
