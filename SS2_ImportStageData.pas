@@ -139,6 +139,13 @@ begin
     addToStackEnabledList(targetFile, model);
 end;
 
+procedure setupStackedMovementForContentIfEnabled(content: IInterface);
+begin
+    if(not setupStacking) then exit;
+
+    setupStackedMovementForContent(targetFile, content);
+end;
+
 function showTypeSelectDialog(): boolean;
 var
     frm: TForm;
@@ -585,7 +592,10 @@ end;
 function getArrayElemDefault(arr: TStringList; index: integer; default: string): string;
 begin
     if(arr.count > index) then begin
-        Result := arr[index];
+        Result := trim(arr[index]);
+        if(Result = '') then begin
+            Result := default;
+        end;
         exit;
     end;
 
@@ -890,7 +900,7 @@ begin
     end;
 end;
 
-procedure fillLevelBlueprint(levelBlueprint: IInterface; levelObj: TJsonObject; hasModels, hasSpawns: boolean; bpRoot: IInterface; edidBase: string; curLevel: integer);
+function fillLevelBlueprint(levelBlueprint: IInterface; levelObj: TJsonObject; hasModels, hasSpawns: boolean; bpRoot: IInterface; edidBase: string; curLevel: integer): IInterface;
 var
     i, levelNr, numOccupants: integer;
     curSpawnObj: TJsonObject;
@@ -1003,13 +1013,15 @@ begin
 
         AddMessage('+++ Filling Spawns complete +++');
     end;
+    
+    Result := levelBlueprint;
 end;
 
 procedure importSingleLevel(targetBlueprintLevelElem: IInterface);
 var
     hasModels, hasItems: boolean;
     curLevel: integer;
-    levelScript: IInterface;
+    levelScript, levelPlan: IInterface;
     levelObj, levelsObj: TJsonObject;
 begin
     // selectedLevelNr
@@ -1032,7 +1044,11 @@ begin
 
 
     AddMessage('=== Filling level '+IntToStr(curLevel) + ' ===');
-    fillLevelBlueprint(targetBlueprintLevelElem, levelObj, hasModels, hasItems, nil, plotId, curLevel);
+    levelPlan := fillLevelBlueprint(targetBlueprintLevelElem, levelObj, hasModels, hasItems, nil, plotId, curLevel);
+    // if we don't have models, then stacked movement was never enabled
+    if(not hasModels) then begin
+        setupStackedMovementForContentIfEnabled(levelPlan);
+    end;
 end;
 
 procedure generateBlueprint(targetBlueprintElem: IInterface);
@@ -1101,6 +1117,9 @@ begin
         end else begin
             deleteScriptProp(bpRootScript, 'BuildingMaterialsOverride');
         end;
+    end else begin
+        // set this up if the actual model loop was skipped
+        setupStackedMovementForContentIfEnabled(bpRoot);
     end;
 
     edidBase := EditorID(bpRoot);
@@ -1185,23 +1204,6 @@ begin
 
 end;
 
-function getFirstScriptName(e: IInterface): string;
-    var
-        curScript, scripts: IInterface;
-        i: integer;
-    begin
-        Result := '';
-        scripts := ebp(e, 'VMAD - Virtual Machine Adapter\Scripts');
-
-        for i := 0 to ElementCount(scripts)-1 do begin
-            curScript := ElementByIndex(scripts, i);
-
-            Result := GetElementEditValues(curScript, 'scriptName');
-            exit;
-        end;
-    end;
-
-
 function Initialize: integer;
 begin
     existingPlotThemes := nil;
@@ -1270,7 +1272,7 @@ begin
     end;
 end;
 
-procedure fillSkinLevelBlueprint(levelBlueprint: IInterface; levelNr: integer; hasModels, hasItems: boolean; skinRoot: IInterface; spawnsPropKey, formName: string);
+function fillSkinLevelBlueprint(levelBlueprint: IInterface; levelNr: integer; hasModels, hasItems: boolean; skinRoot: IInterface; spawnsPropKey, formName: string): IInterface;
 var
     currentLevelSkin, currentLevelScript, curTargetPlotLevel, curModelElem, spawnsArray, curStruct, formToSpawn, reqForm, curMisc: IInterface;
     curLevelModels, curLevelSpawns, curSpawnObj: TJsonObject;
@@ -1390,6 +1392,8 @@ begin
         // spawns
         // spawnsPropKey
     end;
+    
+    Result := currentLevelSkin;
 end;
 
 procedure importSingleSkinLevel(targetSkinLevelElem: IInterface);
@@ -1398,7 +1402,7 @@ var
     curLevel: integer;
     levelScript: IInterface;
     levelObj, levelsObj: TJsonObject;
-    targetPlotLevel, targetPlotScript: IInterface;
+    targetPlotLevel, targetPlotScript, skinLevel: IInterface;
     spawnsPropKey: string;
 begin
     // selectedLevelNr
@@ -1431,7 +1435,10 @@ begin
         spawnsPropKey := 'AdditionalStageItemSpawns';
     end;
 
-    fillSkinLevelBlueprint(targetSkinLevelElem, curLevel, hasModels, hasItems, nil, spawnsPropKey, plotName);
+    skinLevel := fillSkinLevelBlueprint(targetSkinLevelElem, curLevel, hasModels, hasItems, nil, spawnsPropKey, plotName);
+    if(not hasModels) then begin
+        setupStackedMovementForContentIfEnabled(skinLevel);
+    end;
 end;
 
 procedure generateSkin(targetSkinElem: IInterface);
@@ -1477,6 +1484,10 @@ begin
 
         fillSkinLevelBlueprint(currentLevelSkin, i, hasModels, hasItems, skinRoot, spawnsPropKey, lvlFormName);
     end;
+    
+    if(not hasModels) then begin
+        setupStackedMovementForContentIfEnabled(skinRoot);
+    end;
 
     // themes
     if(selectedThemeTagList <> nil) then begin
@@ -1504,20 +1515,6 @@ begin
             AddMessage('NOTICE: skin will not be registered');
         end;
     end;
-    // skinTargetBuildingPlan
-
-    //levelsObj := plotData.O['levels'];
-
-
-
-    // now do it
-
-    // function prepareSkinRoot(targetFile, existingElem, targetRoot: IInterface; edid, fullName: string): IInterface;
-
-
-    // skinData.free();
-
-    // AddMessage(); // skinRoot
 end;
 
 procedure cleanUp();

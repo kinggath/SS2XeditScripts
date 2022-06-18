@@ -1655,6 +1655,21 @@ unit PraUtil;
             exit;
         end;
     end;
+    
+    {
+        Gets the name for the first script, in case the object type or such depends on that
+    }
+    function getFirstScriptName(e: IInterface): string;
+    var
+        curScript, scripts: IInterface;
+        i: integer;
+    begin
+        Result := '';
+        curScript := getFirstScript(e);
+        if(not assigned(curScript)) then exit;
+
+        Result := GetElementEditValues(curScript, 'scriptName');
+    end;
 
     {
         Like getScript, but if it doesn't exist, it will be added
@@ -2020,6 +2035,7 @@ unit PraUtil;
             else:       Result := IntToStr(basicType);
         end;
     end;
+
 
     {
         Set the value of a raw script property or struct member

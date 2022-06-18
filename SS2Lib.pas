@@ -946,10 +946,8 @@ unit SS2Lib;
 	begin
         Result := nil;
 		curFileName := GetFileName(targetFile);
-        AddMessage('Trying to get a recycled for '+curFileName);
 		curArray := spawnMiscData.O['files'].O[curFileName].A['recycled'];
 		if(curArray.count = 0) then begin
-            AddMessage('it''s empty now');
 			exit;
 		end;
 
@@ -2739,6 +2737,7 @@ unit SS2Lib;
 
         if(not assigned(targetFlst)) then begin
             sig := 'FLST';
+
             formlistEdid := globalNewFormPrefix + stackEnableFlstBase;
 
             group := GroupBySignature(targetFile, sig);
@@ -2767,18 +2766,138 @@ unit SS2Lib;
         stackedFormlistCache := targetFlst;
         Result := targetFlst;
     end;
+    
+    // adds either modelOrSrcFlst to targetFlst, or all entries of it, if it's a formlist
+    procedure addToStackEnabledFormList(targetFlst, modelOrSrcFlst: IInterface);
+    var
+        i, numEntries: integer;
+        curEntry: IInterface;
+    begin
+        if(not assigned(modelOrSrcFlst)) then exit;
+        if(Signature(modelOrSrcFlst) = 'FLST') then begin
+            numEntries := getFormListLength(modelOrSrcFlst)-1;
+            for i:=0 to numEntries do begin
+                curEntry := getFormListEntry(modelOrSrcFlst, i);
+                addToStackEnabledFormList(targetFlst, curEntry);
+            end;
+        end else begin
+            addToFormlist(targetFlst, modelOrSrcFlst);
+        end;
+    end;
 
+    // automatically finds the "stack enabled list" in targetFile, and adds the given model to it
     procedure addToStackEnabledList(targetFile, model: IInterface);
     var
-        formlistEdid, cobjEdid: string;
-        targetCobj, targetFlst: IInterface;
+        targetFlst: IInterface;
     begin
-        formlistEdid := globalNewFormPrefix + stackEnableFlstBase;
-        cobjEdid     := globalNewFormPrefix + stackEnableCobjBase;
-
         targetFlst := getStackEnabledFormList(targetFile);
-        addToFormlist(targetFlst, model);
+        addToStackEnabledFormList(targetFlst, model);
+    end;
+    
+    procedure setupStackedMovingForBuildingPlanLevel(targetFlst, plan: IInterface);
+    var
+        planModels, planScript, modelList, curModel: IInterface;
+        i: integer;
+    begin
+        AddMessage('Adding lvl plan '+EditorID(plan));
+        planScript := getScript(plan, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
+        planModels := getScriptProp(planScript, 'StageModels');
+        for i:=0 to ElementCount(planModels)-1 do begin
+            curModel := PathLinksTo(ElementByIndex(planModels, i), 'Object v2\FormID');
+            AddMessage('Adding model '+EditorID(curModel));
+            addToStackEnabledFormList(targetFlst, curModel);
+        end;
+    end;
 
+    procedure setupStackedMovingForBuildingPlan(targetFlst, plan: IInterface);
+    var
+        curPlan, planScript, planList, buildMats: IInterface;
+        listLength, i: integer;
+    begin
+        planScript := getScript(plan, 'SimSettlementsV2:Weapons:BuildingPlan');
+        planList := getScriptProp(planScript, 'LevelPlansList');
+        listLength := getFormListLength(planList);
+        // get the BuildingMaterialsOverride
+        AddMessage('Processing plan '+EditorID(plan));
+        buildMats := getScriptProp(planScript, 'BuildingMaterialsOverride');
+        if(assigned(buildMats)) then begin
+            AddMessage('Adding build mats '+EditorID(buildMats));
+            addToStackEnabledFormList(targetFlst, buildMats);
+        end;
+        
+        if(listLength = 0) then begin
+            AddMessage('WARNING: this building plan has an empty LevelPlansList! '+FullPath(planList));
+            exit;
+        end;
+        for i:=0 to listLength-1 do begin
+            curPlan := getFormListEntry(planList, i);
+            setupStackedMovingForBuildingPlanLevel(targetFlst, curPlan);
+        end;
+    end;
+    
+    procedure setupStackedMovingForBuildingSkinLevel(targetFlst, skin: IInterface);
+    var
+        skinScript, ReplaceStageModel: IInterface;
+    begin
+        skinScript := getScript(plan, 'SimSettlementsV2:Weapons:BuildingLevelSkin');
+        ReplaceStageModel := getScriptProp(skinScript, 'ReplaceStageModel');
+        if(assigned(ReplaceStageModel)) then begin
+            addToStackEnabledFormList(targetFlst, ReplaceStageModel);
+        end;
+    end;
+
+    procedure setupStackedMovingForBuildingSkin(targetFlst, skin: IInterface);
+    var
+        curPlan, skinScript, LevelSkins: IInterface;
+        listLength, i: integer;
+    begin
+        skinScript := getScript(skin, 'SimSettlementsV2:Weapons:BuildingPlan');
+        
+        levelSkins := getScriptProp(skinScript, 'LevelSkins');
+        if(not assigned(levelSkins)) then begin
+            exit;
+        end;
+
+        for i:=0 to ElementCount(levelSkins)-1 do begin
+            curLvlSkin := getObjectFromProperty(levelSkins, i);
+            setupStackedMovingForBuildingSkinLevel(targetFlst, curLvlSkin);
+        end;
+    end;
+    
+    // content can be a whole blueprint, a bp level, a whole skin, or a skin level
+    // adds all of it's models to the stack enabled list in targetFile
+    function addUsedModelsToStackEnabledList(targetFlst, content: IInterface): boolean;
+    var
+        scriptName: string;
+    begin
+        Result := false;
+
+        scriptName := getFirstScriptName(content);
+        if (scriptName = 'SimSettlementsV2:Weapons:BuildingPlan') then begin
+            setupStackedMovingForBuildingPlan(targetFlst, content);
+            Result := true;
+        end else if (scriptName = 'SimSettlementsV2:Weapons:BuildingLevelPlan') then begin
+            setupStackedMovingForBuildingPlanLevel(targetFlst, content);
+            Result := true;
+        end else if (scriptName = 'SimSettlementsV2:Weapons:BuildingSkin') then begin
+            setupStackedMovingForBuildingSkin(targetFlst, content);
+            Result := true;
+        end else if (scriptName = 'SimSettlementsV2:Weapons:BuildingLevelSkin') then begin
+            setupStackedMovingForBuildingSkinLevel(targetFlst, content);
+            Result := true;
+        end;
+    end;
+    
+    // content can be a whole blueprint, a bp level, a whole skin, or a skin level
+    // adds all of it's models to the stack enabled list in targetFile
+    procedure setupStackedMovementForContent(targetFile, content: IInterface);
+    var
+        targetFlst, script: IInterface;
+        scriptName: string;
+    begin
+        targetFlst := getStackEnabledFormList(targetFile);
+
+        addUsedModelsToStackEnabledList(targetFlst, content);
     end;
 
     {
@@ -4047,16 +4166,6 @@ unit SS2Lib;
         try
             SetElementEditValues(Result, 'EDID', newEdid);
 
-            {
-            // special handling for scripts
-            // kgSIM_IndRev_NuclearArms_CapCreator [ACTI:010034DD]
-            script := getScript(Result, 'SimSettlements:AnimatedObjectSpawner');
-            if(assigned(script)) then begin
-                SetElementEditValues(script, 'ScriptName', 'SimSettlementsV2:ObjectReferences:AnimatedObjectSpawner');
-                // also remove AutoBuildParent
-                deleteScriptProp(script, 'AutoBuildParent');
-            end;
-            }
             translateElementScripts(Result);
 
 
