@@ -1824,6 +1824,20 @@ unit PraUtil;
 
         Result := getValueAsVariant(prop, defaultValue);
     end;
+    
+    function getScriptPropType(script: IInterface; propName: String): string;
+    var
+        prop, propVal: IInterface;
+        typeStr: string;
+    begin
+        prop := getRawScriptProp(script, propName);
+        if(not assigned(prop)) then begin
+            Result := '';
+            exit;
+        end;
+
+        Result := geevt(prop, 'Type');
+    end;
 
     {
         Creates a raw script property and returns it
@@ -2126,8 +2140,17 @@ unit PraUtil;
     end;
 
     procedure setScriptPropDefault(script: IInterface; propName: string; value, default: variant);
+    var
+        prevValue: variant;
     begin
+        
         if(value = default) then begin
+            // check if we should clean out the existing value
+            prevValue := getScriptProp(script, propName);
+
+            if(prevValue <> default) then begin
+                deleteScriptProp(script, propName);
+            end
             exit;
         end
 
@@ -2265,6 +2288,47 @@ unit PraUtil;
 
         curStuff := ElementByPath(ElementByIndex(propValue, i), 'Object v2\FormID');
         Result := LinksTo(curStuff);
+    end;
+    
+    function getPropertyArrayLength(prop: IInterface): integer;
+    var
+        typeStr: string;
+        propValue, curStuff: IInterface;
+    begin
+        Result := 0;
+        typeStr := GetElementEditValues(prop, 'Type');
+        if(typeStr <> '') then begin
+            if(not strStartsWith(typeStr, 'Array of')) then exit;
+            
+            propValue := ElementByPath(prop, 'Value\'+typeStr);
+            if(not assigned(propValue)) then begin
+                exit;
+            end;
+        end else begin
+            propValue := prop;
+        end;
+        
+        Result := ElementCount(propValue);
+    end;
+    
+    {
+        Removes an entry from an array property at the given index.
+    }
+    procedure removeEntryFromProperty(prop: IInterface; i: integer);
+    var
+        propValue, curStuff: IInterface;
+        typeStr: string;
+    begin
+        typeStr := GetElementEditValues(prop, 'Type');
+        if(typeStr <> '') then begin
+            if(not strStartsWith(typeStr, 'Array of')) then exit;
+            propValue := ElementByPath(prop, 'Value\' + typeStr);
+        end else begin
+            propValue := prop;
+        end;
+
+        RemoveElement(propValue, i);
+        
     end;
 
     {

@@ -45,8 +45,8 @@ unit RecycleRedundantMiscs;
     procedure processMisc(e: IInterface);
     var
         script, oldMisc, curRef: IInterface;
-        key: string;
-        i, oldIndex: integer;
+        key, iTypeType: string;
+        i, oldIndex, fixedIType: integer;
     begin
 
         // maybe this is a recycled misc?
@@ -56,6 +56,13 @@ unit RecycleRedundantMiscs;
 
         script := getScript(e, 'SimSettlementsV2:MiscObjects:StageItem');
         if(not assigned(script)) then exit;
+        
+        // hack against a stupid mistake I made...
+        iTypeType := getScriptPropType(script, 'iType');
+        if(iTypeType = 'Float') then begin
+            fixedIType := Trunc(getScriptProp(script, 'iType'));
+            setScriptProp(script, 'iType', fixedIType);
+        end;
 
         key := getMiscLookupKeyFromScript(script);
         if(key = '') then exit;
@@ -79,7 +86,7 @@ unit RecycleRedundantMiscs;
         end;
 
         AddMessage('Recycling '+EditorID(e));
-        recycleSpawnMiscIfPossible(e, nil);
+        recycleSpawnMiscIfPossible(e, nil, targetFile);
 
     end;
 
