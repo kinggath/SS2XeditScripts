@@ -761,7 +761,8 @@ begin
         stage := -1;
         stageEnd := -1;
 
-        if (importMode = IMPORT_MODE_SKIN_REPLACE) or (importMode = IMPORT_MODE_SKIN_APPEND) then begin
+        // do this in plot mode ONLY
+        if (importMode = IMPORT_MODE_PLAN) then begin
             if(getArrayElemDefault(csvCols, 9, '') = '') then begin
                 stage := -1;
             end else begin
@@ -777,7 +778,7 @@ begin
 
 
             if(getArrayElemDefault(csvCols, 10, '') <> '') then begin
-                stageEnd := StrToInt(getArrayElemDefault(csvCols, 10, '0'));
+                stageEnd := StrToInt(getArrayElemDefault(csvCols, 10, '-1'));
                 if(stageEnd > stage) then begin
                     if(stageEnd > maxStage) then begin
                         AddMessage('Invalid end stage nr in '+curLine+': '+IntToStr(stageEnd)+'. Stage will be set to '+IntToStr(maxStage));
@@ -1068,7 +1069,7 @@ begin
                 reqForm := StrToForm(curSpawnObj.S['Requirements']);//getFormByLoadOrderFormID(StrToInt(curSpawnObj.S['Requirements']));
             end;
 
-            AddMessage('Adding Spawn '+EditorID(curSpawnForm));
+            //AddMessage('Adding Spawn '+EditorID(curSpawnForm));
             addStageItemReqs(
                 targetFile,
                 levelBlueprint,

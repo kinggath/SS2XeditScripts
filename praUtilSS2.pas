@@ -716,24 +716,79 @@ unit PraUtil;
         br.Free;
         ms.Free;
     end;
-
+    
     procedure WriteElementRecursive(e: IInterface; bw: TBinaryWriter; index: integer);
     var
         i: Integer;
-        child: IInterface;
+        child, maybeLinksTo: IInterface;
     begin
         for i := 0 to ElementCount(e)-1 do begin
             child := ElementByIndex(e, i);
+            maybeLinksTo := LinksTo(child);
             // no clue how much is actually necessary here...
             bw.Write(IntToStr(index));
             bw.Write(';');
-            bw.Write(DisplayName(child));
+            bw.Write(DisplayName(child));// we might want to skip Record Header?
             bw.Write(';');
-            bw.Write(GetEditValue(child));
+            if(assigned(maybeLinksTo)) then begin
+                bw.Write(FormToAbsStr(child));
+            end else begin
+                bw.Write(GetEditValue(child));
+            end;
 
             WriteElementRecursive(child, bw, index+1);
         end;
 
+    end;
+ 
+{
+    function WriteElementRecursive(e: IInterface; bw: TBinaryWriter; index: integer): string;
+    var
+        i: Integer;
+        child, maybeLinksTo: IInterface;
+    begin
+        for i := 0 to ElementCount(e)-1 do begin
+            child := ElementByIndex(e, i);
+            maybeLinksTo := LinksTo(child);
+            // no clue how much is actually necessary here...
+            Result := Result + IntToStr(index);
+            Result := Result + ';';
+            Result := Result + (DisplayName(child));
+            Result := Result + ';';
+            bw.Write(IntToStr(index));
+            bw.Write(';');
+            bw.Write(DisplayName(child));// we might want to skip Record Header?
+            bw.Write(';');
+            if(assigned(maybeLinksTo)) then begin
+                Result := Result + FormToAbsStr(child);
+                bw.Write(FormToAbsStr(child));
+            end else begin
+                Result := Result + GetEditValue(child);
+                bw.Write(GetEditValue(child));
+            end;
+
+            Result := Result + WriteElementRecursive(child, bw, index+1);
+        end;
+
+    end;
+    }
+    function StreamToString(aStream: TStream): string;
+    var
+        SS: TStringStream;
+    begin
+      if aStream <> nil then
+      begin
+        SS := TStringStream.Create('');
+        try
+          SS.CopyFrom(aStream, 0);  // No need to position at 0 nor provide size
+          Result := SS.DataString;
+        finally
+          SS.Free;
+        end;
+      end else
+      begin
+        Result := '';
+      end;
     end;
 
 
@@ -749,8 +804,9 @@ unit PraUtil;
         WriteElementRecursive(e, bw, 0);
 
         bw.Free;
-        ms.Position := 0;
         br := TBinaryReader.Create(ms);
+        //AddMessage('ElementCRC32('+FormToAbsStr(e)+') -> '+test);
+        ms.Position := 0;
         Result := wbCRC32Data(br.ReadBytes(ms.Size));
         br.Free;
         ms.Free;

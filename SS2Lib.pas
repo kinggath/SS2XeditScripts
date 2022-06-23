@@ -55,7 +55,7 @@ unit SS2Lib;
         enableOutpostSubtype = false;
 
 		miscItemCacheFileName = ProgramPath + 'Edit Scripts\SS2\PlotMiscItemCache.json';
-        miscItemCacheFileVersion = 2;
+        miscItemCacheFileVersion = 3;
 
     // variables, templates and such
     var
@@ -543,7 +543,7 @@ unit SS2Lib;
     begin
         spawnDetails := getScriptProp(miscScript, 'SpawnDetails');
         if (not assigned(spawnDetails(spawnDetails))) then begin
-            AddMessage('No SpawnDetails in a spawn misc, this shouldn''t happen');
+            Result := '';
             exit;
         end;
 
@@ -578,6 +578,18 @@ unit SS2Lib;
         end;
 
         Result := getMiscLookupKey(GetFile(miscScript), formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, iType, spawnName, reqItem);
+    end;
+    
+    function getSpawnMiscHash(misc: IInterface): string;
+    var
+        miscScript: IInterface;
+        strToHash: string;
+    begin
+        //ElementCRC32
+        miscScript := getScript(misc, 'SimSettlementsV2:MiscObjects:StageItem');
+        strToHash := FormToAbsStr(misc) + ';' + EditorID(misc) +';' + getMiscLookupKeyFromScript(miscScript);
+        
+        Result := StringCRC32(strToHash);
     end;
 
     procedure addMiscToLookupVerbose(misc, miscScript: IInterface; verbose: boolean);
@@ -647,9 +659,9 @@ unit SS2Lib;
 
 		dataEntry := curArray.O[lookupString];
         dataEntry.S['FormID']   := IntToStr(getRelativeFormId(curFile, misc));
-        dataEntry.S['Hash']     := ElementCRC32(misc);
+        dataEntry.S['Hash']     := getSpawnMiscHash(misc);
 
-        // AddMessage('Wrote this: '+lookupString+' -> '+dataEntry.toString());
+        AddMessage('Added to lookup for '+FormToAbsStr(misc)+': '+lookupString+' -> '+dataEntry.toString());
 
         //miscItemLookupTable.AddObject(hashedString, misc);
     end;
@@ -749,7 +761,7 @@ unit SS2Lib;
         //end;
 
         fId := IntToStr(curFormId);
-        hash := ElementCRC32(misc);
+        hash := getSpawnMiscHash(misc);
         // AddMessage('Adding for '+curFileName+': '+fId+', '+hash);
 
         dataEntry.S['FormID'] := fId;
@@ -772,7 +784,7 @@ unit SS2Lib;
 
 		curFileName := GetFileName(targetFile);
 
-        AddMessage('-> Looking for MISC: '+key+' in '+curFileName);
+        //AddMessage('-> Looking for MISC: '+key+' in '+curFileName);
 		curArray := spawnMiscData.O['files'].O[curFileName].O['spawns'];
 		//i := curArray.IndexOfName(key);
         if (curArray.Types[key] <> JSON_TYPE_OBJECT) then exit;
@@ -893,9 +905,9 @@ unit SS2Lib;
 				exit;
 			end;
 
-            curFormHash := ElementCRC32(curForm);
+            curFormHash := getSpawnMiscHash(curForm);
             if(curFormHash <> curFileHash) then begin
-				AddMessage('Cache file is no longer valid, it will be rebuilt. Hash mismatch for: '+FormToAbsStr(curForm));
+				AddMessage('Cache file is no longer valid, it will be rebuilt. Hash mismatch for: '+FormToAbsStr(curForm)+', file='+curFileHash+', calculated='+curFormHash);
 				Result := true;
 				exit;
 			end;
@@ -919,9 +931,9 @@ unit SS2Lib;
 				exit;
 			end;
 
-            curFormHash := ElementCRC32(curForm);
+            curFormHash := getSpawnMiscHash(curForm);
             if(curFormHash <> curFileHash) then begin
-				AddMessage('Cache file is no longer valid, it will be rebuilt. Hash mismatch for: '+FormToAbsStr(curForm));
+				AddMessage('Cache file is no longer valid, it will be rebuilt. Hash mismatch for: '+FormToAbsStr(curForm)+', file='+curFileHash+', calculated='+curFormHash);
 				Result := true;
 				exit;
 			end;
@@ -1103,7 +1115,7 @@ unit SS2Lib;
     var
         curSpawnScript, curFile: IInterface;
         key, curFileName: string;
-
+        fileFormId: cardinal;
 		curArray: TJsonObject;
     begin
         if(not assigned(misc)) then begin
@@ -1130,14 +1142,19 @@ unit SS2Lib;
 		curArray := spawnMiscData.O['files'].O[curFileName].O['spawns'];
 
 		key := getMiscLookupKeyFromScript(curSpawnScript);
-        AddMessage('Spawn Misc '+EditorID(misc)+' is no longer used, recycling '+key);
+        AddMessage('Spawn Misc '+EditorID(misc)+' '+FormToAbsStr(misc)+' is no longer used, recycling ');
 
 		//i := curArray.IndexOfName(key);
 
 		//i := miscItemLookupTable.indexOf(key);
 		if(curArray.O[key].count > 0) then begin
-			AddMessage('Deleting spawn '+key+' from used list');
-			curArray.delete(curArray.indexOf(key));
+            fileFormId := curArray.O[key].I['FormID'];
+            if(getRelativeFormId(targetFile, misc) <> fileFormId) then begin
+                AddMessage('!!! ERROR !!! FormID mismatch between cached form under '+key+'! Cached: '+IntToHex(fileFormId, 8)+', real: '+FormToAbsStr(misc));
+            end else begin;
+                // AddMessage('Deleting spawn '+key+' from used list '+curArray.O[key].toString());
+                curArray.delete(curArray.indexOf(key));
+            end;
 		end;
 
         deleteScriptProps(curSpawnScript);
@@ -3261,7 +3278,7 @@ unit SS2Lib;
         //getExternalSpawnMiscByParams
         Result := getExternalSpawnMiscByParams(targetFile, iFormID, sPluginName, posX, posY, posZ, rotX, rotY, rotZ, scale, spawnType, spawnName, requirementsItem);
         if(assigned(Result)) then begin
-            AddMessage('Reusing spawn misc '+EditorID(Result));
+            //AddMessage('Reusing spawn misc '+EditorID(Result));
             exit;
         end;
 
@@ -3271,7 +3288,7 @@ unit SS2Lib;
             isNewForm := true;
             Result := getCopyOfTemplate(targetFile, stageItemTemplate, edid);
         end else begin
-            AddMessage('Reusing recycled '+EditorID(Result));
+            AddMessage('Reusing recycled '+FormToAbsStr(Result));
             SetElementEditValues(Result, 'EDID', edid);
         end;
 
@@ -3324,7 +3341,7 @@ unit SS2Lib;
             isNewForm := true;
             Result := getCopyOfTemplate(targetFile, stageItemTemplate, edid);
         end else begin
-            AddMessage('Reusing recycled '+EditorID(Result));
+            AddMessage('Reusing recycled '+EditorID(Result)+' '+FormToAbsStr(Result));
             SetElementEditValues(Result, 'EDID', edid);
         end;
 
