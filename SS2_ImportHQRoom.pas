@@ -72,6 +72,8 @@ unit ImportHqRoom;
         SS2_Tag_HQ_ActionType_RoomConstruction: IInterface;
         SS2_Tag_HQ_ActionType_RoomUpgrade: IInterface;
         defaultUpgradeKw, defaultConstructionKw: IInterface;
+        SS2_SFX_HQProjectType_Administration_Decorate,
+        SS2_WorkshopMenu_HQ_Administration_Decorate : IInterface;
         // SS2_WorkshopMenu_HQ_Engineering_Upgrades_Other
         // SS2_WorkshopMenu_HQ_Facilities_Construction_Other
 		// templates
@@ -1857,6 +1859,9 @@ unit ImportHqRoom;
 		SS2_Tag_HQ_RoomIsClean                  := FindObjectByEdidWithError('SS2_Tag_HQ_RoomIsClean');
         SS2_Tag_HQ_ActionType_RoomConstruction  := FindObjectByEdidWithError('SS2_Tag_HQ_ActionType_RoomConstruction');
         SS2_Tag_HQ_ActionType_RoomUpgrade       := FindObjectByEdidWithError('SS2_Tag_HQ_ActionType_RoomUpgrade');
+        
+        SS2_SFX_HQProjectType_Administration_Decorate   := FindObjectByEdidWithError('SS2_SFX_HQProjectType_Administration_Decorate');
+        SS2_WorkshopMenu_HQ_Administration_Decorate     := FindObjectByEdidWithError('SS2_WorkshopMenu_HQ_Administration_Decorate');
 
         defaultUpgradeKw        := FindObjectByEdidWithError('SS2_WorkshopMenu_HQ_Engineering_Upgrades_Other');
         defaultConstructionKw   := FindObjectByEdidWithError('SS2_WorkshopMenu_HQ_Facilities_Construction_Other');
@@ -3955,7 +3960,7 @@ unit ImportHqRoom;
 		roomUpgradeMisc, roomUpgradeActi: IInterface;
 		upgradeDuration: float;
 
-		roomShapeKeyword, upgradeSlot, actionGroup: IInterface;
+		roomShapeKeyword, upgradeSlot, actionGroup, cobjSfx: IInterface;
 
         // existing stuff
         existingMiscScript, existingActi, existingActiScript, existingCobj, cobjKeyword: IInterface;
@@ -4092,6 +4097,9 @@ unit ImportHqRoom;
 		selectUpgradeSlot.Name := 'selectUpgradeSlot';
 		selectUpgradeSlot.onChange := showRoomUpradeDialog2UpdateOk;
 
+
+        // add the decoration KW
+        addObjectDupIgnore(listKeywordsConstruct, 'Decoration', SS2_WorkshopMenu_HQ_Administration_Decorate);
         // put the new dropdown here
         CreateLabel(frm, secondRowOffset+10, 10+curY, 'Submenu:*');
         //listKeywordsConstruct
@@ -4397,7 +4405,14 @@ unit ImportHqRoom;
                 trim(currentUpgradeDescriptionData.S['designerName']),
                 trim(currentUpgradeDescriptionData.S['designDesc'])
 			);
-
+            
+            cobjSfx := nil;
+            
+            // special hack: if cobjKeyword is SS2_WorkshopMenu_HQ_Administration_Decorate, then use the sfx SS2_SFX_HQProjectType_Administration_Decorate
+            if(isSameForm(cobjKeyword, SS2_WorkshopMenu_HQ_Administration_Decorate)) then begin
+                cobjSfx := SS2_SFX_HQProjectType_Administration_Decorate;
+            end;
+ 
             createRoomUpgradeActivatorsAndCobjs(
                 actiData,
                 roomUpgradeMisc,
@@ -4411,7 +4426,7 @@ unit ImportHqRoom;
                 cobjKeyword,
                 selectActionGroup.ItemIndex,
                 mechanicsDescr,
-                nil
+                cobjSfx
             );
 
             if(actiData <> nil) then begin
