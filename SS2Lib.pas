@@ -3582,8 +3582,8 @@ unit SS2Lib;
         lvlFormList := getScriptProp(rootScript, 'LevelPlansList');
         lvlFormList := getOverriddenForm(lvlFormList, targetFile);
         
-        AddMessage('lvlFormList=');
-        dumpElem(lvlFormList);
+        //AddMessage('lvlFormList=');
+        //dumpElem(lvlFormList);
 
         Result := generateBuildingPlanForLevel(targetFile, rootBlueprint, edidBase, lvlNr);
         Result := getOverriddenForm(Result, targetFile);

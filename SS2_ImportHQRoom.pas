@@ -66,6 +66,7 @@ unit ImportHqRoom;
 		SS2_VirtualResourceCategory_OrganicMaterials: IInterface;
 		SS2_VirtualResourceCategory_MachineParts: IInterface;
 		SS2_VirtualResourceCategory_BuildingMaterials: IInterface;
+        SS2_UsageRequirements_PerformanceSettingOff_Clutter: IInterface;
 		SS2_c_HQ_DailyLimiter_Scrap: IInterface;
         SS2_Tag_HQ_RoomIsClean: IInterface;
         SS2_Tag_HQ_ActionType_RoomConstruction: IInterface;
@@ -1676,7 +1677,8 @@ unit ImportHqRoom;
 		readStringList(listModels, 	   currentCacheFile.O['assets'].A['ActivatorModels']);
 		readStringList(listModelsMisc, currentCacheFile.O['assets'].A['MiscModels']);
 
-		if (listModels.count > 0) or (listModelsMisc.count > 0) then begin
+        // if we had to reload at least one file, also reload all models
+		if (Result.A['filesToReload'].count = 0) and ((listModels.count > 0) or (listModelsMisc.count > 0)) then begin
 			// seems we have enough models
 			Result.B['needModels'] := false;
 		end;
@@ -1849,6 +1851,7 @@ unit ImportHqRoom;
 		SS2_VirtualResourceCategory_OrganicMaterials  := FindObjectByEdidWithError('SS2_VirtualResourceCategory_OrganicMaterials');
 		SS2_VirtualResourceCategory_MachineParts 	  := FindObjectByEdidWithError('SS2_VirtualResourceCategory_MachineParts');
 		SS2_VirtualResourceCategory_BuildingMaterials := FindObjectByEdidWithError('SS2_VirtualResourceCategory_BuildingMaterials');
+		SS2_UsageRequirements_PerformanceSettingOff_Clutter := FindObjectByEdidWithError('SS2_UsageRequirements_PerformanceSettingOff_Clutter');
 
 		SS2_c_HQ_DailyLimiter_Scrap             := FindObjectByEdidWithError('SS2_c_HQ_DailyLimiter_Scrap');
 		SS2_Tag_HQ_RoomIsClean                  := FindObjectByEdidWithError('SS2_Tag_HQ_RoomIsClean');
@@ -2954,7 +2957,6 @@ unit ImportHqRoom;
 
 			selectedSlot := StrToForm(selectedSlotStr);
 			setItemIndexByForm(selectUpgradeSlot, selectedSlot);
-
 		end;
 
 		layoutBrowseUpdateOk(btnOk);
@@ -2964,10 +2966,11 @@ unit ImportHqRoom;
 			layoutName := trim(inputName.Text);
 			layoutPath := trim(inputPath.Text);
 
-			// selectedSlot := nil;
-			//if(selectUpgradeSlot.ItemIndex > 0) then begin
+
 			selectedSlot := ObjectToElement(selectUpgradeSlot.Items.Objects[selectUpgradeSlot.ItemIndex]);
-			//end;
+
+            
+
 			layoutDisplayName := getLayoutDisplayName(layoutName, layoutPath, selectedSlot);
 
             selectedSlotStr := FormToStr(selectedSlot);
@@ -3353,7 +3356,6 @@ unit ImportHqRoom;
         i: integer;
     begin
         Result := nil;
-
         RoomLayouts := getScriptProp(script, 'RoomLayouts');
 
         for i:=0 to ElementCount(RoomLayouts)-1 do begin
@@ -3397,7 +3399,7 @@ unit ImportHqRoom;
 
         designerData := getDesignerObjectsFromUpgradeScript(existingMiscScript);
 
-        if(nil <> designerData) then begin
+        if(assigned(designerData)) then begin
             nameHolder := StrToForm(designerData.S['name']);
             descHolder := StrToForm(designerData.S['desc']);
 
@@ -3421,7 +3423,6 @@ unit ImportHqRoom;
         layoutData: TJsonObject;
         layoutDisplayName, layoutName, layoutPath: string;
     begin
-
         RoomLayouts := getScriptProp(script, 'RoomLayouts');
         for i:=0 to ElementCount(RoomLayouts)-1 do begin
             curLayout := getObjectFromProperty(RoomLayouts, i);
@@ -3688,7 +3689,6 @@ unit ImportHqRoom;
     begin
         dialogParent := findComponentParentWindow(sender);
         currentUpgradeDialog := dialogParent;
-        AddMessage(dialogParent.ClassName + ' ' + dialogParent.Name);
 
 
         yOffset := 10;
@@ -4839,7 +4839,7 @@ unit ImportHqRoom;
 
 	function createRoomLayout(existingElem, hq: IInterface; layoutName, csvPath, upgradeNameSpaceless, slotNameSpaceless: string; upgradeSlot, descriptionMsg, designerMisc: IInterface): IInterface;
 	var
-		resultEdid, layoutNameSpaceless, curLine, curEditorId, curFileName: string;
+		resultEdid, layoutNameSpaceless, curLine, curEditorId, curFileName, slotEdid: string;
 		spawnData: TJsonObject;
 		csvLines, csvCols, spawnObj: TStringList;
 		posX, posY, posZ, rotX, rotY, rotZ, i: integer;
@@ -4869,6 +4869,13 @@ unit ImportHqRoom;
 
 		// put in the slot KW
 		slotKw := findSlotKeywordFromSlotMisc(upgradeSlot);
+        
+        slotEdid := EditorID(upgradeSlot);
+        if(Pos('decoration', LowerCase(slotEdid)) > 0) then begin
+            // Special hack: if the selected slot is a 'Decoration', also use SS2_UsageRequirements_PerformanceSettingOff_Clutter
+            // put this into 'Requirements' on the layout script
+            setScriptProp(resultScript, 'Requirements', SS2_UsageRequirements_PerformanceSettingOff_Clutter);
+        end;
 
 		setScriptProp(resultScript, 'TagKeyword', slotKw);
 		//setScriptProp(resultScript, 'workshopRef', hq);
