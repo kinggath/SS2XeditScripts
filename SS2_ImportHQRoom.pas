@@ -5785,7 +5785,7 @@ unit ImportHqRoom;
             end;
             upgradeEdidPart := upgradeEdidPart+roomShapePart+'_';
 
-            upgradeEdid := generateEdid('HQ'+HqName, upgradeEdidPart + upgradeNameSpaceless); //configMiscEdid := 'SS2_HQ' + findHqNameShort(forHq)+'_Action_AssignRoomConfig_'+kwBase+'_'+roomNameSpaceless;
+            upgradeEdid := generateEdid('HQ'+HqName, upgradeEdidPart + upgradeNameSpaceless);
             upgradeResult := getCopyOfTemplateOA(targetFile, SS2_HQ_Action_RoomUpgrade_Template, upgradeEdid);
         end else begin
             upgradeResult := getOrCreateElementOverride(existingElem, targetFile);
@@ -5855,7 +5855,7 @@ unit ImportHqRoom;
             end;
         end;
 
-        ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', upgradeNameSpaceless);
+        ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', roomShapePart+'_'+upgradeNameSpaceless);
         ActionAvailableGlobal := nil;
 
         if(assigned(existingElem)) then begin
