@@ -66,7 +66,7 @@ unit ImportHqRoom;
 		SS2_VirtualResourceCategory_OrganicMaterials: IInterface;
 		SS2_VirtualResourceCategory_MachineParts: IInterface;
 		SS2_VirtualResourceCategory_BuildingMaterials: IInterface;
-        SS2_UsageRequirements_PerformanceSettingOff_Clutter: IInterface;
+        SS2_UsageRequirements_PerformanceSettingOn_Clutter: IInterface;
 		SS2_c_HQ_DailyLimiter_Scrap: IInterface;
         SS2_Tag_HQ_RoomIsClean: IInterface;
         SS2_Tag_HQ_ActionType_RoomConstruction: IInterface;
@@ -1853,7 +1853,7 @@ unit ImportHqRoom;
 		SS2_VirtualResourceCategory_OrganicMaterials  := FindObjectByEdidWithError('SS2_VirtualResourceCategory_OrganicMaterials');
 		SS2_VirtualResourceCategory_MachineParts 	  := FindObjectByEdidWithError('SS2_VirtualResourceCategory_MachineParts');
 		SS2_VirtualResourceCategory_BuildingMaterials := FindObjectByEdidWithError('SS2_VirtualResourceCategory_BuildingMaterials');
-		SS2_UsageRequirements_PerformanceSettingOff_Clutter := FindObjectByEdidWithError('SS2_UsageRequirements_PerformanceSettingOff_Clutter');
+		SS2_UsageRequirements_PerformanceSettingOn_Clutter := FindObjectByEdidWithError('SS2_UsageRequirements_PerformanceSettingOn_Clutter');
 
 		SS2_c_HQ_DailyLimiter_Scrap             := FindObjectByEdidWithError('SS2_c_HQ_DailyLimiter_Scrap');
 		SS2_Tag_HQ_RoomIsClean                  := FindObjectByEdidWithError('SS2_Tag_HQ_RoomIsClean');
@@ -4887,9 +4887,9 @@ unit ImportHqRoom;
         
         slotEdid := EditorID(upgradeSlot);
         if(Pos('decoration', LowerCase(slotEdid)) > 0) then begin
-            // Special hack: if the selected slot is a 'Decoration', also use SS2_UsageRequirements_PerformanceSettingOff_Clutter
+            // Special hack: if the selected slot is a 'Decoration', also use SS2_UsageRequirements_PerformanceSettingOn_Clutter
             // put this into 'Requirements' on the layout script
-            setScriptProp(resultScript, 'Requirements', SS2_UsageRequirements_PerformanceSettingOff_Clutter);
+            setScriptProp(resultScript, 'Requirements', SS2_UsageRequirements_PerformanceSettingOn_Clutter);
         end;
 
 		setScriptProp(resultScript, 'TagKeyword', slotKw);

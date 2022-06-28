@@ -4,7 +4,7 @@ unit SS2Lib;
 
     const
         // maximal length of editorIDs. Anything longer will be partially hashed
-        maxEdidLength = 99;
+        maxEdidLength = 87; // 99-12, because 12 is the length of DUPLICATE000
 		ss2Filename = 'SS2.esm';
 		wsfrFilename = 'WorkshopFramework.esm';
 		ss2Suffix = '_SS2';
