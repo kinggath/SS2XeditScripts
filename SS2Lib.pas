@@ -55,7 +55,7 @@ unit SS2Lib;
         enableOutpostSubtype = false;
 
 		miscItemCacheFileName = ProgramPath + 'Edit Scripts\SS2\PlotMiscItemCache.json';
-        miscItemCacheFileVersion = 2;
+        miscItemCacheFileVersion = 3;
 
     // variables, templates and such
     var
@@ -110,6 +110,9 @@ unit SS2Lib;
 
         foundationTemplate, // the misc, SS2_PlotFoundation_1x1_Concrete
         foundationTemplate_Cobj: IInterface; // template for making non-terraformer foundation COBJs
+        
+        // subspawner stuff
+        subspawnerTemplate: IInterface;
 
         // desk stuff
         SS2_Tag_ManagementDesk,
@@ -540,7 +543,7 @@ unit SS2Lib;
     begin
         spawnDetails := getScriptProp(miscScript, 'SpawnDetails');
         if (not assigned(spawnDetails(spawnDetails))) then begin
-            AddMessage('No SpawnDetails in a spawn misc, this shouldn''t happen');
+            Result := '';
             exit;
         end;
 
@@ -576,15 +579,28 @@ unit SS2Lib;
 
         Result := getMiscLookupKey(GetFile(miscScript), formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, iType, spawnName, reqItem);
     end;
+    
+    function getSpawnMiscHash(misc: IInterface): string;
+    var
+        miscScript: IInterface;
+        strToHash: string;
+    begin
+        //ElementCRC32
+        miscScript := getScript(misc, 'SimSettlementsV2:MiscObjects:StageItem');
+        strToHash := FormToAbsStr(misc) + ';' + EditorID(misc) +';' + getMiscLookupKeyFromScript(miscScript);
+        
+        Result := StringCRC32(strToHash);
+    end;
 
     procedure addMiscToLookupVerbose(misc, miscScript: IInterface; verbose: boolean);
     var
         oldScript, curFile: IInterface;
 
-        oldIndex: integer;
-        hashedString, lookupString, curFileName, curElemHash, otherElemHash: string;
+        oldIndex, recycledId: integer;
+        hashedString, lookupString, curFileName, otherElemLookupString: string;
         oldMisc: IInterface;
 		curArray, dataEntry: TJsonObject;
+        curFormId: cardinal;
     begin
         // super special workaround:
         if(EditorID(misc) = 'SS2_Template_StageItem') then exit;
@@ -624,12 +640,28 @@ unit SS2Lib;
         if(verbose) then begin
             AddMessage('Adding misc to lookup: '+EditorID(misc)+' -> '+lookupString+' file: '+curFileName);
         end;
+        
+        {
+        curFormId := getRelativeFormId(curFile, misc);
+        otherElemLookupString := findSpawnMisc(curFileName, curFormId);
+        if(otherElemLookupString <> '') then begin
+            // we had this under another key before, delete it
+            AddMessage('### current misc was before under '+otherElemLookupString);
+            curArray.delete(otherElemLookupString);
+        end;
+        }
+        
+        //recycledId := findRecycledMisc(curFileName, curFormId);
+        //if(recycledId >= 0) then begin
+        //    spawnMiscData.O['files'].O[curFileName].A['recycled'].delete(recycledId);
+        //end;
+        
 
 		dataEntry := curArray.O[lookupString];
         dataEntry.S['FormID']   := IntToStr(getRelativeFormId(curFile, misc));
-        dataEntry.S['Hash']     := ElementCRC32(misc);
+        dataEntry.S['Hash']     := getSpawnMiscHash(misc);
 
-        // AddMessage('Wrote this: '+lookupString+' -> '+dataEntry.toString());
+        AddMessage('Added to lookup for '+FormToAbsStr(misc)+': '+lookupString+' -> '+dataEntry.toString());
 
         //miscItemLookupTable.AddObject(hashedString, misc);
     end;
@@ -638,30 +670,104 @@ unit SS2Lib;
     begin
         addMiscToLookupVerbose(misc, miscScript, false);
     end;
+    
+    {
+    function findRecycledMisc(miscFileName: string; miscFormId: cardinal): integer;
+    var
+        i: integer;
+        recycled: TJsonArray;
+        curEntry: TJsonObject;
+        curFormId: cardinal;
+    begin
+        Result := -1;
+        exit; // this only makes everything slower, but doesn't fix the issue...
+        if(spawnMiscData = nil) then begin
+            exit;
+        end;
+        //AddMessage(spawnMiscData.O['files'].toString());
+        recycled := spawnMiscData.O['files'].O[miscFileName].A['recycled'];
+        // check if cache is valid?
+		for i:=0 to recycled.count-1 do begin
+            curEntry := recycled.O[i];
+			curFormId := StrToInt(curEntry.S['FormID']);
+            
+            if(curFormId = miscFormId) then begin
+                Result := i;
+                exit;
+            end;
+        end;
+    end;
+    }
+    function findSpawnMisc(miscFileName: string; miscFormId: cardinal): string;
+    var
+        i: integer;
+        spawns: TJsonObject;
+        curEntry: TJsonObject;
+        curFormId: cardinal;
+        curKey: string;
+    begin
+        Result := '';
+        exit; // this only makes everything slower, but doesn't fix the issue...
+        if(spawnMiscData = nil) then begin
+            exit;
+        end;
+        spawns := spawnMiscData.O['files'].O[miscFileName].O['spawns'];
+        // check if cache is valid?
+		for i:=0 to spawns.count-1 do begin
+			curKey := spawns.names[i];
+            curEntry := spawns.O[curKey];
+            if('' = curEntry.S['FormID']) then begin
+				continue;
+            end;
+
+			curFormId := StrToInt(curEntry.S['FormID']);
+            
+            if(curFormId = miscFormId) then begin
+                Result := curKey;
+                exit;
+            end;
+        end;
+    end;
+    
 
 	procedure addMiscToRecycled(misc: IInterface);
 	var
 		curFile: IInterface;
-		curFileName, fId, hash: string;
+		curFileName, fId, hash, spawnKey: string;
 		curFormId: cardinal;
-        dataEntry: TJsonObject;
+        dataEntry, spawns: TJsonObject;
+        recycled: TJsonArray;
+        existingRecycledIndex: integer;
 	begin
 
 		curFile := GetFile(misc);
 		curFileName := GetFileName(curFile);
 		curFormId := getRelativeFormId(curFile, misc);//getLocalFormId(curFile, FormID(misc));
 
-		//spawnMiscData.O[curFileName].A['recycled'].add(IntToStr(curFormId));
-		dataEntry := spawnMiscData.O['files'].O[curFileName].A['recycled'].addObject();
+		recycled := spawnMiscData.O['files'].O[curFileName].A['recycled'];
+        //existingRecycledIndex := findRecycledMisc(curFileName, curFormId);
+        //if(existingRecycledIndex < 0) then begin
+        dataEntry := recycled.addObject();
+        //end else begin
+        //    AddMessage('### Misc is in the recycled array already');
+        //    dataEntry := recycled.O[i];
+        //end;
+        
+        //spawns := spawnMiscData.O['files'].O[curFileName].O['spawns'];
+        // also don't forget to remove this from spawns
+        //spawnKey := findSpawnMisc(curFileName, curFormId);
+        //if(spawnKey <> '') then begin
+        //    spawns.delete(spawnKey);
+        //end;
 
         fId := IntToStr(curFormId);
-        hash := ElementCRC32(misc);
-        AddMessage('Adding for '+curFileName+': '+fId+', '+hash);
+        hash := getSpawnMiscHash(misc);
+        // AddMessage('Adding for '+curFileName+': '+fId+', '+hash);
 
         dataEntry.S['FormID'] := fId;
         dataEntry.S['Hash']   := hash;
 
-        AddMessage(spawnMiscData.O['files'].O[curFileName].A['recycled'].toString());
+        //AddMessage(spawnMiscData.O['files'].O[curFileName].A['recycled'].toString());
 	end;
 
     function getExternalSpawnMiscByParams(targetFile: IInterface; iFormID: cardinal; sPluginName: string; posX, posY, posZ, rotX, rotY, rotZ, scale: Float; iType: integer; spawnName: string; requirementsItem: IInterface): IInterface;
@@ -678,7 +784,7 @@ unit SS2Lib;
 
 		curFileName := GetFileName(targetFile);
 
-        AddMessage('-> Looking for MISC: '+key+' in '+curFileName);
+        //AddMessage('-> Looking for MISC: '+key+' in '+curFileName);
 		curArray := spawnMiscData.O['files'].O[curFileName].O['spawns'];
 		//i := curArray.IndexOfName(key);
         if (curArray.Types[key] <> JSON_TYPE_OBJECT) then exit;
@@ -799,9 +905,9 @@ unit SS2Lib;
 				exit;
 			end;
 
-            curFormHash := ElementCRC32(curForm);
+            curFormHash := getSpawnMiscHash(curForm);
             if(curFormHash <> curFileHash) then begin
-				AddMessage('Cache file is no longer valid, it will be rebuilt.');
+				AddMessage('Cache file is no longer valid, it will be rebuilt. Hash mismatch for: '+FormToAbsStr(curForm)+', file='+curFileHash+', calculated='+curFormHash);
 				Result := true;
 				exit;
 			end;
@@ -820,14 +926,14 @@ unit SS2Lib;
             curFileHash := curEntry.S['Hash'];
 			curForm := getFormByFileAndFormID(targetFile, curFormId);
 			if(not assigned(curForm)) then begin
-				AddMessage('Cache file is not valid, it will be rebuilt.');
+				AddMessage('Cache file is not valid, it will be rebuilt. Failed to find '+GetFileName(targetFile)+':'+IntToHex(curFormId, 8));
 				Result := true;
 				exit;
 			end;
 
-            curFormHash := ElementCRC32(curForm);
+            curFormHash := getSpawnMiscHash(curForm);
             if(curFormHash <> curFileHash) then begin
-				AddMessage('Cache file is no longer valid, it will be rebuilt.');
+				AddMessage('Cache file is no longer valid, it will be rebuilt. Hash mismatch for: '+FormToAbsStr(curForm)+', file='+curFileHash+', calculated='+curFormHash);
 				Result := true;
 				exit;
 			end;
@@ -881,7 +987,8 @@ unit SS2Lib;
 
         loadRecycledMiscsNoCacheFile(targetFile, true);
 
-		// saveMiscsToCache();
+        // actually why not
+		saveMiscsToCache();
 
 		//AddMessage('Finished building Spawn Misc cache. Found '+IntToStr(miscItemCache.count)+' recycled Miscs, indexed '+IntToStr(miscItemLookupTable.count)+' used Miscs');
 		if(numRecycleableMiscs > 0) then begin
@@ -1008,7 +1115,7 @@ unit SS2Lib;
     var
         curSpawnScript, curFile: IInterface;
         key, curFileName: string;
-
+        fileFormId: cardinal;
 		curArray: TJsonObject;
     begin
         if(not assigned(misc)) then begin
@@ -1035,14 +1142,19 @@ unit SS2Lib;
 		curArray := spawnMiscData.O['files'].O[curFileName].O['spawns'];
 
 		key := getMiscLookupKeyFromScript(curSpawnScript);
-        AddMessage('Spawn Misc '+EditorID(misc)+' is no longer used, recycling '+key);
+        AddMessage('Spawn Misc '+EditorID(misc)+' '+FormToAbsStr(misc)+' is no longer used, recycling ');
 
 		//i := curArray.IndexOfName(key);
 
 		//i := miscItemLookupTable.indexOf(key);
 		if(curArray.O[key].count > 0) then begin
-			AddMessage('Deleting spawn '+key+' from used list');
-			curArray.delete(curArray.indexOf(key));
+            fileFormId := curArray.O[key].I['FormID'];
+            if(getRelativeFormId(targetFile, misc) <> fileFormId) then begin
+                AddMessage('!!! ERROR !!! FormID mismatch between cached form under '+key+'! Cached: '+IntToHex(fileFormId, 8)+', real: '+FormToAbsStr(misc));
+            end else begin;
+                // AddMessage('Deleting spawn '+key+' from used list '+curArray.O[key].toString());
+                curArray.delete(curArray.indexOf(key));
+            end;
 		end;
 
         deleteScriptProps(curSpawnScript);
@@ -2011,6 +2123,8 @@ unit SS2Lib;
 
         terraformerTemplate_Cobj := MainRecordByEditorID(cobjGroup, 'SS2_COBJ_Foundation_TerraformBlock2x2_Dirt'); // the cobj, SS2_COBJ_Foundation_TerraformBlock2x2_Dirt
         foundationTemplate_Cobj := MainRecordByEditorID(cobjGroup, 'SS2_COBJ_Foundation_Concrete_2x2'); // SS2_COBJ_Foundation_Concrete_2x2
+        
+        subspawnerTemplate := MainRecordByEditorID(actiGroup, 'SS2_BreweryJumpTrigger'); // not really the proper template, but close enough
 
         foundationTemplate := MainRecordByEditorID(miscGroup, 'SS2_PlotFoundation_1x1_Concrete');
 
@@ -2858,7 +2972,7 @@ unit SS2Lib;
             exit;
         end;
 
-        for i:=0 to ElementCount(levelSkins)-1 do begin
+        for i:=0 to getPropertyArrayLength(levelSkins)-1 do begin
             curLvlSkin := getObjectFromProperty(levelSkins, i);
             setupStackedMovingForBuildingSkinLevel(targetFlst, curLvlSkin);
         end;
@@ -3119,6 +3233,29 @@ unit SS2Lib;
             recycleSpawnMiscIfPossible(curSpawnItem, lvlRoot, targetFile);
         end;
     end;
+    
+    procedure cleanItemSpawnsForSubspawner(newItemSpawns, lvlRoot, targetFile: IInterface);
+    var
+        i, numOldEntries : integer;
+        curSpawn: IInterface;
+        newItemSpawnsValues, curSpawnItem, curSpawnScript: IInterface;
+    begin
+        // clear the list and erase all the items in it
+        if(not assigned(newItemSpawns)) then begin
+            exit;
+        end;
+
+        //newItemSpawnsValues := ElementByPath(newItemSpawns, 'Value\Array of Object');
+        numOldEntries := getPropertyArrayLength(newItemSpawns);
+        // AddMessage('numOldEntries = '+IntToStr(numOldEntries));
+        for i:=0 to numOldEntries-1 do begin
+            curSpawnItem := getObjectFromProperty(newItemSpawns, 0);
+            removeEntryFromProperty(newItemSpawns, 0);
+            //RemoveElement(newItemSpawns, curSpawnItem);
+
+            recycleSpawnMiscIfPossible(curSpawnItem, lvlRoot, targetFile);
+        end;
+    end;
 
     {
         Creates a stageItemSpawn for formId/filename combination
@@ -3141,7 +3278,7 @@ unit SS2Lib;
         //getExternalSpawnMiscByParams
         Result := getExternalSpawnMiscByParams(targetFile, iFormID, sPluginName, posX, posY, posZ, rotX, rotY, rotZ, scale, spawnType, spawnName, requirementsItem);
         if(assigned(Result)) then begin
-            AddMessage('Reusing spawn misc '+EditorID(Result));
+            //AddMessage('Reusing spawn misc '+EditorID(Result));
             exit;
         end;
 
@@ -3151,7 +3288,7 @@ unit SS2Lib;
             isNewForm := true;
             Result := getCopyOfTemplate(targetFile, stageItemTemplate, edid);
         end else begin
-            AddMessage('Reusing recycled '+EditorID(Result));
+            AddMessage('Reusing recycled '+FormToAbsStr(Result));
             SetElementEditValues(Result, 'EDID', edid);
         end;
 
@@ -3204,7 +3341,7 @@ unit SS2Lib;
             isNewForm := true;
             Result := getCopyOfTemplate(targetFile, stageItemTemplate, edid);
         end else begin
-            AddMessage('Reusing recycled '+EditorID(Result));
+            AddMessage('Reusing recycled '+EditorID(Result)+' '+FormToAbsStr(Result));
             SetElementEditValues(Result, 'EDID', edid);
         end;
 
@@ -3234,7 +3371,7 @@ unit SS2Lib;
         if(scale <> 1.0) then setStructMember(spawnDetails, 'fScale', scale);
 
         if(spawnType > 0) then begin
-            setScriptProp(spawnItemScript, 'iType', spawnType);
+            setScriptProp(spawnItemScript, 'iType', Trunc(spawnType)); // just in case
         end else begin
             deleteScriptProp(spawnItemScript, 'iType');
         end;
@@ -4183,6 +4320,22 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
     }
 
 
+    /////////////// SUBSPAWNER STUFF ///////////////
+    function prepareSubspawnerRoot(targetFile, existingElem: IInterface; edid: string): IInterface;
+    var
+        rootEdid: string;
+        newScript: IInterface;
+    begin
+        rootEdid := generateEdid('', edid);
+        if(not assigned(existingElem)) then begin
+            // we have no acti with the proper script, so we'll just get something else
+            Result := getCopyOfTemplate(targetFile, subspawnerTemplate, rootEdid);
+            RemoveElement(Result, 'VMAD');
+            addScript(Result, 'SimSettlementsV2:ObjectReferences:PlotSubSpawner');
+        end else begin
+            Result := getOverriddenForm(existingElem, targetFile);
+        end;
+    end;
     /////////////// SKIN STUFF ///////////////
 
     function prepareSkinRoot(targetFile, existingElem, targetRoot: IInterface; edid, fullName: string): IInterface;
@@ -4255,14 +4408,21 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         if(not assigned(levelSkinsArray)) then begin
             exit;
         end;
-        for i:=0 to ElementCount(levelSkinsArray)-1 do begin
+        AddMessage('===');
+        dumpElem(levelSkinsArray);
+        AddMessage('===');
+        for i:=0 to getPropertyArrayLength(levelSkinsArray)-1 do begin
 
             curLvl := getObjectFromProperty(levelSkinsarray, i);//LinksTo(ElementByIndex(levelSkinsarray, i));
+            AddMessage('checking '+EditorID(curLvl));
             curLvlScript :=  getScript(curLvl, 'SimSettlementsV2:Weapons:BuildingLevelSkin');
 
             curLvlTarget := getScriptProp(curLvlScript, 'TargetBuildingLevelPlan');
+            AddMessage('got target '+EditorID(curLvlTarget));
+            
             curLvlTargetScript := getScript(curLvlTarget, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
             curLvlNr := getScriptProp(curLvlTargetScript, 'iRequiredLevel');
+            AddMessage('lvl nr '+IntToStr(curLvlNr));
             if(curLvlNr = lvlNr) then begin
                 Result := curLvl;
                 exit;
@@ -5594,11 +5754,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         stageModelStr, stageItemStr, plotEdidStr: string;
     begin
         Result := true;
-{
-        if(assigned(plotMainTypeCombobox)) then begin
-            Result := (plotSubtypeCombobox.ItemIndex > -1 and plotMainTypeCombobox.ItemIndex > -1 and plotSizeCombobox.ItemIndex > -1);
-        end;
-}
+
         if(isConvertDialogActive or (not Result)) then begin
             exit; // exit here
         end;
@@ -5634,6 +5790,45 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         end;
 
         if (stageModelStr = '') and (stageItemStr = '') then begin
+            Result := false;
+            exit;
+        end;
+
+        Result := true;
+    end;
+    
+    function shouldSubspawnerOkBtnBeEnabled(frm: TForm): boolean;
+    var
+        inputName, inputId, inputPrefix: TEdit;
+        stageModelStr, stageItemStr, plotEdidStr: string;
+    begin
+        Result := true;
+
+        if(isConvertDialogActive or (not Result)) then begin
+            exit; // exit here
+        end;
+
+        // otherwise check more
+        ////itemSpawnInput stageModelInput
+        // StageModelFileRequired
+
+        inputId     := TEdit(frm.FindComponent('InputPlotId'));
+        inputPrefix := TEdit(frm.FindComponent('InputModPrefix'));
+
+        if (trim(inputId.text) = '') or (trim(inputPrefix.text) = '') then begin
+            Result := false;
+            exit;
+        end;
+
+        stageItemStr  := trim(itemSpawnInput.text);
+        
+        
+        if(isUpdatingExistingBlueprint) then begin
+            // just allow clicking OK for update at this point
+            exit;
+        end;
+
+        if (stageItemStr = '') then begin
             Result := false;
             exit;
         end;
@@ -5709,6 +5904,12 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         plotDialogOkBtn.enabled := shouldOkBtnBeEnabled(sender.parent);
     end;
 
+    procedure updateSubspawnDialogOkBtnState(sender: TObject);
+    begin
+        if(plotDialogOkBtn = nil) then exit;
+        plotDialogOkBtn.enabled := shouldSubspawnerOkBtnBeEnabled(sender.parent);
+    end;
+    
     procedure updateSkinDialogOkBtnState(sender: TObject);
     begin
         if(plotDialogOkBtn = nil) then exit;
@@ -6347,17 +6548,6 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             //plotId          := Trim(inputPlotEdid.text);
             //modPrefix       := Trim(inputModPrefix.text);
             Result.S['targetPlot'] := Trim(plotEdidInput.Text);
-            {
-            if(packedPlotType >= 0) then begin
-                selectedMainType := plotMainTypeCombobox.ItemIndex;
-                selectedSize     := plotSizeCombobox.ItemIndex;
-                selectedSubType  := getSubtypeByIndex(selectedMainType, plotSubtypeCombobox.ItemIndex);
-
-                Result.I['type'] := packPlotType(selectedMainType, selectedSize, selectedSubType);
-            end else begin
-                Result.I['type'] := -1;
-            end;
-            }
 
             Result.S['modelsFile'] := Trim(stageModelInput.Text);
             Result.S['itemsFileAdd'] := Trim(itemSpawnInput.Text);
@@ -6370,6 +6560,119 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result.B['registerPlot'] := registerCb.checked;
             Result.B['makePreview'] := previewCb.checked;
             Result.B['setupStacking'] := stackCb.checked;
+
+        end;
+
+        frm.free();
+
+    end;
+    
+    function ShowSubspawnerCreateDialog(title, initialPlotId, initialModPrefix: string; isNewEntry, recheckItems: boolean): TJsonObject;
+    var
+        frm: TForm;
+        btnBrowseModel, btnBrowseItems, btnBrowsePlots, btnOk, btnCancel, btnThemes: TButton;
+        resultCode, yOffset: integer;
+        inputName, inputPlotEdid, inputModPrefix: TEdit;
+        descrElem: IInterface;
+        selectedMainType, selectedSize, selectedSubType: integer;
+        packedResultType: integer;
+        spawnsModeSelector: TRadioGroup;
+        themesLabel: TLabel;
+        reckeckItemsCb, onlyAddWithReqsCb: TCheckBox;
+        themesInitialText: string;
+        descLabelRecheck, descLabelOnlyAdd: TLabel;
+    begin
+        Result := nil;
+
+        isUpdatingExistingBlueprint := (not isNewEntry);
+
+        Result := false;
+        frm := CreateDialog(title, 500, 270);
+
+        yOffset := 0;
+
+        CreateLabel(frm, 10, yOffset+18, 'Editor ID:');
+        inputPlotEdid := CreateInput(frm, 100, yOffset+14, initialPlotId);
+        inputPlotEdid.Name := 'InputPlotId';
+        inputPlotEdid.Text := initialPlotId;
+        inputPlotEdid.onChange := updateSubspawnDialogOkBtnState;
+        inputPlotEdid.width := 300;
+
+        yOffset := yOffset + 30;
+        CreateLabel(frm, 10, yOffset+12, 'Mod Prefix:');
+        inputModPrefix := CreateInput(frm, 100, yOffset+8, initialModPrefix);
+        inputModPrefix.Name := 'InputModPrefix';
+        inputModPrefix.Text := initialModPrefix;
+        inputModPrefix.onChange := updateSubspawnDialogOkBtnState;
+        inputModPrefix.width := 300;
+
+        // parent plot edid
+        yOffset := 70;
+
+
+
+        CreateLabel(frm, 10, yOffset+2, 'Stage Items:');
+        itemSpawnInput := CreateInput(frm, 10, yOffset+20, '');
+        itemSpawnInput.Name := 'InputStageItems';
+        itemSpawnInput.Text := '';
+        itemSpawnInput.onChange := updateSubspawnDialogOkBtnState;
+        itemSpawnInput.width := 430;
+
+        btnBrowseItems := CreateButton(frm, 450, yOffset+18, '...');
+        btnBrowseItems.OnClick := browseItemFile;
+
+        yOffset := yOffset + 50;
+
+        // extra input for subspawners
+        reckeckItemsCb := CreateCheckbox(frm, 10, yOffset+2, 'Recheck Items With Requirements');
+        descLabelRecheck := CreateLabel(frm, 10, yOffset + 22, 'If unckecked, any items with the Requirements field filled out will only be tested for those Requirements the first time the items are spawned. '+STRING_LINE_BREAK+'If checked, those Requirements will be re-tested each time the player returns to determine if they should be spawned.');
+        descLabelRecheck.WordWrap := True;
+        descLabelRecheck.Width := 480;
+        descLabelRecheck.Height := 58;
+        reckeckItemsCb.Checked := recheckItems;
+        
+        
+        yOffset := yOffset + 80;
+        {
+        onlyAddWithReqsCb := CreateCheckbox(frm, 10, yOffset+2, 'Only Add Items With Requirements (misnomer?)');
+        descLabelOnlyAdd := CreateLabel(frm, 10, yOffset + 22, 'If checked, items with the Requirements field filled out will never be removed later if the Requirements are no longer true. This should be used only for special cases as it involves retesting and rebuilding every item in this spawn. ');
+        descLabelOnlyAdd.WordWrap := True;
+        descLabelOnlyAdd.Width := 480;
+        descLabelOnlyAdd.Height := 58;
+        yOffset := yOffset + 60;
+        }
+
+
+        
+        // yOffset := yOffset + 170;
+
+        // BUTTONS
+        btnOk := CreateButton(frm, 100, yOffset, 'Start');
+        btnOk.ModalResult := mrYes;
+        btnOk.Default := true;
+
+        plotDialogOkBtn := btnOk;
+
+        btnCancel := CreateButton(frm, 300, yOffset, 'Cancel');
+        btnCancel.ModalResult := mrCancel;
+
+
+        updateSubspawnDialogOkBtnState(btnCancel);
+
+        resultCode := frm.ShowModal();
+
+        if(resultCode = mrYes) then begin
+            Result := TJsonObject.create;
+
+
+
+            Result.S['itemsFile'] := Trim(itemSpawnInput.Text);
+
+
+            Result.S['edid'] := Trim(inputPlotEdid.text);
+            Result.S['prefix'] := Trim(inputModPrefix.text);
+            Result.B['reckeckItems'] := reckeckItemsCb.Checked;
+
 
         end;
 

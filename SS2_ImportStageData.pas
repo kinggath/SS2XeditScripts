@@ -10,15 +10,20 @@ const
     MODE_BP_LEVEL   = 2;
     MODE_SKIN_ROOT  = 4;
     MODE_SKIN_LEVEL = 5;
+    MODE_SUBSPAWNER = 6;
     configFile = ProgramPath + 'Edit Scripts\SS2\SS2_ImportStageData.cfg';
 
+    IMPORT_MODE_PLAN = 0; //regular building plan
+    IMPORT_MODE_SKIN_REPLACE = 1; //skin replace
+    IMPORT_MODE_SKIN_APPEND = 2; //skin append
+    IMPORT_MODE_SUBSPAWNER = 3; //subspawner
 var
     targetElem, targetFile: IInterface;
     globalTargetBlueprintElem: IInterface;
     globalTargetSingleLevelElem: IInterface;
     skinTargetBuildingPlan: IInterface;
     stageFilePath, itemFilePath: string;
-    skinSpawnsMode, setupStacking: boolean;
+    skinSpawnsMode, setupStacking, subspawnerRecheckItems: boolean;
 
     plotName, plotId, modPrefix, plotEdidBase, descriptionBase, confirmationString: string;
 
@@ -34,7 +39,7 @@ var
 
     occupantsOnLevel1, occupantsOnLevel2, occupantsOnLevel3: integer;
 
-
+    importSpawnsMode: integer; // one of the IMPORT_MODE_ ones
 
 
 function isSkinMode(): boolean;
@@ -124,7 +129,7 @@ var
 begin
     levelInput := sender.parent.findComponent('LevelInput');
 
-    if (sender.ItemIndex = 0) or (sender.ItemIndex = 2) then begin
+    if (sender.ItemIndex = 0) or (sender.ItemIndex = 2) or (sender.ItemIndex = 4) then begin
         levelInput.enabled := false;
     end else begin
         levelInput.enabled := true;
@@ -166,6 +171,7 @@ begin
     entries.add('Single Building Plan Level');
     entries.add('Entire Skin');
     entries.add('Single Skin Level');
+    entries.add('Subspawner');
 
     typeSelect := CreateComboBox(frm, 10, 30, 150, entries);
     typeSelect.Style := csDropDownList;
@@ -198,6 +204,10 @@ begin
         end else if(typeSelect.ItemIndex = 2) then begin
             currentMode := MODE_SKIN_ROOT;
             Result := true;
+        end else if(typeSelect.ItemIndex = 4) then begin        
+            currentMode := MODE_SUBSPAWNER;
+            
+            Result := true;
         end else begin
             selectedLevelNr := StrToInt(levelInput.text);
             if(typeSelect.ItemIndex = 1) then begin
@@ -221,10 +231,12 @@ var
     dialogLabel, skinTargetEdid, plotDescription, plotConfirm: string;
     plotType: integer;
 //    plotThemes: TStringList;
-    requreStageModels, isSkin, showThemeSelector, hasSkinTarget, isNewEntry: boolean;
+    requreStageModels, isSkin, showThemeSelector, hasSkinTarget, isNewEntry, reckeckItems: boolean;
     numOcc1, numOcc2, numOcc3: integer;
-    plotLevelScript: IInterface;
+    plotLevelScript, subspawnerScript: IInterface;
     plotLevelNr, plotLevelOcc: integer;
+    
+    
 begin
     Result := false;
 
@@ -304,6 +316,8 @@ begin
             dialogLabel := 'Selected Skin Level: '+plotId;
             isSkin := true;
             showThemeSelector := false;
+        end else if(currentMode = MODE_SUBSPAWNER) then begin
+            dialogLabel := 'Selected Subspawner: '+plotId;
         end;
     end else begin
         // generate new
@@ -324,133 +338,159 @@ begin
         end;
     end;
 
-    // ugh
-    // ShowPlotCreateDialog
-
-    if(isSkin) then begin
-        // old skin target
+    if(currentMode = MODE_SUBSPAWNER) then begin
+        reckeckItems := false;
         if(assigned(targetElem)) then begin
-            skinTargetBuildingPlan := getSkinTargetPlot(targetElem);
+            subspawnerScript := getScript(targetElem, 'SimSettlementsV2:ObjectReferences:PlotSubSpawner');
+            reckeckItems := getScriptPropDefault(subspawnerScript, 'bRecheckItemsWithRequirements', false);
         end;
-
-        // function ShowSkinCreateDialog(title, text, initialPlotName, initialPlotId, initialModPrefix: string; existingPlotTarget: IInterface; showThemeSelector: boolean; initialThemes: TStringList; autoRegister, makePreview: boolean): TJsonObject;
-        resultData := ShowSkinCreateDialog(
-            'Skin Data Import', // title
-            dialogLabel,    // text
-            plotName,       // skin name
-            plotId,         // skin edid
-            modPrefix,      // mod prefix
-            skinTargetBuildingPlan, // target BP
-            showThemeSelector,           // isFullSkin
-            existingPlotThemes,            // initial themes
-            autoRegister,           // autoRegister
-            makePreviews,            // make previews
-            setupStacking,
-            isNewEntry
+    
+        resultData := ShowSubspawnerCreateDialog(
+            'Subspawner Data Import',
+            plotId, modPrefix, isNewEntry, reckeckItems
         );
-
         if(not assigned(resultData)) then begin
             exit;
         end;
-
-        stageFilePath := resultData.S['modelsFile'];
-        itemFilePath  := resultData.S['itemsFileAdd'];
-
-        // currentType   := resultData.I['type'];
-        plotName      := resultData.S['name'];
+        
+        itemFilePath  := resultData.S['itemsFile'];
         plotId        := resultData.S['edid'];
         modPrefix     := resultData.S['prefix'];
-        skinSpawnsMode:= resultData.B['itemsReplace'];
-        skinTargetEdid:= resultData.S['targetPlot'];
-
-		autoRegister     := resultData.B['registerPlot'];
-        makePreviews     := resultData.B['makePreview'];
-        setupStacking    := resultData.B['setupStacking'];
-
-        hasSkinTarget := false;
-
-        if(skinTargetEdid <> '') then begin
-            if(assigned(skinTargetBuildingPlan)) then begin
-                if(skinTargetEdid = EditorID(skinTargetBuildingPlan)) then begin
-                    hasSkinTarget := true;
-                end;
-            end;
-
-            if(not hasSkinTarget) then begin
-                skinTargetBuildingPlan := FindObjectByEdid(skinTargetEdid);
-            end;
-        end else begin
-            if(assigned(skinTargetBuildingPlan)) then hasSkinTarget := true;
-        end;
-
-        // for SS2Lib
-        globalNewFormPrefix := modPrefix;
-        resultData.free();
-
-        if(plotName = '') or (plotId = '') or (modPrefix = '') then begin
-            AddMessage('Plot Name, Plot ID and Mod Prefix must be filled out');
-            exit;
-        end;
+        subspawnerRecheckItems     := resultData.B['reckeckItems'];
+        importSpawnsMode := IMPORT_MODE_SUBSPAWNER;
     end else begin
-        resultData := ShowPlotCreateDialog(
-                'Plot Data Import',
-                dialogLabel,
-                plotName,
-                plotDescription,
-                plotConfirm,
-                plotId,
-                modPrefix,
-                plotType,
-                requreStageModels,
-                showThemeSelector,
-                existingPlotThemes,
-                autoRegister,
-                makePreviews,
+    
+
+        if(isSkin) then begin
+            // old skin target
+            if(assigned(targetElem)) then begin
+                skinTargetBuildingPlan := getSkinTargetPlot(targetElem);
+            end;
+
+            // function ShowSkinCreateDialog(title, text, initialPlotName, initialPlotId, initialModPrefix: string; existingPlotTarget: IInterface; showThemeSelector: boolean; initialThemes: TStringList; autoRegister, makePreview: boolean): TJsonObject;
+            resultData := ShowSkinCreateDialog(
+                'Skin Data Import', // title
+                dialogLabel,    // text
+                plotName,       // skin name
+                plotId,         // skin edid
+                modPrefix,      // mod prefix
+                skinTargetBuildingPlan, // target BP
+                showThemeSelector,           // isFullSkin
+                existingPlotThemes,            // initial themes
+                autoRegister,           // autoRegister
+                makePreviews,            // make previews
                 setupStacking,
-                isNewEntry,
-                numOcc1, numOcc2, numOcc3
+                isNewEntry
             );
 
-        // selectedThemeTagList
+            if(not assigned(resultData)) then begin
+                exit;
+            end;
 
-        if(not assigned(resultData)) then begin
-            exit;
-        end;
+            stageFilePath := resultData.S['modelsFile'];
+            itemFilePath  := resultData.S['itemsFileAdd'];
 
-        // AddMessage(resultData.ToString());
+            // currentType   := resultData.I['type'];
+            plotName      := resultData.S['name'];
+            plotId        := resultData.S['edid'];
+            modPrefix     := resultData.S['prefix'];
+            skinSpawnsMode:= resultData.B['itemsReplace'];
+            skinTargetEdid:= resultData.S['targetPlot'];
+            
+            if(resultData.B['itemsReplace']) then begin
+                importSpawnsMode := IMPORT_MODE_SKIN_REPLACE;
+            end else begin
+                importSpawnsMode := IMPORT_MODE_SKIN_APPEND;
+            end;
 
-        stageFilePath := resultData.S['modelsFile'];
-        itemFilePath  := resultData.S['itemsFile'];
-        currentType   := resultData.I['type'];
-        plotName      := resultData.S['name'];
-        plotId        := resultData.S['edid'];
-        modPrefix     := resultData.S['prefix'];
+            autoRegister     := resultData.B['registerPlot'];
+            makePreviews     := resultData.B['makePreview'];
+            setupStacking    := resultData.B['setupStacking'];
 
-        autoRegister     := resultData.B['registerPlot'];
-        makePreviews     := resultData.B['makePreview'];
-        setupStacking    := resultData.B['setupStacking'];
+            hasSkinTarget := false;
 
-        descriptionBase := resultData.S['description'];
-        confirmationString := resultData.S['confirmation'];
+            if(skinTargetEdid <> '') then begin
+                if(assigned(skinTargetBuildingPlan)) then begin
+                    if(skinTargetEdid = EditorID(skinTargetBuildingPlan)) then begin
+                        hasSkinTarget := true;
+                    end;
+                end;
 
-        occupantsOnLevel1 := resultData.I['occupants1'];
-        occupantsOnLevel2 := resultData.I['occupants2'];
-        occupantsOnLevel3 := resultData.I['occupants3'];
+                if(not hasSkinTarget) then begin
+                    skinTargetBuildingPlan := FindObjectByEdid(skinTargetEdid);
+                end;
+            end else begin
+                if(assigned(skinTargetBuildingPlan)) then hasSkinTarget := true;
+            end;
 
-        // resultData
+            // for SS2Lib
+            globalNewFormPrefix := modPrefix;
+            resultData.free();
 
+            if(plotName = '') or (plotId = '') or (modPrefix = '') then begin
+                AddMessage('Plot Name, Plot ID and Mod Prefix must be filled out');
+                exit;
+            end;
+        end else begin
+            resultData := ShowPlotCreateDialog(
+                    'Plot Data Import',
+                    dialogLabel,
+                    plotName,
+                    plotDescription,
+                    plotConfirm,
+                    plotId,
+                    modPrefix,
+                    plotType,
+                    requreStageModels,
+                    showThemeSelector,
+                    existingPlotThemes,
+                    autoRegister,
+                    makePreviews,
+                    setupStacking,
+                    isNewEntry,
+                    numOcc1, numOcc2, numOcc3
+                );
 
-        // for SS2Lib
-        globalNewFormPrefix := modPrefix;
+            // selectedThemeTagList
 
-        resultData.free();
+            if(not assigned(resultData)) then begin
+                exit;
+            end;
 
-        if(plotName = '') or (plotId = '') or (modPrefix = '') then begin
-            AddMessage('Plot Name, Plot ID and Mod Prefix must be filled out');
-            exit;
+            // AddMessage(resultData.ToString());
+
+            stageFilePath := resultData.S['modelsFile'];
+            itemFilePath  := resultData.S['itemsFile'];
+            currentType   := resultData.I['type'];
+            plotName      := resultData.S['name'];
+            plotId        := resultData.S['edid'];
+            modPrefix     := resultData.S['prefix'];
+
+            autoRegister     := resultData.B['registerPlot'];
+            makePreviews     := resultData.B['makePreview'];
+            setupStacking    := resultData.B['setupStacking'];
+
+            descriptionBase := resultData.S['description'];
+            confirmationString := resultData.S['confirmation'];
+
+            occupantsOnLevel1 := resultData.I['occupants1'];
+            occupantsOnLevel2 := resultData.I['occupants2'];
+            occupantsOnLevel3 := resultData.I['occupants3'];
+
+            // resultData
+            importSpawnsMode := IMPORT_MODE_PLAN;
+
+            // for SS2Lib
+            globalNewFormPrefix := modPrefix;
+
+            resultData.free();
+
+            if(plotName = '') or (plotId = '') or (modPrefix = '') then begin
+                AddMessage('Plot Name, Plot ID and Mod Prefix must be filled out');
+                exit;
+            end;
         end;
     end;
-
     plotEdidBase := StripPrefix(modPrefix, plotId);
 
 
@@ -611,7 +651,7 @@ begin
     Result := (lineRest = '');
 end;
 
-function importItemData(itemsSheet: string; skinReplace: boolean): boolean;
+function importItemData(itemsSheet: string; importMode: ingeger): boolean;
 var
     csvLines, csvCols: TStringList;
     i, j, lvl, stage, stageEnd, maxStage, vendorLevel: integer;
@@ -620,6 +660,7 @@ var
     spawnsArr: TJSONArray;
     curElement, reqsElement: IInterface;
 begin
+    //skinReplace: boolean
     Result := true;
     csvLines := TStringList.create;
     csvLines.LoadFromFile(itemsSheet);
@@ -654,41 +695,74 @@ begin
             csvCols.Free;
             continue;
         end;
+        {
+            0 => Form
+            1 => Pos X
+            2 => Pos Y
+            3 => Pos Z
+            4 => Rot X
+            5 => Rot Y
+            6 => Rot Z
+            7 => Scale
+            8 => iLevel
+            9 => iStageNum
+            10 => iStageEnd
+            11 => iType
+            12 => sVendorType
+            13 => iVendorLevel
+            14 => iOwnerNumber
+            15 => sSpawnName
+            16 => Requirements 
+        }
 
-
-        // pos, rot, scale
-        if (csvCols.count < 9) or
-            (csvCols.Strings[1] = '') or
-            (csvCols.Strings[2] = '') or
-            (csvCols.Strings[3] = '') or
-            (csvCols.Strings[4] = '') or
-            (csvCols.Strings[5] = '') or
-            (csvCols.Strings[6] = '') or
-            (csvCols.Strings[7] = '') or
-            (csvCols.Strings[8] = '') then begin // 8 is level
-            AddMessage('Line "'+curLine+'" is not valid, skipping');
-            csvCols.Free;
-            continue;
-        end;
-//Line "praSS2_CustomChairMarkerSitAndEat_BackONly001,51.0000,-132.0000,0.0000,0.0000,-0.0000,90.0000,1.0000,,,,,,,1,," is not valid, skipping
-//Line "NpcBedSleepingBagChildLay01001,65.2019,180.7893,3.4545,0,-0,245.4087,1,,1,5" is not valid, skipping
-//Line "NpcBedSleepingBagSleep01001,71.0656,73.3275,3.4546,0,-0,91.6733,1,,1,5" is not valid, skipping
-        // find correct level and stage
-        lvl := StrToInt(csvCols.Strings[8]);
-        lvlObj := plotData.O['levels'].O[lvl];
-
-        if (plotData.O['levels'].O[lvl].I['maxStage'] <= 0) then begin
-            // AddMessage('MaxStage not set, finding it');
-            maxStage := findMaxStageForLevel(lvl);
-            plotData.O['levels'].O[lvl].I['maxStage'] := maxStage;
+        if(importMode = IMPORT_MODE_SUBSPAWNER) then begin
+            if (csvCols.count < 8) or
+                (csvCols.Strings[1] = '') or
+                (csvCols.Strings[2] = '') or
+                (csvCols.Strings[3] = '') or
+                (csvCols.Strings[4] = '') or
+                (csvCols.Strings[5] = '') or
+                (csvCols.Strings[6] = '') or
+                (csvCols.Strings[7] = '') then begin 
+                AddMessage('Line "'+curLine+'" is not valid, skipping');
+                csvCols.Free;
+                continue;
+            end;
+            
+            lvl := 1;
+            maxStage := 1;
         end else begin
-            maxStage := plotData.O['levels'].O[lvl].I['maxStage'];
+            if (csvCols.count < 9) or
+                (csvCols.Strings[1] = '') or
+                (csvCols.Strings[2] = '') or
+                (csvCols.Strings[3] = '') or
+                (csvCols.Strings[4] = '') or
+                (csvCols.Strings[5] = '') or
+                (csvCols.Strings[6] = '') or
+                (csvCols.Strings[7] = '') or
+                (csvCols.Strings[8] = '') then begin // 8 is level
+                AddMessage('Line "'+curLine+'" is not valid, skipping');
+                csvCols.Free;
+                continue;
+            end;
+            // find correct level and stage
+            lvl := StrToInt(csvCols.Strings[8]);
+            
+            if (plotData.O['levels'].O[lvl].I['maxStage'] <= 0) then begin
+                maxStage := findMaxStageForLevel(lvl);
+                plotData.O['levels'].O[lvl].I['maxStage'] := maxStage;
+            end else begin
+                maxStage := plotData.O['levels'].O[lvl].I['maxStage'];
+            end;
         end;
+        
+        lvlObj := plotData.O['levels'].O[lvl];
 
         stage := -1;
         stageEnd := -1;
 
-        if(not isSkinMode()) then begin
+        // do this in plot mode ONLY
+        if (importMode = IMPORT_MODE_PLAN) then begin
             if(getArrayElemDefault(csvCols, 9, '') = '') then begin
                 stage := -1;
             end else begin
@@ -704,7 +778,7 @@ begin
 
 
             if(getArrayElemDefault(csvCols, 10, '') <> '') then begin
-                stageEnd := StrToInt(getArrayElemDefault(csvCols, 10, '0'));
+                stageEnd := StrToInt(getArrayElemDefault(csvCols, 10, '-1'));
                 if(stageEnd > stage) then begin
                     if(stageEnd > maxStage) then begin
                         AddMessage('Invalid end stage nr in '+curLine+': '+IntToStr(stageEnd)+'. Stage will be set to '+IntToStr(maxStage));
@@ -722,7 +796,7 @@ begin
             // this is a display point
             // AddMessage('YES IS RIDP');
 
-            if(skinReplace) then begin
+            if(importMode = IMPORT_MODE_SKIN_REPLACE) then begin
                 ridpObj := lvlObj.O['ridpReplace'];//stageObj.A['spawns'];
             end else begin
                 ridpObj := lvlObj.O['ridp'];//stageObj.A['spawns'];
@@ -995,7 +1069,7 @@ begin
                 reqForm := StrToForm(curSpawnObj.S['Requirements']);//getFormByLoadOrderFormID(StrToInt(curSpawnObj.S['Requirements']));
             end;
 
-            AddMessage('Adding Spawn '+EditorID(curSpawnForm));
+            //AddMessage('Adding Spawn '+EditorID(curSpawnForm));
             addStageItemReqs(
                 targetFile,
                 levelBlueprint,
@@ -1203,7 +1277,7 @@ begin
     end;
 end;
 
-function importSpreadsheetsToJson(modelsSheet, itemsSheet: string; spawnsMode: boolean): boolean;
+function importSpreadsheetsToJson(modelsSheet, itemsSheet: string; spawnsMode: integer): boolean;
 begin
     Result := true;
     plotData := TJsonObject.create;
@@ -1220,7 +1294,6 @@ begin
     end;
 
     if(itemsSheet <> '') then begin
-
         if(not importItemData(itemsSheet, spawnsMode)) then begin
             Result := false;
         end;
@@ -1281,7 +1354,7 @@ begin
 
     // SimSettlementsV2:Weapons:BuildingLevelPlan -> just one plan
 
-    if(signature(e) <> 'WEAP') then begin
+    if (signature(e) <> 'WEAP') and (signature(e) <> 'ACTI') then begin
         exit;
     end;
 
@@ -1305,7 +1378,69 @@ begin
     end else if (scriptName = 'SimSettlementsV2:Weapons:BuildingLevelSkin') then begin
         targetElem := e;
         currentMode := MODE_SKIN_LEVEL;
+    end else if (scriptName = 'SimSettlementsV2:ObjectReferences:PlotSubSpawner') then begin
+        targetElem := e;
+        currentMode := MODE_SUBSPAWNER;
     end;
+end;
+
+function fillSubspawner(subspawner, subspawnerScript: IInterface): IInterface;
+var
+    currentLevelSkin, currentLevelScript, curTargetPlotLevel, curModelElem, spawnsArray, curStruct, formToSpawn, reqForm, curMisc: IInterface;
+    curLevelModels, curLevelSpawns, curSpawnObj: TJsonObject;
+    itemSpawnEdid: string;
+    j: integer;
+begin
+ 
+    cleanItemSpawnsForSubspawner(getRawScriptProp(subspawnerScript, 'SubSpawns'), subspawner, targetFile);
+
+    curLevelSpawns := plotData.O['levels'].O['1'].A['spawns'];
+
+    if(curLevelSpawns.count > 0) then begin
+    
+        // this is a pure array of form, not array of struct
+        spawnsArray := getOrCreateScriptPropArrayOfObject(subspawnerScript, 'SubSpawns');
+        for j:=0 to curLevelSpawns.count-1 do begin
+            curSpawnObj := curLevelSpawns.O[j];
+
+            formToSpawn := getOverriddenForm(StrToForm(curSpawnObj.S['Form']), targetFile);
+            if(not assigned(formToSpawn)) then begin
+                AddMessage('=== ERROR: Failed to find form for '+curSpawnObj.S['Form']+'. This is a bug!');
+                continue;
+            end;
+
+            itemSpawnEdid := generateStageItemEdid(
+                EditorID(formToSpawn),
+                plotEdidBase,
+                '1_'+IntToStr(j),
+                ''
+            );
+
+            reqForm := nil;
+            if(curSpawnObj.S['Requirements'] <> '') then begin
+                reqForm := StrToForm(curSpawnObj.S['Requirements']);//getFormByLoadOrderFormID(StrToInt(curSpawnObj.S['Requirements']));
+            end;
+
+            curMisc := createStageItemForm(
+                targetFile,
+                itemSpawnEdid,
+                formToSpawn,
+                curSpawnObj.F['posX'],
+                curSpawnObj.F['posY'],
+                curSpawnObj.F['posZ'],
+                curSpawnObj.F['rotX'],
+                curSpawnObj.F['rotY'],
+                curSpawnObj.F['rotZ'],
+                curSpawnObj.F['scale'],
+                curSpawnObj.I['type'],
+                curSpawnObj.S['spawnName'],
+                reqForm
+            );
+
+            appendObjectToProperty(spawnsArray, curMisc);
+        end;
+    end;
+
 end;
 
 function fillSkinLevelBlueprint(levelBlueprint: IInterface; levelNr: integer; hasModels, hasItems: boolean; skinRoot: IInterface; spawnsPropKey, formName: string): IInterface;
@@ -1415,7 +1550,7 @@ begin
                     curSpawnObj.F['rotY'],
                     curSpawnObj.F['rotZ'],
                     curSpawnObj.F['scale'],
-                    curSpawnObj.F['type'],
+                    curSpawnObj.I['type'],
                     curSpawnObj.S['spawnName'],
                     reqForm
                 );
@@ -1477,6 +1612,28 @@ begin
     end;
 end;
 
+procedure generateSubspawner(tagetSubspawner: IInterface);
+var
+    isNewElem: boolean;
+    subspawnerRoot, subspawnerScript: IInterface;
+begin
+    {
+        itemFilePath  := resultData.S['itemsFile'];
+        plotId        := resultData.S['edid'];
+        modPrefix     := resultData.S['prefix'];
+        subspawnerRecheckItems     := resultData.B['reckeckItems'];
+    }
+    isNewElem := (not assigned(tagetSubspawner));
+    
+    subspawnerRoot   := prepareSubspawnerRoot(targetFile, tagetSubspawner, plotId);
+    subspawnerScript := getScript(subspawnerRoot, 'SimSettlementsV2:ObjectReferences:PlotSubSpawner');
+    //AddMessage('subspawnerRecheckItems='+BoolToStr(subspawnerRecheckItems));
+    setScriptPropDefault(subspawnerScript, 'bRecheckItemsWithRequirements', subspawnerRecheckItems, false);
+    
+    //subspawner, subspawnerScript: IInterface): IInterface;
+    fillSubspawner(subspawnerRoot, subspawnerScript);
+end;
+
 procedure generateSkin(targetSkinElem: IInterface);
 var
     skinRoot, skinScript, curModelElem, currentLevelSkin, currentLevelScript: IInterface;
@@ -1492,16 +1649,8 @@ begin
     hasModels := plotData.B['hasModels'];
     hasItems  := plotData.B['hasItems'];
 
-{
-        stageFilePath := resultData.S['modelsFile'];
-        itemFilePath  := resultData.S['itemsFileAdd'];
-        currentType   := resultData.I['type'];
-        plotName      := resultData.S['name'];
-        plotId        := resultData.S['edid'];
-        modPrefix     := resultData.S['prefix'];
-        skinSpawnsMode:= resultData.B['itemsReplace'];
-}
-    // parse the 3 files
+
+    // parse the 2 files
 
     if(skinSpawnsMode) then begin
         spawnsPropKey := 'ReplaceStageItemSpawns';
@@ -1596,7 +1745,7 @@ begin
     end;
 
 
-    if(not importSpreadsheetsToJson(stageFilePath, itemFilePath, skinSpawnsMode)) then begin
+    if(not importSpreadsheetsToJson(stageFilePath, itemFilePath, importSpawnsMode)) then begin
         AddMessage('Can''t generate blueprint due to errors in data');
         cleanUp();
         exit;
@@ -1625,6 +1774,8 @@ begin
         generateSkin(targetElem);
     end else if(currentMode = MODE_SKIN_LEVEL) then begin
         importSingleSkinLevel(targetElem);
+    end else if(currentMode = MODE_SUBSPAWNER) then begin
+        generateSubspawner(targetElem);
     end;
 
 
