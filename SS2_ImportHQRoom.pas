@@ -5855,7 +5855,7 @@ unit ImportHqRoom;
             end;
         end;
 
-        ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', roomShapePart+'_'+upgradeNameSpaceless);
+        ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', roomShapePart+'_gl_'+upgradeNameSpaceless);
         ActionAvailableGlobal := nil;
 
         if(assigned(existingElem)) then begin
@@ -5866,7 +5866,7 @@ unit ImportHqRoom;
         if(not assigned(ActionAvailableGlobal)) then begin
             // make ActionAvailableGlobal
             // if updating, assume this exists already
-            ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', upgradeNameSpaceless);
+            //ActionAvailableGlobalEdid := generateEdid('HQActionAvailable_'+HqName+'_', upgradeNameSpaceless);
             ActionAvailableGlobal := getCopyOfTemplateOA(targetFile, versionGlobalTemplate, ActionAvailableGlobalEdid);
             // how do I remove the CONST flag?
             SetElementEditValues(ActionAvailableGlobal, 'Record Header\Record Flags\Constant', '0');
