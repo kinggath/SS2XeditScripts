@@ -396,6 +396,31 @@ unit PraUtil;
         }
     end;
 
+    procedure loadMasterList(list: TStringList; theFile: IInterface);
+    var
+		curFile: IInterface;
+		curFileName: string;
+		i: integer;
+	begin
+		for i:=0 to MasterCount(theFile)-1 do begin
+			curFile := MasterByIndex(theFile, i);
+			curFileName := GetFileName(curFile);
+
+            if(list.indexOf(curFileName) < 0) then begin
+                list.addObject(curFileName, curFile);
+                loadMasterList(list, curFile);
+            end;
+		end;
+    end;
+
+
+	function getMasterList(theFile: IInterface): TStringList;
+	begin
+		Result := TStringList.create();
+
+        loadMasterList(Result, theFile);
+	end;
+
     function GetFirstNonOverrideElement(theFile: IwbFile): IInterface;
     var
         curGroup, curRecord: IInterface;
@@ -444,7 +469,8 @@ unit PraUtil;
             Result := getLoadOrderPrefix(theFile, elemFormId);
         end;
     end;
-    
+
+
     {
         Returns the FormID of e with the LO prefix replaced with the corresponding master index in theFile.
         That is, if the record 0x00001234 is from the second master, this will return 0x01001234
@@ -463,7 +489,7 @@ unit PraUtil;
             Result := getLocalFormId(theFile, FormID(e)) or (numMasters shl 24);
             exit;
         end;
-        
+
         for i:=0 to numMasters-1 do begin
             curMaster := MasterByIndex(theFile, i);
             if(isSameFile(mainFile, curMaster)) then begin
@@ -473,7 +499,7 @@ unit PraUtil;
             end;
         end;
     end;
-    
+
     {
         Returns an element by a formId, which is relative to the given file's master list.
         That is, if theFile has at least 2 masters and the given id is 0x01001234, it will
@@ -498,7 +524,7 @@ unit PraUtil;
             Result := getFormByFileAndFormID(theFile, baseId);
             exit;
         end;
-        
+
         // otherwise, from a master
         targetMaster := MasterByIndex(theFile, prefix);
 
@@ -666,9 +692,9 @@ unit PraUtil;
 
         Result := RecordByFormID(theFile, fixedId, false);
     end;
-    
+
     {
-        Returns a record by it's form ID and a file. This should also work 
+        Returns a record by it's form ID and a file. This should also work
     }
     function getFormByFileAndPrefixedFormID(theFile: IInterface; id: cardinal): IInterface;
     var
@@ -716,11 +742,11 @@ unit PraUtil;
         br.Free;
         ms.Free;
     end;
-    
+
     procedure WriteElementRecursive(e: IInterface; bw: TBinaryWriter; index: integer);
     var
         i: Integer;
-        child, maybeLinksTo: IInterface;
+        child, maybeLinksTo: IInterface
     begin
         for i := 0 to ElementCount(e)-1 do begin
             child := ElementByIndex(e, i);
@@ -728,7 +754,7 @@ unit PraUtil;
             // no clue how much is actually necessary here...
             bw.Write(IntToStr(index));
             bw.Write(';');
-            bw.Write(DisplayName(child));// we might want to skip Record Header?
+            bw.Write(DisplayName(child));
             bw.Write(';');
             if(assigned(maybeLinksTo)) then begin
                 bw.Write(FormToAbsStr(child));
@@ -739,56 +765,6 @@ unit PraUtil;
             WriteElementRecursive(child, bw, index+1);
         end;
 
-    end;
- 
-{
-    function WriteElementRecursive(e: IInterface; bw: TBinaryWriter; index: integer): string;
-    var
-        i: Integer;
-        child, maybeLinksTo: IInterface;
-    begin
-        for i := 0 to ElementCount(e)-1 do begin
-            child := ElementByIndex(e, i);
-            maybeLinksTo := LinksTo(child);
-            // no clue how much is actually necessary here...
-            Result := Result + IntToStr(index);
-            Result := Result + ';';
-            Result := Result + (DisplayName(child));
-            Result := Result + ';';
-            bw.Write(IntToStr(index));
-            bw.Write(';');
-            bw.Write(DisplayName(child));// we might want to skip Record Header?
-            bw.Write(';');
-            if(assigned(maybeLinksTo)) then begin
-                Result := Result + FormToAbsStr(child);
-                bw.Write(FormToAbsStr(child));
-            end else begin
-                Result := Result + GetEditValue(child);
-                bw.Write(GetEditValue(child));
-            end;
-
-            Result := Result + WriteElementRecursive(child, bw, index+1);
-        end;
-
-    end;
-    }
-    function StreamToString(aStream: TStream): string;
-    var
-        SS: TStringStream;
-    begin
-      if aStream <> nil then
-      begin
-        SS := TStringStream.Create('');
-        try
-          SS.CopyFrom(aStream, 0);  // No need to position at 0 nor provide size
-          Result := SS.DataString;
-        finally
-          SS.Free;
-        end;
-      end else
-      begin
-        Result := '';
-      end;
     end;
 
 
@@ -804,9 +780,8 @@ unit PraUtil;
         WriteElementRecursive(e, bw, 0);
 
         bw.Free;
-        br := TBinaryReader.Create(ms);
-        //AddMessage('ElementCRC32('+FormToAbsStr(e)+') -> '+test);
         ms.Position := 0;
+        br := TBinaryReader.Create(ms);
         Result := wbCRC32Data(br.ReadBytes(ms.Size));
         br.Free;
         ms.Free;
@@ -1711,7 +1686,7 @@ unit PraUtil;
             exit;
         end;
     end;
-    
+
     {
         Gets the name for the first script, in case the object type or such depends on that
     }
@@ -1880,7 +1855,7 @@ unit PraUtil;
 
         Result := getValueAsVariant(prop, defaultValue);
     end;
-    
+
     function getScriptPropType(script: IInterface; propName: String): string;
     var
         prop, propVal: IInterface;
@@ -2106,7 +2081,6 @@ unit PraUtil;
         end;
     end;
 
-
     {
         Set the value of a raw script property or struct member
     }
@@ -2199,7 +2173,6 @@ unit PraUtil;
     var
         prevValue: variant;
     begin
-        
         if(value = default) then begin
             // check if we should clean out the existing value
             prevValue := getScriptProp(script, propName);
@@ -2345,7 +2318,7 @@ unit PraUtil;
         curStuff := ElementByPath(ElementByIndex(propValue, i), 'Object v2\FormID');
         Result := LinksTo(curStuff);
     end;
-    
+
     function getPropertyArrayLength(prop: IInterface): integer;
     var
         typeStr: string;
@@ -2355,7 +2328,7 @@ unit PraUtil;
         typeStr := GetElementEditValues(prop, 'Type');
         if(typeStr <> '') then begin
             if(not strStartsWith(typeStr, 'Array of')) then exit;
-            
+
             propValue := ElementByPath(prop, 'Value\'+typeStr);
             if(not assigned(propValue)) then begin
                 exit;
@@ -2363,10 +2336,10 @@ unit PraUtil;
         end else begin
             propValue := prop;
         end;
-        
+
         Result := ElementCount(propValue);
     end;
-    
+
     {
         Removes an entry from an array property at the given index.
     }
@@ -2384,7 +2357,7 @@ unit PraUtil;
         end;
 
         RemoveElement(propValue, i);
-        
+
     end;
 
     {
@@ -2586,6 +2559,36 @@ unit PraUtil;
             end;
         end;
     end;
+
+    function getWinningOverrideBefore(sourceElem: IInterface; notInThisFile: IwbFile): IInterface;
+    var
+        masterElem, curOverride, prevOverride: IINterface;
+        numOverrides, i: integer;
+        targetFileName: string;
+    begin
+
+        masterElem := MasterOrSelf(sourceElem);
+        targetFileName := GetFileName(targetFile);
+        Result := masterElem;
+
+        if(FilesEqual(notInThisFile,  GetFile(masterElem))) then begin
+            Result := nil;
+            exit;
+        end;
+
+        numOverrides := OverrideCount(masterElem);
+        prevOverride := masterElem;
+        for i:=0 to numOverrides-1 do begin
+            curOverride := OverrideByIndex(masterElem, i);
+            Result := prevOverride;
+
+            if (FilesEqual(GetFile(curOverride), notInThisFile)) then begin
+                exit;
+            end;
+            prevOverride := curOverride;
+        end;
+    end;
+
 
     function getExistingElementOverrideOrClosest(sourceElem: IInterface; targetFile: IwbFile): IInterface;
     var
