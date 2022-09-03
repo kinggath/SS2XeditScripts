@@ -106,49 +106,6 @@ unit ImportHqRoom;
         currentUpgradeDialog: TForm;
 
 
-    function getStringAfter(str, separator: string): string;
-    var
-        p: integer;
-    begin
-
-        p := Pos(separator, str);
-        if(p <= 0) then begin
-            Result := str;
-            exit;
-        end;
-
-        p := p + length(separator);
-
-        Result := copy(str, p, length(str)-p+1);
-    end;
-
-    function getRoomShapeKeywordFromConfig(roomConfig: IInterface): IInterface;
-    var
-        configScript: IInterface;
-    begin
-        configScript := getScript(roomConfig, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
-        // -> SS2C2_HQGNN_Action_AssignRoomConfig_GNN256BoxShape_Bathroom "Bathroom" [MISC:0401F0BE]
-        Result := getScriptProp(configScript, 'RoomShapeKeyword');
-    end;
-
-    function getRoomShapeUniquePart(str: string): string;
-    var
-        edid: string;
-        p: integer;
-    begin
-        Result := getStringAfter(str, '_Tag_RoomShape_');
-    end;
-
-	function StringRepeat(str: string; len: integer): string;
-	var
-		i: integer;
-	begin
-		Result := '';
-		for i:=0 to len-1 do begin
-			Result := Result + str;
-		end;
-	end;
-
     function getFakeClipboardText(): string;
     var
         helper: TStringList;

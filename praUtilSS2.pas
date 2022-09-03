@@ -1402,7 +1402,7 @@ unit PraUtil;
 
         Result := ElementAssign(elemAtPath, HighInteger, nil, False);
     end;
-
+    
     {
         Removes the elem located at path from elem.
     }
@@ -1509,6 +1509,32 @@ unit PraUtil;
     begin
         Result := strEndsWith(LowerCase(haystack), LowerCase(needle));
     end;
+    
+    function getStringAfter(str, separator: string): string;
+    var
+        p: integer;
+    begin
+
+        p := Pos(separator, str);
+        if(p <= 0) then begin
+            Result := str;
+            exit;
+        end;
+
+        p := p + length(separator);
+
+        Result := copy(str, p, length(str)-p+1);
+    end;
+
+	function StringRepeat(str: string; len: integer): string;
+	var
+		i: integer;
+	begin
+		Result := '';
+		for i:=0 to len-1 do begin
+			Result := Result + str;
+		end;
+	end;
 
     function strUpperCaseFirst(str: string): string;
     var
@@ -2302,6 +2328,49 @@ unit PraUtil;
 
         SetLinksTo(ElementByPath(newEntry, 'Object v2\FormID'), newObject);
     end;
+    
+    {
+        Appends an object to an "Array of Object" property value, unless it already exists
+    }
+    procedure ensurePropertyHasObject(prop: IInterface; newObject: IInterface);
+    var
+        newEntry, propValue, curEntry: IInterface;
+        i: integer;
+    begin
+        propValue := ElementByPath(prop, 'Value\Array of Object');
+        if(not assigned(propValue)) then begin
+            propValue := prop; // assume we were given the array of object already
+        end;
+        
+        for i:=0 to ElementCount(propValue)-1 do begin
+            curEntry := ElementByIndex(propValue, i);
+            if(IsSameForm(newObject, PathLinksTo(curEntry, 'Object v2\FormID'))) then begin
+                exit;
+            end;
+        end;
+
+        newEntry := ElementAssign(propValue, HighInteger, nil, false);
+
+        SetPathLinksTo(newEntry, 'Object v2\FormID', newObject);
+    end;
+    
+    procedure removeObjectFromProperty(prop: IInterface; objectToRemove: IInterface);
+    var
+        newEntry, propValue, curEntry: IInterface;
+        i: integer;
+    begin
+        propValue := ElementByPath(prop, 'Value\Array of Object');
+        if(not assigned(propValue)) then begin
+            propValue := prop; // assume we were given the array of object already
+        end;
+        
+        for i:=0 to ElementCount(propValue)-1 do begin
+            curEntry := ElementByIndex(propValue, i);
+            if(IsSameForm(objectToRemove, PathLinksTo(curEntry, 'Object v2\FormID'))) then begin
+                RemoveElement(propValue, i);
+            end;
+        end;
+    end;
 
     {
         Gets an object from an "Array of Object" property value at the given index
@@ -2990,5 +3059,4 @@ unit PraUtil;
     begin
         dumpElemWithPrefix(e, '');
     end;
-
 end.
