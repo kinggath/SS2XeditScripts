@@ -110,7 +110,7 @@ unit SS2Lib;
 
         foundationTemplate, // the misc, SS2_PlotFoundation_1x1_Concrete
         foundationTemplate_Cobj: IInterface; // template for making non-terraformer foundation COBJs
-        
+
         // subspawner stuff
         subspawnerTemplate: IInterface;
 
@@ -579,7 +579,7 @@ unit SS2Lib;
 
         Result := getMiscLookupKey(GetFile(miscScript), formToSpawn, posX, posY, posZ, rotX, rotY, rotZ, scale, iType, spawnName, reqItem);
     end;
-    
+
     function getSpawnMiscHash(misc: IInterface): string;
     var
         miscScript: IInterface;
@@ -588,7 +588,7 @@ unit SS2Lib;
         //ElementCRC32
         miscScript := getScript(misc, 'SimSettlementsV2:MiscObjects:StageItem');
         strToHash := FormToAbsStr(misc) + ';' + EditorID(misc) +';' + getMiscLookupKeyFromScript(miscScript);
-        
+
         Result := StringCRC32(strToHash);
     end;
 
@@ -640,7 +640,7 @@ unit SS2Lib;
         if(verbose) then begin
             AddMessage('Adding misc to lookup: '+EditorID(misc)+' -> '+lookupString+' file: '+curFileName);
         end;
-        
+
         {
         curFormId := getRelativeFormId(curFile, misc);
         otherElemLookupString := findSpawnMisc(curFileName, curFormId);
@@ -650,12 +650,12 @@ unit SS2Lib;
             curArray.delete(otherElemLookupString);
         end;
         }
-        
+
         //recycledId := findRecycledMisc(curFileName, curFormId);
         //if(recycledId >= 0) then begin
         //    spawnMiscData.O['files'].O[curFileName].A['recycled'].delete(recycledId);
         //end;
-        
+
 
 		dataEntry := curArray.O[lookupString];
         dataEntry.S['FormID']   := IntToStr(getRelativeFormId(curFile, misc));
@@ -670,7 +670,7 @@ unit SS2Lib;
     begin
         addMiscToLookupVerbose(misc, miscScript, false);
     end;
-    
+
     {
     function findRecycledMisc(miscFileName: string; miscFormId: cardinal): integer;
     var
@@ -690,7 +690,7 @@ unit SS2Lib;
 		for i:=0 to recycled.count-1 do begin
             curEntry := recycled.O[i];
 			curFormId := StrToInt(curEntry.S['FormID']);
-            
+
             if(curFormId = miscFormId) then begin
                 Result := i;
                 exit;
@@ -721,14 +721,14 @@ unit SS2Lib;
             end;
 
 			curFormId := StrToInt(curEntry.S['FormID']);
-            
+
             if(curFormId = miscFormId) then begin
                 Result := curKey;
                 exit;
             end;
         end;
     end;
-    
+
 
 	procedure addMiscToRecycled(misc: IInterface);
 	var
@@ -752,7 +752,7 @@ unit SS2Lib;
         //    AddMessage('### Misc is in the recycled array already');
         //    dataEntry := recycled.O[i];
         //end;
-        
+
         //spawns := spawnMiscData.O['files'].O[curFileName].O['spawns'];
         // also don't forget to remove this from spawns
         //spawnKey := findSpawnMisc(curFileName, curFormId);
@@ -1671,7 +1671,7 @@ unit SS2Lib;
             end;
         end;
     end;
-    
+
     function getNumOccupants(plot: IInterface; num: integer): integer;
     var
         levelPlan, curLvlScript: IInterface;
@@ -1682,12 +1682,12 @@ unit SS2Lib;
             exit;
         end;
         levelPlan := getOverriddenForm(levelPlan, targetFile);
-        
+
         curLvlScript :=  getScript(levelPlan, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
         //curLvlNr := getScriptProp(curLvlScript, 'iRequiredLevel');
         //iMaxOccupants
         Result := getScriptPropDefault(curLvlScript, 'iMaxOccupants', 1);
-        
+
     end;
 
     function getPlotThemes(plot: IInterface): TStringList;
@@ -2123,7 +2123,7 @@ unit SS2Lib;
 
         terraformerTemplate_Cobj := MainRecordByEditorID(cobjGroup, 'SS2_COBJ_Foundation_TerraformBlock2x2_Dirt'); // the cobj, SS2_COBJ_Foundation_TerraformBlock2x2_Dirt
         foundationTemplate_Cobj := MainRecordByEditorID(cobjGroup, 'SS2_COBJ_Foundation_Concrete_2x2'); // SS2_COBJ_Foundation_Concrete_2x2
-        
+
         subspawnerTemplate := MainRecordByEditorID(actiGroup, 'SS2_BreweryJumpTrigger'); // not really the proper template, but close enough
 
         foundationTemplate := MainRecordByEditorID(miscGroup, 'SS2_PlotFoundation_1x1_Concrete');
@@ -2880,7 +2880,7 @@ unit SS2Lib;
         stackedFormlistCache := targetFlst;
         Result := targetFlst;
     end;
-    
+
     // adds either modelOrSrcFlst to targetFlst, or all entries of it, if it's a formlist
     procedure addToStackEnabledFormList(targetFlst, modelOrSrcFlst: IInterface);
     var
@@ -2907,7 +2907,7 @@ unit SS2Lib;
         targetFlst := getStackEnabledFormList(targetFile);
         addToStackEnabledFormList(targetFlst, model);
     end;
-    
+
     procedure setupStackedMovingForBuildingPlanLevel(targetFlst, plan: IInterface);
     var
         planModels, planScript, modelList, curModel: IInterface;
@@ -2938,7 +2938,7 @@ unit SS2Lib;
             AddMessage('Adding build mats '+EditorID(buildMats));
             addToStackEnabledFormList(targetFlst, buildMats);
         end;
-        
+
         if(listLength = 0) then begin
             AddMessage('WARNING: this building plan has an empty LevelPlansList! '+FullPath(planList));
             exit;
@@ -2948,7 +2948,7 @@ unit SS2Lib;
             setupStackedMovingForBuildingPlanLevel(targetFlst, curPlan);
         end;
     end;
-    
+
     procedure setupStackedMovingForBuildingSkinLevel(targetFlst, skin: IInterface);
     var
         skinScript, ReplaceStageModel: IInterface;
@@ -2966,7 +2966,7 @@ unit SS2Lib;
         listLength, i: integer;
     begin
         skinScript := getScript(skin, 'SimSettlementsV2:Weapons:BuildingPlan');
-        
+
         levelSkins := getScriptProp(skinScript, 'LevelSkins');
         if(not assigned(levelSkins)) then begin
             exit;
@@ -2977,7 +2977,7 @@ unit SS2Lib;
             setupStackedMovingForBuildingSkinLevel(targetFlst, curLvlSkin);
         end;
     end;
-    
+
     // content can be a whole blueprint, a bp level, a whole skin, or a skin level
     // adds all of it's models to the stack enabled list in targetFile
     function addUsedModelsToStackEnabledList(targetFlst, content: IInterface): boolean;
@@ -3001,7 +3001,7 @@ unit SS2Lib;
             Result := true;
         end;
     end;
-    
+
     // content can be a whole blueprint, a bp level, a whole skin, or a skin level
     // adds all of it's models to the stack enabled list in targetFile
     procedure setupStackedMovementForContent(targetFile, content: IInterface);
@@ -3233,7 +3233,7 @@ unit SS2Lib;
             recycleSpawnMiscIfPossible(curSpawnItem, lvlRoot, targetFile);
         end;
     end;
-    
+
     procedure cleanItemSpawnsForSubspawner(newItemSpawns, lvlRoot, targetFile: IInterface);
     var
         i, numOldEntries : integer;
@@ -3718,7 +3718,7 @@ unit SS2Lib;
         rootScript := getScript(rootBlueprint, 'SimSettlementsV2:Weapons:BuildingPlan');
         lvlFormList := getScriptProp(rootScript, 'LevelPlansList');
         lvlFormList := getOverriddenForm(lvlFormList, targetFile);
-        
+
         //AddMessage('lvlFormList=');
         //dumpElem(lvlFormList);
 
@@ -4419,7 +4419,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
             curLvlTarget := getScriptProp(curLvlScript, 'TargetBuildingLevelPlan');
             AddMessage('got target '+EditorID(curLvlTarget));
-            
+
             curLvlTargetScript := getScript(curLvlTarget, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
             curLvlNr := getScriptProp(curLvlTargetScript, 'iRequiredLevel');
             AddMessage('lvl nr '+IntToStr(curLvlNr));
@@ -5783,7 +5783,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
                 exit;
             end;
         end;
-        
+
         if(isUpdatingExistingBlueprint) then begin
             // just allow clicking OK for update at this point
             exit;
@@ -5796,7 +5796,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
         Result := true;
     end;
-    
+
     function shouldSubspawnerOkBtnBeEnabled(frm: TForm): boolean;
     var
         inputName, inputId, inputPrefix: TEdit;
@@ -5821,8 +5821,8 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         end;
 
         stageItemStr  := trim(itemSpawnInput.text);
-        
-        
+
+
         if(isUpdatingExistingBlueprint) then begin
             // just allow clicking OK for update at this point
             exit;
@@ -5909,7 +5909,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         if(plotDialogOkBtn = nil) then exit;
         plotDialogOkBtn.enabled := shouldSubspawnerOkBtnBeEnabled(sender.parent);
     end;
-    
+
     procedure updateSkinDialogOkBtnState(sender: TObject);
     begin
         if(plotDialogOkBtn = nil) then exit;
@@ -6231,9 +6231,9 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
             //confirmationInput confirmationAutoCb
         end;
-        
-        
-        
+
+
+
         CreateLabel(frm, 150, yOffset, 'L1');
         CreateLabel(frm, 200, yOffset, 'L2');
         CreateLabel(frm, 250, yOffset, 'L3');
@@ -6242,25 +6242,25 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         inputNumOccupants1 := CreateInput(frm, 150, yOffset, IntToStr(initOcc1));
         inputNumOccupants2 := CreateInput(frm, 200, yOffset, IntToStr(initOcc2));
         inputNumOccupants3 := CreateInput(frm, 250, yOffset, IntToStr(initOcc3));
-        
+
         inputNumOccupants1.width := 40;
         inputNumOccupants2.width := 40;
         inputNumOccupants3.width := 40;
-        
+
         if(initOcc1 <= 0) then begin
             inputNumOccupants1.enabled := false;
         end;
-        
+
         if(initOcc2 <= 0) then begin
             inputNumOccupants2.enabled := false;
         end;
-        
+
         if(initOcc3 <= 0) then begin
             inputNumOccupants3.enabled := false;
         end;
-        
+
         yOffset := yOffset + 25;
-        
+
 
         registerCb := CreateCheckbox(frm, 10, yOffset+2, 'Register Building Plan');
         previewCb  := CreateCheckbox(frm, 160, yOffset+2, 'Setup building previews');
@@ -6337,7 +6337,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result.B['registerPlot'] := registerCb.checked;
             Result.B['makePreview'] := previewCb.checked;
             Result.B['setupStacking'] := stackCb.checked;
-            
+
             //occ1 := curIndex := tryToParseInt(substr);
             occ1 := tryToParseInt(inputNumOccupants1.Text);
             occ2 := tryToParseInt(inputNumOccupants2.Text);
@@ -6386,9 +6386,9 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         if (assigned(existingPlotTarget) or (not isFullSkin)) then begin
             PlotEdidInputRequired := false;
         end;
-        
+
         isUpdatingExistingBlueprint := (not isNewEntry);
-        
+
         StageModelFileRequired := false;
         isConvertDialogActive := false;
         Result := false;
@@ -6566,7 +6566,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         frm.free();
 
     end;
-    
+
     function ShowSubspawnerCreateDialog(title, initialPlotId, initialModPrefix: string; isNewEntry, recheckItems: boolean): TJsonObject;
     var
         frm: TForm;
@@ -6630,8 +6630,8 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         descLabelRecheck.Width := 480;
         descLabelRecheck.Height := 58;
         reckeckItemsCb.Checked := recheckItems;
-        
-        
+
+
         yOffset := yOffset + 80;
         {
         onlyAddWithReqsCb := CreateCheckbox(frm, 10, yOffset+2, 'Only Add Items With Requirements (misnomer?)');
@@ -6643,7 +6643,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         }
 
 
-        
+
         // yOffset := yOffset + 170;
 
         // BUTTONS
@@ -6680,4 +6680,392 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
     end;
 
+
+    function getRoomConfigName(configMisc: IInterface): string;
+	var
+		edid, confName: string;
+	begin
+		edid := EditorID(configMisc);
+		//edid := StringReplace(edid, 'SS2_HQGNN_Action_AssignRoomConfig_', '', [rfReplaceAll]);
+		edid := regexReplace(edid, '[^_]+_HQ[^_]*_Action_AssignRoomConfig_', '');
+		confName := GetElementEditValues(configMisc, 'FULL');
+
+		Result := confName + ' (' + edid+')';
+	end;
+
+    function findRoomConfigFromRoomUpgrade(existingElem: IInterface): IInterface;
+    var
+        upgradeScript, TargetUpgradeSlot, RoomLayouts, curLayout: IInterface;
+        i: integer;
+    begin
+        upgradeScript := getScript(existingElem, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
+
+
+        // check upgrade slot
+        TargetUpgradeSlot := getScriptProp(upgradeScript, 'TargetUpgradeSlot');
+        if(assigned(TargetUpgradeSlot)) then begin
+            Result := findRoomConfigFromSlotMisc(TargetUpgradeSlot);
+            if(assigned(Result)) then begin
+                exit;
+            end;
+        end;
+
+
+        // otherwise check the layouts
+        RoomLayouts := getScriptProp(upgradeScript, 'RoomLayouts');
+        if(assigned(RoomLayouts)) then begin
+            for i:=0 to ElementCount(RoomLayouts)-1 do begin
+                curLayout := getObjectFromProperty(RoomLayouts, i);
+                AddMessage('Checking layout '+EditorID(curLayout));
+                Result := findRoomConfigFromLayout(curLayout);
+                if(assigned(Result)) then begin
+                    exit;
+                end;
+            end;
+        end;
+
+        Result := nil;
+    end;
+
+
+    function findRoomConfigFromSlotMisc(slot: IInterface): IInterface;
+    var
+        i, numRefs: integer;
+        curRef, refScript, RoomUpgradeSlots: IInterface;
+    begin
+        for i:=0 to ReferencedByCount(slot)-1 do begin
+            curRef := ReferencedByIndex(slot, i);
+            refScript := getScript(curRef, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
+            if(assigned(refScript)) then begin
+                RoomUpgradeSlots := getScriptProp(refScript, 'RoomUpgradeSlots');
+                if(hasObjectInProperty(RoomUpgradeSlots, slot)) then begin
+                    Result := curRef;
+                    exit;
+                end;
+                continue;
+            end;
+            refScript := getScript(curRef, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
+            if(assigned(refScript)) then begin
+                RoomUpgradeSlots := getScriptProp(refScript, 'AdditionalUpgradeSlots');
+                if(hasObjectInProperty(RoomUpgradeSlots, slot)) then begin
+                    Result := findRoomConfigFromRoomUpgrade(curRef);
+                    if(assigned(Result)) then exit;
+                end;
+            end;
+        end;
+    end;
+
+    function findRoomConfigFromLayout(layout: IInterface): IInterface;
+    var
+        slotMisc: IInterface;
+    begin
+        slotMisc := findSlotMiscFromLayout(layout);
+        Result := findRoomConfigFromSlotMisc(slotMisc);
+        if(assigned(Result)) then begin
+            exit;
+        end;
+
+        Result := nil;
+    end;
+    
+    function findSlotMiscFromKeyword(keyword: IInterface): IInterface;
+    var
+        curRef, UpgradeSlotKeyword: IInterface;
+        i: integer;
+    begin
+        for i:=0 to ReferencedByCount(keyword)-1 do begin
+            curRef := ReferencedByIndex(keyword, i);
+            if(signature(curRef) = 'MISC') then begin
+                UpgradeSlotKeyword := findSlotKeywordFromSlotMisc(curRef);
+
+                if(equals(UpgradeSlotKeyword, keyword)) then begin
+                    Result := curRef;
+                    exit;
+                end;
+            end;
+        end;
+    end;
+
+    function findSlotMiscFromLayout(layout: IInterface): IInterface;
+    var
+        layoutScript, TagKeyword: IInterface;
+    begin
+        layoutScript := getScript(layout, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
+        TagKeyword := getScriptProp(layoutScript, 'TagKeyword');
+        // find the misc from the kw
+        Result := findSlotMiscFromKeyword(TagKeyword);
+    end;
+    
+    function GetRoomSlotName(slotMisc: IInterface): string;
+	var
+		miscScript, slotKw: IInterface;
+	begin
+		Result := GetElementEditValues(slotMisc, 'FULL');
+		if(Result <> '') then exit;
+
+		slotKw := findSlotKeywordFromSlotMisc(slotMisc);
+		Result := GetElementEditValues(slotKw, 'FULL');
+		if(Result <> '') then exit;
+
+		// otherwise, mh
+		Result := regexExtract(EditorID(slotMisc), '_([^_]+)$', 1);
+		if(Result <> '') then exit;
+
+		Result := EditorID(slotMisc);
+	end;
+
+    function findSlotKeywordFromSlotMisc(slotMisc: IInterface): IInterface;
+    var
+        curScript: IInterface;
+    begin
+        Result := nil;
+
+        curScript := getScript(slotMisc, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot_GNN');
+        if(not assigned(curScript)) then begin
+            curScript := getScript(slotMisc, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot');
+        end;
+
+        if(assigned(curScript)) then begin
+            Result := getScriptProp(curScript, 'UpgradeSlotKeyword');
+        end;
+    end;
+    
+    function getCobjConditionValue(conditions: IInterface): integer;
+    var
+        i: integer;
+        cond, glob: IInterface;
+    begin
+        for i:=0 to ElementCount(conditions)-1 do begin
+            cond := ElementByIndex(conditions, i);
+            glob := PathLinksTo(cond, 'CTDA\Global');//SS2_Settings_ResourceComplexity [GLOB:03020B07]
+            if(EditorID(glob) = 'SS2_Settings_ResourceComplexity') then begin
+                Result := trunc(StrToFloat(GetElementEditValues(cond, 'CTDA\Comparison Value')));
+                exit;
+            end;
+        end;
+
+        Result := -1;
+    end;
+    
+    function findRoomUpgradeCOBJWithComplexityOvr(acti: IInterface): TJsonObject;
+    var
+        i, curComplexity: integer;
+        curRef, conditions, complexityCondition, glob: IInterface;
+    begin
+        //AddMessage('checking shit '+FullPath(acti));
+        for i:=0 to ReferencedByCount(acti)-1 do begin
+            curRef := ReferencedByIndex(acti, i);
+            if(Signature(curRef) = 'COBJ') then begin
+                if(equals(PathLinksTo(curRef, 'CNAM'), acti)) then begin
+                    // now check which complexity we have
+                    conditions := ElementByPath(curRef, 'Conditions');
+                    curComplexity := getCobjConditionValue(conditions);
+                    if(curComplexity > -1) then begin
+                        Result := TJsonObject.create;
+                        Result.I['complexity'] := curComplexity;
+                        Result.S['form'] := FormToStr(curRef);
+
+                        exit;
+                    end;
+                end;
+            end;
+        end;
+
+        Result := nil;
+    end;
+    
+    function findRoomUpgradeCOBJWithComplexity(acti: IInterface): TJsonObject;
+    var
+        i,j, curComplexity: integer;
+        curRef, conditions, complexityCondition, glob, actiMaster: IInterface;
+    begin
+        actiMaster := MasterOrSelf(acti);
+        Result := nil;
+
+        for i:=OverrideCount(actiMaster)-1 downto 0 do begin
+            Result := findRoomUpgradeCOBJWithComplexityOvr(OverrideByIndex(actiMaster, i));
+            if(Result <> nil) then begin
+                exit;
+            end;
+        end;
+
+        Result := findRoomUpgradeCOBJWithComplexityOvr(actiMaster);
+
+    end;
+    
+    procedure postprocessRoomUpgradeActivatorsAndCobjs(json: TJsonObject);
+    var
+        i:  integer;
+        iStr, actiStr, cobjStr: string;
+        acti, cobj: IInterface;
+    begin
+
+        for i:=1 to 3 do begin
+            iStr := intToStr(i);
+            actiStr := json.O[iStr].S['acti'];
+            cobjStr := json.O[iStr].S['cobj'];
+
+            acti := nil;
+            cobj := nil;
+
+            if(actiStr <> '') then begin
+                acti := StrToForm(actiStr);
+            end;
+
+            if(cobjStr <> '') then begin
+                cobj := StrToForm(cobjStr);
+            end;
+
+            if (assigned(acti)) then begin
+                json.O[iStr].S['acti'] := FormToStr(getExistingElementOverrideOrClosest(acti, targetFile));
+            end;
+
+            if(assigned(cobj)) then begin
+                json.O[iStr].S['cobj'] := FormToStr(getExistingElementOverrideOrClosest(cobj, targetFile));
+            end;
+        end;
+    end;
+
+    function findRoomUpgradeActivatorsAndCobjs(roomUpgradeMisc: IInterface): TJsonObject;
+    var
+        acti1, acti2, acti3, cobj1, cobj2, cobj3: IInterface;
+        curRef, script, otherMisc: IInterface;
+        cobjData: TJsonObject;
+        i: integer;
+        roomUpgradeMiscMaster: IInterface;
+    begin
+
+        Result := TJsonObject.create();
+        roomUpgradeMiscMaster := MasterOrSelf(roomUpgradeMisc);
+
+        for i:=0 to ReferencedByCount(roomUpgradeMiscMaster)-1 do begin
+            curRef := ReferencedByIndex(roomUpgradeMiscMaster, i);
+
+            if(Signature(curRef) <> 'ACTI') then begin
+                continue;
+            end;
+
+            script := getScript(curRef, 'SimSettlementsV2:HQ:Library:ObjectRefs:HQWorkshopItemActionTrigger');
+            if (assigned(script)) then begin
+                otherMisc := getScriptProp(script, 'HQAction');
+                if(equals(otherMisc, roomUpgradeMiscMaster)) then begin
+                    // okay, seems like we found one, but which?
+                    cobjData := findRoomUpgradeCOBJWithComplexity(curRef);
+                    if(cobjData <> nil) then begin
+                        case cobjData.I['complexity'] of
+                            1:  begin
+                                    acti1 := curRef;
+                                    cobj1 := StrToForm(cobjData.S['form']);
+                                end;
+                            2:  begin
+                                    acti2 := curRef;
+                                    cobj2 := StrToForm(cobjData.S['form']);
+                                end;
+                            3:  begin
+                                    acti3 := curRef;
+                                    cobj3 := StrToForm(cobjData.S['form']);
+                                end;
+                        end;
+                        cobjData.free();
+                        if (assigned(acti1) and assigned(acti2) and assigned(acti3)) then begin
+                            break;
+                        end;
+                    end;
+                end;
+            end;
+        end;
+        // do I have all of them?
+        // we might have one of the ACTI/COBJ pairs, where the ACTI would actually have all 3 COBJs
+
+        if (assigned(acti1) and assigned(acti2) and assigned(acti3) and assigned(cobj1) and assigned(cobj2) and assigned(cobj3)) then begin
+            // found all
+            Result.O['1'].S['acti'] := FormToStr(acti1);
+            Result.O['1'].S['cobj'] := FormToStr(cobj1);
+
+            Result.O['2'].S['acti'] := FormToStr(acti2);
+            Result.O['2'].S['cobj'] := FormToStr(cobj2);
+
+            Result.O['3'].S['acti'] := FormToStr(acti3);
+            Result.O['3'].S['cobj'] := FormToStr(cobj3);
+            postprocessRoomUpgradeActivatorsAndCobjs(Result);
+            exit;
+        end;
+
+
+        // check COBJ1
+        if(assigned(acti1)) then begin
+            // try to fill 2 and 3
+            if(not assigned(cobj2)) then begin
+                cobj2 := findRoomUpgradeCOBJ(2, acti1);
+            end;
+
+            if(not assigned(cobj3)) then begin
+                cobj3 := findRoomUpgradeCOBJ(3, acti1);
+            end;
+            // check COBJ2
+        end else if(assigned(acti2)) then begin
+            // try to fill 1 and 3
+            if(not assigned(cobj1)) then begin
+                cobj1 := findRoomUpgradeCOBJ(1, acti2);
+            end;
+
+            if(not assigned(cobj3)) then begin
+                cobj3 := findRoomUpgradeCOBJ(3, acti2);
+            end;
+            // check COBJ3
+        end else if(assigned(acti3)) then begin
+            // try to fill 1 and 2
+            if(not assigned(cobj1)) then begin
+                cobj1 := findRoomUpgradeCOBJ(1, acti3);
+            end;
+
+            if(not assigned(cobj2)) then begin
+                cobj2 := findRoomUpgradeCOBJ(2, acti3);
+            end;
+        end;
+
+        if(assigned(acti1)) then begin
+            Result.O['1'].S['acti'] := FormToStr(acti1);
+        end;
+
+        if(assigned(acti2)) then begin
+            Result.O['2'].S['acti'] := FormToStr(acti2);
+        end;
+
+        if(assigned(acti3)) then begin
+            Result.O['3'].S['acti'] := FormToStr(acti3);
+        end;
+
+        if(assigned(cobj1)) then begin
+            Result.O['1'].S['cobj'] := FormToStr(cobj1);
+        end;
+
+        if(assigned(cobj2)) then begin
+            Result.O['2'].S['cobj'] := FormToStr(cobj2);
+        end;
+
+        if(assigned(cobj3)) then begin
+            Result.O['3'].S['cobj'] := FormToStr(cobj3);
+        end;
+
+        // postprocess
+        postprocessRoomUpgradeActivatorsAndCobjs(Result);
+    end;
+    
+    function getRoomShapeKeywordFromConfig(roomConfig: IInterface): IInterface;
+    var
+        configScript: IInterface;
+    begin
+        configScript := getScript(roomConfig, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
+        // -> SS2C2_HQGNN_Action_AssignRoomConfig_GNN256BoxShape_Bathroom "Bathroom" [MISC:0401F0BE]
+        Result := getScriptProp(configScript, 'RoomShapeKeyword');
+    end;
+
+    function getRoomShapeUniquePart(str: string): string;
+    var
+        edid: string;
+        p: integer;
+    begin
+        Result := getStringAfter(str, '_Tag_RoomShape_');
+    end;
 end.

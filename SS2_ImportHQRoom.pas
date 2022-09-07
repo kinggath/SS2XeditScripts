@@ -106,49 +106,6 @@ unit ImportHqRoom;
         currentUpgradeDialog: TForm;
 
 
-    function getStringAfter(str, separator: string): string;
-    var
-        p: integer;
-    begin
-
-        p := Pos(separator, str);
-        if(p <= 0) then begin
-            Result := str;
-            exit;
-        end;
-
-        p := p + length(separator);
-
-        Result := copy(str, p, length(str)-p+1);
-    end;
-
-    function getRoomShapeKeywordFromConfig(roomConfig: IInterface): IInterface;
-    var
-        configScript: IInterface;
-    begin
-        configScript := getScript(roomConfig, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
-        // -> SS2C2_HQGNN_Action_AssignRoomConfig_GNN256BoxShape_Bathroom "Bathroom" [MISC:0401F0BE]
-        Result := getScriptProp(configScript, 'RoomShapeKeyword');
-    end;
-
-    function getRoomShapeUniquePart(str: string): string;
-    var
-        edid: string;
-        p: integer;
-    begin
-        Result := getStringAfter(str, '_Tag_RoomShape_');
-    end;
-
-	function StringRepeat(str: string; len: integer): string;
-	var
-		i: integer;
-	begin
-		Result := '';
-		for i:=0 to len-1 do begin
-			Result := Result + str;
-		end;
-	end;
-
     function getFakeClipboardText(): string;
     var
         helper: TStringList;
@@ -905,18 +862,6 @@ unit ImportHqRoom;
 		endProgress();
 	end;
 
-	function getRoomConfigName(configMisc: IInterface): string;
-	var
-		edid, confName: string;
-	begin
-		edid := EditorID(configMisc);
-		//edid := StringReplace(edid, 'SS2_HQGNN_Action_AssignRoomConfig_', '', [rfReplaceAll]);
-		edid := regexReplace(edid, '[^_]+_HQ[^_]*_Action_AssignRoomConfig_', '');
-		confName := GetElementEditValues(configMisc, 'FULL');
-
-		Result := confName + ' (' + edid+')';
-	end;
-
 
 
 	{
@@ -1207,6 +1152,7 @@ unit ImportHqRoom;
 			end;
 
 			if(pos('_Action_AssignRoomConfig_', edid) > 0) then begin
+                // room config
 				curScript := getScript(curRec, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
 				if(assigned(curScript)) then begin
                     loadRoomConfig(curFileName, curRec, curScript);
@@ -1689,30 +1635,7 @@ unit ImportHqRoom;
 		AddMessage('Cache loaded');
 	end;
 
-    procedure loadMasterList(list: TStringList; theFile: IInterface);
-    var
-		curFile: IInterface;
-		curFileName: string;
-		i: integer;
-	begin
-		for i:=0 to MasterCount(theFile)-1 do begin
-			curFile := MasterByIndex(theFile, i);
-			curFileName := GetFileName(curFile);
 
-            if(list.indexOf(curFileName) < 0) then begin
-                list.addObject(curFileName, curFile);
-                loadMasterList(list, curFile);
-            end;
-		end;
-    end;
-
-
-	function getMasterList(theFile: IInterface): TStringList;
-	begin
-		Result := TStringList.create();
-
-        loadMasterList(Result, theFile);
-	end;
 
 	procedure loadForms();
 	var
@@ -1859,7 +1782,7 @@ unit ImportHqRoom;
 		SS2_Tag_HQ_RoomIsClean                  := FindObjectByEdidWithError('SS2_Tag_HQ_RoomIsClean');
         SS2_Tag_HQ_ActionType_RoomConstruction  := FindObjectByEdidWithError('SS2_Tag_HQ_ActionType_RoomConstruction');
         SS2_Tag_HQ_ActionType_RoomUpgrade       := FindObjectByEdidWithError('SS2_Tag_HQ_ActionType_RoomUpgrade');
-        
+
         SS2_SFX_HQProjectType_Administration_Decorate   := FindObjectByEdidWithError('SS2_SFX_HQProjectType_Administration_Decorate');
         SS2_WorkshopMenu_HQ_Administration_Decorate     := FindObjectByEdidWithError('SS2_WorkshopMenu_HQ_Administration_Decorate');
 
@@ -2215,23 +2138,7 @@ unit ImportHqRoom;
 		//dropDown.ItemIndex := prevIndex;
 	end;
 
-	function GetRoomSlotName(slotMisc: IInterface): string;
-	var
-		miscScript, slotKw: IInterface;
-	begin
-		Result := GetElementEditValues(slotMisc, 'FULL');
-		if(Result <> '') then exit;
-
-		slotKw := findSlotKeywordFromSlotMisc(slotMisc);
-		Result := GetElementEditValues(slotKw, 'FULL');
-		if(Result <> '') then exit;
-
-		// otherwise, mh
-		Result := regexExtract(EditorID(slotMisc), '_([^_]+)$', 1);
-		if(Result <> '') then exit;
-
-		Result := EditorID(slotMisc);
-	end;
+	
 
 	function getRoomUpgradeSlots(forHq, roomConfig: IInterface): TStringList;
 	var
@@ -2974,7 +2881,7 @@ unit ImportHqRoom;
 
 			selectedSlot := ObjectToElement(selectUpgradeSlot.Items.Objects[selectUpgradeSlot.ItemIndex]);
 
-            
+
 
 			layoutDisplayName := getLayoutDisplayName(layoutName, layoutPath, selectedSlot);
 
@@ -4405,14 +4312,14 @@ unit ImportHqRoom;
                 trim(currentUpgradeDescriptionData.S['designerName']),
                 trim(currentUpgradeDescriptionData.S['designDesc'])
 			);
-            
+
             cobjSfx := nil;
-            
+
             // special hack: if cobjKeyword is SS2_WorkshopMenu_HQ_Administration_Decorate, then use the sfx SS2_SFX_HQProjectType_Administration_Decorate
             if(isSameForm(cobjKeyword, SS2_WorkshopMenu_HQ_Administration_Decorate)) then begin
                 cobjSfx := SS2_SFX_HQProjectType_Administration_Decorate;
             end;
- 
+
             createRoomUpgradeActivatorsAndCobjs(
                 actiData,
                 roomUpgradeMisc,
@@ -4884,7 +4791,7 @@ unit ImportHqRoom;
 
 		// put in the slot KW
 		slotKw := findSlotKeywordFromSlotMisc(upgradeSlot);
-        
+
         slotEdid := EditorID(upgradeSlot);
         if(Pos('decoration', LowerCase(slotEdid)) > 0) then begin
             // Special hack: if the selected slot is a 'Decoration', also use SS2_UsageRequirements_PerformanceSettingOn_Clutter
@@ -5191,22 +5098,7 @@ unit ImportHqRoom;
         end;
 	end;
 
-    function getCobjConditionValue(conditions: IInterface): integer;
-    var
-        i: integer;
-        cond, glob: IInterface;
-    begin
-        for i:=0 to ElementCount(conditions)-1 do begin
-            cond := ElementByIndex(conditions, i);
-            glob := PathLinksTo(cond, 'CTDA\Global');//SS2_Settings_ResourceComplexity [GLOB:03020B07]
-            if(EditorID(glob) = 'SS2_Settings_ResourceComplexity') then begin
-                Result := trunc(StrToFloat(GetElementEditValues(cond, 'CTDA\Comparison Value')));
-                exit;
-            end;
-        end;
-
-        Result := -1;
-    end;
+    
 
     function findRoomUpgradeCOBJ(resourceComplexity: integer; acti: IInterface): IInterface;
     var
@@ -5459,210 +5351,6 @@ unit ImportHqRoom;
         Result := nil;
 	end;
 
-    function findRoomUpgradeCOBJWithComplexityOvr(acti: IInterface): TJsonObject;
-    var
-        i, curComplexity: integer;
-        curRef, conditions, complexityCondition, glob: IInterface;
-    begin
-        //AddMessage('checking shit '+FullPath(acti));
-        for i:=0 to ReferencedByCount(acti)-1 do begin
-            curRef := ReferencedByIndex(acti, i);
-            if(Signature(curRef) = 'COBJ') then begin
-                if(equals(PathLinksTo(curRef, 'CNAM'), acti)) then begin
-                    // now check which complexity we have
-                    conditions := ElementByPath(curRef, 'Conditions');
-                    curComplexity := getCobjConditionValue(conditions);
-                    if(curComplexity > -1) then begin
-                        Result := TJsonObject.create;
-                        Result.I['complexity'] := curComplexity;
-                        Result.S['form'] := FormToStr(curRef);
-
-                        exit;
-                    end;
-                end;
-            end;
-        end;
-
-        Result := nil;
-    end;
-
-    function findRoomUpgradeCOBJWithComplexity(acti: IInterface): TJsonObject;
-    var
-        i,j, curComplexity: integer;
-        curRef, conditions, complexityCondition, glob, actiMaster: IInterface;
-    begin
-        actiMaster := MasterOrSelf(acti);
-        Result := nil;
-
-        for i:=OverrideCount(actiMaster)-1 downto 0 do begin
-            Result := findRoomUpgradeCOBJWithComplexityOvr(OverrideByIndex(actiMaster, i));
-            if(Result <> nil) then begin
-                exit;
-            end;
-        end;
-
-        Result := findRoomUpgradeCOBJWithComplexityOvr(actiMaster);
-
-    end;
-
-    procedure postprocessRoomUpgradeActivatorsAndCobjs(json: TJsonObject);
-    var
-        i:  integer;
-        iStr, actiStr, cobjStr: string;
-        acti, cobj: IInterface;
-    begin
-
-        for i:=1 to 3 do begin
-            iStr := intToStr(i);
-            actiStr := json.O[iStr].S['acti'];
-            cobjStr := json.O[iStr].S['cobj'];
-
-            acti := nil;
-            cobj := nil;
-
-            if(actiStr <> '') then begin
-                acti := StrToForm(actiStr);
-            end;
-
-            if(cobjStr <> '') then begin
-                cobj := StrToForm(cobjStr);
-            end;
-
-            if (assigned(acti)) then begin
-                json.O[iStr].S['acti'] := FormToStr(getExistingElementOverrideOrClosest(acti, targetFile));
-            end;
-
-            if(assigned(cobj)) then begin
-                json.O[iStr].S['cobj'] := FormToStr(getExistingElementOverrideOrClosest(cobj, targetFile));
-            end;
-        end;
-    end;
-
-    function findRoomUpgradeActivatorsAndCobjs(roomUpgradeMisc: IInterface): TJsonObject;
-    var
-        acti1, acti2, acti3, cobj1, cobj2, cobj3: IInterface;
-        curRef, script, otherMisc: IInterface;
-        cobjData: TJsonObject;
-        i: integer;
-        roomUpgradeMiscMaster: IInterface;
-    begin
-
-        Result := TJsonObject.create();
-        roomUpgradeMiscMaster := MasterOrSelf(roomUpgradeMisc);
-
-        for i:=0 to ReferencedByCount(roomUpgradeMiscMaster)-1 do begin
-            curRef := ReferencedByIndex(roomUpgradeMiscMaster, i);
-
-            if(Signature(curRef) <> 'ACTI') then begin
-                continue;
-            end;
-
-            script := getScript(curRef, 'SimSettlementsV2:HQ:Library:ObjectRefs:HQWorkshopItemActionTrigger');
-            if (assigned(script)) then begin
-                otherMisc := getScriptProp(script, 'HQAction');
-                if(equals(otherMisc, roomUpgradeMiscMaster)) then begin
-                    // okay, seems like we found one, but which?
-                    cobjData := findRoomUpgradeCOBJWithComplexity(curRef);
-                    if(cobjData <> nil) then begin
-                        case cobjData.I['complexity'] of
-                            1:  begin
-                                    acti1 := curRef;
-                                    cobj1 := StrToForm(cobjData.S['form']);
-                                end;
-                            2:  begin
-                                    acti2 := curRef;
-                                    cobj2 := StrToForm(cobjData.S['form']);
-                                end;
-                            3:  begin
-                                    acti3 := curRef;
-                                    cobj3 := StrToForm(cobjData.S['form']);
-                                end;
-                        end;
-                        cobjData.free();
-                        if (assigned(acti1) and assigned(acti2) and assigned(acti3)) then begin
-                            break;
-                        end;
-                    end;
-                end;
-            end;
-        end;
-        // do I have all of them?
-        // we might have one of the ACTI/COBJ pairs, where the ACTI would actually have all 3 COBJs
-
-        if (assigned(acti1) and assigned(acti2) and assigned(acti3) and assigned(cobj1) and assigned(cobj2) and assigned(cobj3)) then begin
-            // found all
-            Result.O['1'].S['acti'] := FormToStr(acti1);
-            Result.O['1'].S['cobj'] := FormToStr(cobj1);
-
-            Result.O['2'].S['acti'] := FormToStr(acti2);
-            Result.O['2'].S['cobj'] := FormToStr(cobj2);
-
-            Result.O['3'].S['acti'] := FormToStr(acti3);
-            Result.O['3'].S['cobj'] := FormToStr(cobj3);
-            postprocessRoomUpgradeActivatorsAndCobjs(Result);
-            exit;
-        end;
-
-
-        // check COBJ1
-        if(assigned(acti1)) then begin
-            // try to fill 2 and 3
-            if(not assigned(cobj2)) then begin
-                cobj2 := findRoomUpgradeCOBJ(2, acti1);
-            end;
-
-            if(not assigned(cobj3)) then begin
-                cobj3 := findRoomUpgradeCOBJ(3, acti1);
-            end;
-            // check COBJ2
-        end else if(assigned(acti2)) then begin
-            // try to fill 1 and 3
-            if(not assigned(cobj1)) then begin
-                cobj1 := findRoomUpgradeCOBJ(1, acti2);
-            end;
-
-            if(not assigned(cobj3)) then begin
-                cobj3 := findRoomUpgradeCOBJ(3, acti2);
-            end;
-            // check COBJ3
-        end else if(assigned(acti3)) then begin
-            // try to fill 1 and 2
-            if(not assigned(cobj1)) then begin
-                cobj1 := findRoomUpgradeCOBJ(1, acti3);
-            end;
-
-            if(not assigned(cobj2)) then begin
-                cobj2 := findRoomUpgradeCOBJ(2, acti3);
-            end;
-        end;
-
-        if(assigned(acti1)) then begin
-            Result.O['1'].S['acti'] := FormToStr(acti1);
-        end;
-
-        if(assigned(acti2)) then begin
-            Result.O['2'].S['acti'] := FormToStr(acti2);
-        end;
-
-        if(assigned(acti3)) then begin
-            Result.O['3'].S['acti'] := FormToStr(acti3);
-        end;
-
-        if(assigned(cobj1)) then begin
-            Result.O['1'].S['cobj'] := FormToStr(cobj1);
-        end;
-
-        if(assigned(cobj2)) then begin
-            Result.O['2'].S['cobj'] := FormToStr(cobj2);
-        end;
-
-        if(assigned(cobj3)) then begin
-            Result.O['3'].S['cobj'] := FormToStr(cobj3);
-        end;
-
-        // postprocess
-        postprocessRoomUpgradeActivatorsAndCobjs(Result);
-    end;
 
     function indexOfElement(list: TStringList; elem: IInterface): integer;
     var
@@ -6304,121 +5992,7 @@ unit ImportHqRoom;
 		Result := getScriptProp(script, 'ActionAvailableGlobal');
 	end;
 
-    function findRoomConfigFromSlotMisc(slot: IInterface): IInterface;
-    var
-        i, numRefs: integer;
-        curRef, refScript, RoomUpgradeSlots: IInterface;
-    begin
-        for i:=0 to ReferencedByCount(slot)-1 do begin
-            curRef := ReferencedByIndex(slot, i);
-            refScript := getScript(curRef, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
-            if(assigned(refScript)) then begin
-                RoomUpgradeSlots := getScriptProp(refScript, 'RoomUpgradeSlots');
-                if(hasObjectInProperty(RoomUpgradeSlots, slot)) then begin
-                    Result := curRef;
-                    exit;
-                end;
-                continue;
-            end;
-            refScript := getScript(curRef, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
-            if(assigned(refScript)) then begin
-                RoomUpgradeSlots := getScriptProp(refScript, 'AdditionalUpgradeSlots');
-                if(hasObjectInProperty(RoomUpgradeSlots, slot)) then begin
-                    Result := findRoomConfigFromRoomUpgrade(curRef);
-                    if(assigned(Result)) then exit;
-                end;
-            end;
-        end;
-    end;
 
-    function findSlotKeywordFromSlotMisc(slotMisc: IInterface): IInterface;
-    var
-        curScript: IInterface;
-    begin
-        Result := nil;
-
-        curScript := getScript(slotMisc, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot_GNN');
-        if(not assigned(curScript)) then begin
-            curScript := getScript(slotMisc, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot');
-        end;
-
-        if(assigned(curScript)) then begin
-            Result := getScriptProp(curScript, 'UpgradeSlotKeyword');
-        end;
-    end;
-
-    function findSlotMiscFromLayout(layout: IInterface): IInterface;
-    var
-        layoutScript, TagKeyword, curRef, UpgradeSlotKeyword: IInterface;
-        i: integer;
-    begin
-        layoutScript := getScript(layout, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
-        TagKeyword := getScriptProp(layoutScript, 'TagKeyword');
-        // find the misc from the kw
-        for i:=0 to ReferencedByCount(TagKeyword)-1 do begin
-            curRef := ReferencedByIndex(TagKeyword, i);
-            if(signature(curRef) = 'MISC') then begin
-                UpgradeSlotKeyword := findSlotKeywordFromSlotMisc(curRef);
-
-                if(equals(UpgradeSlotKeyword, TagKeyword)) then begin
-                    Result := curRef;
-                    exit;
-                end;
-
-            end;
-        end;
-
-        Result := nil;
-    end;
-
-    function findRoomConfigFromLayout(layout: IInterface): IInterface;
-    var
-        slotMisc: IInterface;
-    begin
-        slotMisc := findSlotMiscFromLayout(layout);
-        Result := findRoomConfigFromSlotMisc(slotMisc);
-        if(assigned(Result)) then begin
-            exit;
-        end;
-
-        Result := nil;
-    end;
-
-
-
-    function findRoomConfigFromRoomUpgrade(existingElem: IInterface): IInterface;
-    var
-        upgradeScript, TargetUpgradeSlot, RoomLayouts, curLayout: IInterface;
-        i: integer;
-    begin
-        upgradeScript := getScript(existingElem, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
-
-
-        // check upgrade slot
-        TargetUpgradeSlot := getScriptProp(upgradeScript, 'TargetUpgradeSlot');
-        if(assigned(TargetUpgradeSlot)) then begin
-            Result := findRoomConfigFromSlotMisc(TargetUpgradeSlot);
-            if(assigned(Result)) then begin
-                exit;
-            end;
-        end;
-
-
-        // otherwise check the layouts
-        RoomLayouts := getScriptProp(upgradeScript, 'RoomLayouts');
-        if(assigned(RoomLayouts)) then begin
-            for i:=0 to ElementCount(RoomLayouts)-1 do begin
-                curLayout := getObjectFromProperty(RoomLayouts, i);
-                AddMessage('Checking layout '+EditorID(curLayout));
-                Result := findRoomConfigFromLayout(curLayout);
-                if(assigned(Result)) then begin
-                    exit;
-                end;
-            end;
-        end;
-
-        Result := nil;
-    end;
 
     function selectRoomConfig(caption: string): IInterface;
 	var
