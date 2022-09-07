@@ -166,7 +166,7 @@ unit ChangeRoomConfig;
        
 
         curY := curY + 24;
-		btnOk := CreateButton(frm, 200, curY, 'Next');
+		btnOk := CreateButton(frm, 200, curY, 'Apply');
 		btnOk.ModalResult := mrYes;
 		btnOk.Name := 'btnOk';
 		btnOk.Default := true;
@@ -189,6 +189,7 @@ unit ChangeRoomConfig;
                     oldKey := FormToStr(oldSlotMisc);
                     newKey := FormToStr(newSlotMisc);
                     Result.S[oldKey] := newKey;
+                    //AddMessage(EditorID(oldSlotMisc)+' '+oldKey+' -> '+EditorID(newSlotMisc)+' '+newKey);
                 end;
             end;
         end;
@@ -235,6 +236,7 @@ unit ChangeRoomConfig;
 
 
         slotMapping := showSlotSelection(e, oldConfigScript, newConfigScript);
+        //AddMessage('slotMapping='+slotMapping.toString());
         if(slotMapping = nil) then begin
             AddMessage('Cancelled slot mapping');
             exit;
@@ -250,12 +252,14 @@ unit ChangeRoomConfig;
             // this is a MISC
             oldSlotMisc := getObjectFromProperty(curSlots, i);
             oldSlotKw := findSlotKeywordFromSlotMisc(oldSlotMisc);
-            oldSlotKey := FormToStr(oldSlotMisc);
-            removeKeywordByPath(e, oldSlotKw, 'KWDA');
+            if(hasKeywordByPath(e, oldSlotKw, 'KWDA')) then begin
+                oldSlotKey := FormToStr(oldSlotMisc);                
+                removeKeywordByPath(e, oldSlotKw, 'KWDA');
+            end;
         end;
         newRoomSlot := StrToForm(slotMapping.S[oldSlotKey]);
         newSlotKw := findSlotKeywordFromSlotMisc(newRoomSlot);
-        //AddMessage('newSlotKw='+EditorID(newSlotKw));
+        // AddMessage('oldKey='+oldSlotKey+', newKey='+slotMapping.S[oldSlotKey]+' newSlotKw='+EditorID(newSlotKw));
         ensureKeywordByPath(e, newSlotKw, 'KWDA');
         // 2. Change the TargetUpgradeSlot script property, to the slot selected in step 2.
         setScriptProp(script, 'TargetUpgradeSlot', newRoomSlot);
@@ -483,6 +487,7 @@ unit ChangeRoomConfig;
         curFileName: string;
     begin
         Result := TStringList.create;
+        Result.Sorted := true;
         masterList := getMasterList(targetFile);
 
         for i:=0 to masterList.count-1 do begin
