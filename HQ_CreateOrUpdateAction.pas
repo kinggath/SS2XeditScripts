@@ -1832,6 +1832,9 @@ unit ImportHqRoom;
 		listModelsMisc.Sorted := true;
 		listRoomConfigs.Sorted := true;
 		listKeywordsTech.Sorted := true;
+		listDepartmentObjects.Sorted := true;
+		listActionGroups.Sorted := true;
+		listRoomShapes.Sorted := true;
 
 		//listHQRefs.Duplicates := dupIgnore;
 		listRoomShapes.Duplicates := dupIgnore;
