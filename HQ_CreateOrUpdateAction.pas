@@ -1,22 +1,5 @@
 {
     Run on Room Config to update. Run on anything else to generate a new
-
-	TODO:
-
-
-    3. Yeah the Other thing is still happening. I think I know why though - its when running an update on a record that hasn't been saved yet.
-
-
-    Maybe later:
-	- Allow not selecting slot for a layout. generate a new KW then
-    - Maybe add config file, at least for prefix
-	DONE:
-    1. Uncheck the Register Room Upgrade box when using the script to update.
-
-    2. Add a button to rebuild the Mechanics Description from the current room functionality.
-        I like how it works now where it doesn't overwrite the description after its been manually edited - that's a good feature you added,
-        but sometimes I'm just using the original generated text anyway, so would be nice to be able to force it to update and match the current room
-        functionality text with one click instead of having to type up the changes manually.
 }
 unit ImportHqRoom;
 	uses 'SS2\SS2Lib'; // uses praUtil
@@ -2141,7 +2124,7 @@ unit ImportHqRoom;
 		//dropDown.ItemIndex := prevIndex;
 	end;
 
-	
+
 
 	function getRoomUpgradeSlots(forHq, roomConfig: IInterface): TStringList;
 	var
@@ -2702,42 +2685,144 @@ unit ImportHqRoom;
         deleteSelectedBoxItems(resourceBox);
 	end;
 
+    function stringContainsCI(haystack: String; needle: String): boolean;
+    begin
+        haystack := LowerCase(haystack);
+        needle := LowerCase(needle);
+
+        Result := (pos(needle, haystack) > 0);
+    end;
+
+
+    procedure roomFuncHandlerFilter(Sender: TObject);
+	var
+		selectResourceDropdown: TComboBox;
+        filterInput: TEdit;
+        filterText, prevSelectedValue: string;
+        prevSelectedIndex, i: integer;
+	begin
+		selectResourceDropdown := TComboBox(sender.parent.FindComponent('selectResourceDropdown'));
+		filterInput := TEdit(sender.parent.FindComponent('filterInput'));
+
+        prevSelectedIndex := selectResourceDropdown.ItemIndex;
+        prevSelectedValue := '';
+        if(prevSelectedIndex >= 0) then begin
+            prevSelectedValue := selectResourceDropdown.Items[prevSelectedIndex];
+        end;
+
+        //procedure setItemIndexByValue(dropDown: TComboBox; value: string);
+
+        filterText := trim(filterInput.Text);
+        selectResourceDropdown.Items.clear();
+
+
+        for i:=0 to listRoomFuncs.count - 1 do begin
+            if(filterText = '') then begin
+                selectResourceDropdown.Items.addObject(listRoomFuncs[i], ObjectToElement(listRoomFuncs.Objects[i]));
+            end else begin
+                if(stringContainsCI(listRoomFuncs[i], filterText)) then begin
+                    selectResourceDropdown.Items.addObject(listRoomFuncs[i], ObjectToElement(listRoomFuncs.Objects[i]));
+                end;
+            end;
+        end;
+
+        if(filterText = '') then begin
+            selectResourceDropdown.Items := listRoomFuncs;
+        end else begin
+        end;
+
+        selectResourceDropdown.ItemIndex := 0;
+
+        if(prevSelectedValue <> '') then begin
+            setItemIndexByValue(selectResourceDropdown, prevSelectedValue);
+        end;
+
+        roomFuncHandlerValidator(sender);
+	end;
+
+    procedure roomFuncHandlerFilterClear(Sender: TObject);
+	var
+        filterInput: TEdit;
+	begin
+		filterInput := TEdit(sender.parent.FindComponent('filterInput'));
+        if(filterInput.Text <> '') then begin
+            filterInput.Text := '';
+            roomFuncHandlerFilter(Sender);
+        end;
+	end;
+
+    procedure roomFuncHandlerValidator(Sender: TObject);
+	var
+		selectResourceDropdown: TComboBox;
+        btnOk: TButton;
+	begin
+		selectResourceDropdown := TComboBox(sender.parent.FindComponent('selectResourceDropdown'));
+		btnOk := TButton(sender.parent.FindComponent('btnOk'));
+
+        {
+		oldFormLabel := TLabel(sender.parent.FindComponent('oldFormLabel'));
+        if(oldFormLabel <> nil) then begin
+            btnOk.enabled := (trim(inputName.Text) <> '');
+            exit;
+        end;
+
+        }
+		btnOk.enabled := (selectResourceDropdown.ItemIndex >= 0);
+	end;
+
 	procedure addRoomFuncHandler(Sender: TObject);
 	var
         frm: TForm;
-		btnOk, btnCancel: TButton;
+		btnOk, btnCancel, btnClearFilter: TButton;
 		selectResourceDropdown: TComboBox;
 		resultCode, nr: integer;
 		resourceBox:TListBox;
+        filterInput: TEdit;
 	begin
-		frm := CreateDialog('Add Room Function', 300, 130);
+		frm := CreateDialog('Add Room Function', 300, 160);
 		CreateLabel(frm, 10, 10, 'Select Room Function to add');
 
-		selectResourceDropdown := CreateComboBox(frm, 10, 28, 270, listRoomFuncs);
+
+		CreateLabel(frm, 10, 32, 'Filter');
+        filterInput := CreateInput(frm, 50, 30, '');
+        filterInput.width := 160;
+        filterInput.name := 'filterInput';
+        filterInput.text := '';
+        filterInput.onchange := roomFuncHandlerFilter;
+
+        btnClearFilter := CreateButton(frm, 220, 28, 'Clear');
+        btnClearFilter.width := 60;
+        btnClearFilter.onclick := roomFuncHandlerFilterClear;
+
+
+		selectResourceDropdown := CreateComboBox(frm, 10, 58, 270, nil);
 		selectResourceDropdown.Style := csDropDownList;
 		selectResourceDropdown.Name := 'selectResourceDropdown';
 		selectResourceDropdown.ItemIndex := 0;
+		selectResourceDropdown.onchange := roomFuncHandlerValidator;
 
 
-		btnOk := CreateButton(frm, 50, 64, 'OK');
+		btnOk := CreateButton(frm, 50, 94, 'OK');
 		btnOk.ModalResult := mrYes;
 		btnOk.Name := 'btnOk';
 		btnOk.Default := true;
 
-		btnCancel := CreateButton(frm, 160, 64, 'Cancel');
+		btnCancel := CreateButton(frm, 160, 94, 'Cancel');
 		btnCancel.ModalResult := mrCancel;
 
 		btnOk.Width := 75;
 		btnCancel.Width := 75;
 
+        roomFuncHandlerFilter(filterInput);
+        roomFuncHandlerValidator(filterInput);
 
 		resultCode := frm.ShowModal();
 		if(resultCode = mrYes) then begin
 			resourceBox := TListBox(sender.parent.FindComponent('roomFuncsBox'));
 
 			// try to find existing
-			if(resourceBox.Items.indexOf(listRoomFuncs[selectResourceDropdown.ItemIndex]) < 0) then begin
-				resourceBox.Items.AddObject(listRoomFuncs[selectResourceDropdown.ItemIndex], listRoomFuncs.Objects[selectResourceDropdown.ItemIndex]);
+			if(resourceBox.Items.indexOf(selectResourceDropdown.Items[selectResourceDropdown.ItemIndex]) < 0) then begin
+				resourceBox.Items.AddObject(selectResourceDropdown.Items[selectResourceDropdown.ItemIndex], selectResourceDropdown.Items.Objects[selectResourceDropdown.ItemIndex]);
 			end;
 			// addResourceToListBox(selectResourceDropdown.ItemIndex, nr, roomFuncsBox);
 		end;
@@ -5101,7 +5186,7 @@ unit ImportHqRoom;
         end;
 	end;
 
-    
+
 
     function findRoomUpgradeCOBJ(resourceComplexity: integer; acti: IInterface): IInterface;
     var
