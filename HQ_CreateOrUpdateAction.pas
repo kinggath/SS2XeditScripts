@@ -2525,6 +2525,11 @@ unit ImportHqRoom;
         jsonMain.free();
     end;
 
+    function getResourceIndex(text: string): integer;
+    begin
+        Result := listRoomResources.indexOf(text);
+    end;
+
     procedure addResourceToList(resIndex, cnt: Integer; list: TStringList);
 	var
 		nameBase: string;
@@ -2632,42 +2637,64 @@ unit ImportHqRoom;
 	procedure addResourceHandler(Sender: TObject);
 	var
         frm: TForm;
-		btnOk, btnCancel: TButton;
+		btnOk, btnCancel, btnClearFilter: TButton;
 		selectResourceDropdown: TComboBox;
-		inputName: TEdit;
-		resultCode, nr: integer;
+		inputAmount, filterInput: TEdit;
+		resultCode, nr, resIndex: integer;
 		resourceBox:TListBox;
 	begin
-		frm := CreateDialog('Add Resource', 300, 130);
+		frm := CreateDialog('Add Resource', 300, 160);
 		CreateLabel(frm, 10, 10, 'Select Resource to add');
 
-		inputName := CreateInput(frm, 10, 28, '1');
-		inputName.Width := 50;
 
-		selectResourceDropdown := CreateComboBox(frm, 64, 28, 210, listRoomResources);
+        CreateLabel(frm, 10, 32, 'Filter');
+        filterInput := CreateInput(frm, 50, 30, '');
+        filterInput.width := 160;
+        filterInput.name := 'filterInput';
+        filterInput.text := '';
+        filterInput.onchange := addResourceHandlerFilter;
+
+        btnClearFilter := CreateButton(frm, 220, 28, 'Clear');
+        btnClearFilter.width := 60;
+        btnClearFilter.onclick := addResourceHandlerFilterClear;
+
+
+		inputAmount := CreateInput(frm, 10, 58, '1');
+		inputAmount.Width := 50;
+		inputAmount.Name := 'inputAmount';
+		inputAmount.Text := '1';
+		inputAmount.onchange := addResourceHandlerValidator;
+
+		selectResourceDropdown := CreateComboBox(frm, 64, 58, 210, nil);
 		selectResourceDropdown.Style := csDropDownList;
 		selectResourceDropdown.Name := 'selectResourceDropdown';
 		selectResourceDropdown.ItemIndex := 0;
+		selectResourceDropdown.onchange := addResourceHandlerValidator;
 		//listRoomResources
 
-		btnOk := CreateButton(frm, 50, 64, 'OK');
+		btnOk := CreateButton(frm, 50, 94, 'OK');
 		btnOk.ModalResult := mrYes;
 		btnOk.Name := 'btnOk';
 		btnOk.Default := true;
 
-		btnCancel := CreateButton(frm, 160, 64, 'Cancel');
+		btnCancel := CreateButton(frm, 160, 94, 'Cancel');
 		btnCancel.ModalResult := mrCancel;
 
 		btnOk.Width := 75;
 		btnCancel.Width := 75;
 
+        addResourceHandlerFilter(filterInput);
+        addResourceHandlerValidator(filterInput);
 
 		resultCode := frm.ShowModal();
 		if(resultCode = mrYes) then begin
-			nr := tryToParseInt(inputName.Text);
+			nr := tryToParseInt(inputAmount.Text);
 
 			resourceBox := TListBox(sender.parent.FindComponent('resourceBox'));
-			addResourceToListBox(selectResourceDropdown.ItemIndex, nr, resourceBox);
+
+            resIndex := getResourceIndex(selectResourceDropdown.Items[selectResourceDropdown.ItemIndex]);
+
+			addResourceToListBox(resIndex, nr, resourceBox);
             // techResearchDialog2, roomUpgradeDialog2
 			updateOkButtonAuto(resourceBox.parent);
 		end;
@@ -2693,6 +2720,64 @@ unit ImportHqRoom;
         Result := (pos(needle, haystack) > 0);
     end;
 
+    procedure genericDropdownFilter(targetDropdown: TComboBox; filterInput: TEdit; sourceList: TStringList);
+	var
+        filterText, prevSelectedValue: string;
+        prevSelectedIndex, i: integer;
+	begin
+
+        prevSelectedIndex := targetDropdown.ItemIndex;
+        prevSelectedValue := '';
+        if(prevSelectedIndex >= 0) then begin
+            prevSelectedValue := targetDropdown.Items[prevSelectedIndex];
+        end;
+
+        filterText := trim(filterInput.Text);
+        targetDropdown.Items.clear();
+
+
+        for i:=0 to sourceList.count - 1 do begin
+            if(filterText = '') then begin
+                targetDropdown.Items.addObject(sourceList[i], ObjectToElement(sourceList.Objects[i]));
+            end else begin
+                if(stringContainsCI(sourceList[i], filterText)) then begin
+                    targetDropdown.Items.addObject(sourceList[i], ObjectToElement(sourceList.Objects[i]));
+                end;
+            end;
+        end;
+
+        targetDropdown.ItemIndex := 0;
+
+        if(prevSelectedValue <> '') then begin
+            setItemIndexByValue(targetDropdown, prevSelectedValue);
+        end;
+	end;
+
+    procedure addResourceHandlerFilter(Sender: TObject);
+	var
+		selectResourceDropdown: TComboBox;
+        filterInput: TEdit;
+        filterText, prevSelectedValue: string;
+        prevSelectedIndex, i: integer;
+	begin
+		selectResourceDropdown := TComboBox(sender.parent.FindComponent('selectResourceDropdown'));
+		filterInput := TEdit(sender.parent.FindComponent('filterInput'));
+
+        genericDropdownFilter(selectResourceDropdown, filterInput, listRoomResources);
+
+        addResourceHandlerValidator(sender);
+	end;
+
+    procedure addResourceHandlerFilterClear(Sender: TObject);
+	var
+        filterInput: TEdit;
+	begin
+		filterInput := TEdit(sender.parent.FindComponent('filterInput'));
+        if(filterInput.Text <> '') then begin
+            filterInput.Text := '';
+            addResourceHandlerFilter(Sender);
+        end;
+	end;
 
     procedure roomFuncHandlerFilter(Sender: TObject);
 	var
@@ -2704,38 +2789,7 @@ unit ImportHqRoom;
 		selectResourceDropdown := TComboBox(sender.parent.FindComponent('selectResourceDropdown'));
 		filterInput := TEdit(sender.parent.FindComponent('filterInput'));
 
-        prevSelectedIndex := selectResourceDropdown.ItemIndex;
-        prevSelectedValue := '';
-        if(prevSelectedIndex >= 0) then begin
-            prevSelectedValue := selectResourceDropdown.Items[prevSelectedIndex];
-        end;
-
-        //procedure setItemIndexByValue(dropDown: TComboBox; value: string);
-
-        filterText := trim(filterInput.Text);
-        selectResourceDropdown.Items.clear();
-
-
-        for i:=0 to listRoomFuncs.count - 1 do begin
-            if(filterText = '') then begin
-                selectResourceDropdown.Items.addObject(listRoomFuncs[i], ObjectToElement(listRoomFuncs.Objects[i]));
-            end else begin
-                if(stringContainsCI(listRoomFuncs[i], filterText)) then begin
-                    selectResourceDropdown.Items.addObject(listRoomFuncs[i], ObjectToElement(listRoomFuncs.Objects[i]));
-                end;
-            end;
-        end;
-
-        if(filterText = '') then begin
-            selectResourceDropdown.Items := listRoomFuncs;
-        end else begin
-        end;
-
-        selectResourceDropdown.ItemIndex := 0;
-
-        if(prevSelectedValue <> '') then begin
-            setItemIndexByValue(selectResourceDropdown, prevSelectedValue);
-        end;
+        genericDropdownFilter(selectResourceDropdown, filterInput, listRoomFuncs);
 
         roomFuncHandlerValidator(sender);
 	end;
@@ -2759,15 +2813,26 @@ unit ImportHqRoom;
 		selectResourceDropdown := TComboBox(sender.parent.FindComponent('selectResourceDropdown'));
 		btnOk := TButton(sender.parent.FindComponent('btnOk'));
 
-        {
-		oldFormLabel := TLabel(sender.parent.FindComponent('oldFormLabel'));
-        if(oldFormLabel <> nil) then begin
-            btnOk.enabled := (trim(inputName.Text) <> '');
-            exit;
-        end;
-
-        }
 		btnOk.enabled := (selectResourceDropdown.ItemIndex >= 0);
+	end;
+
+    procedure addResourceHandlerValidator(Sender: TObject);
+	var
+		selectResourceDropdown: TComboBox;
+        btnOk: TButton;
+        inputAmount: TEdit;
+        nr: integer;
+	begin
+        //inputAmount
+		selectResourceDropdown := TComboBox(sender.parent.FindComponent('selectResourceDropdown'));
+		inputAmount := TEdit(sender.parent.FindComponent('inputAmount'));
+
+        nr := tryToParseInt(inputAmount.Text);
+
+
+		btnOk := TButton(sender.parent.FindComponent('btnOk'));
+
+		btnOk.enabled := ((selectResourceDropdown.ItemIndex >= 0) and (nr > 0));
 	end;
 
 	procedure addRoomFuncHandler(Sender: TObject);
