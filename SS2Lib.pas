@@ -567,7 +567,6 @@ unit SS2Lib;
             sPluginName := getStructMemberDefault(spawnDetails, 'sPluginName', '');
 
             if (iFormID <= 0) or (sPluginName = '') then begin
-                dumpElem(spawnDetails);
                 AddMessage('No formToSpawn or iFormID/sPluginName in a spawn misc, this shouldn''t happen');
                 exit;
             end;
@@ -2700,7 +2699,7 @@ unit SS2Lib;
 
 
         currentAddonQuest  := fallbackQuest;
-        currentAddonConfig := addonScript;
+        currentAddonConfig := addonConfig;
         // currentAddonQuestScriptName := geevt(curScript, 'scriptName');
         Result := fallbackQuest;
     end;
@@ -4408,9 +4407,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         if(not assigned(levelSkinsArray)) then begin
             exit;
         end;
-        AddMessage('===');
-        dumpElem(levelSkinsArray);
-        AddMessage('===');
+
         for i:=0 to getPropertyArrayLength(levelSkinsArray)-1 do begin
 
             curLvl := getObjectFromProperty(levelSkinsarray, i);//LinksTo(ElementByIndex(levelSkinsarray, i));
