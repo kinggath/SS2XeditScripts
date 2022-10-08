@@ -3768,8 +3768,10 @@ unit SS2Lib;
 
         for i:=0 to tempList.count-1 do begin
             curLine := trim(tempList[0]);
-            if (curLine[1] <> '[') or (curLine[length(curLine)] <> ']') then begin
-                break;
+            if(curLine <> '') then begin
+                if (curLine[1] <> '[') or (curLine[length(curLine)] <> ']') then begin
+                    break;
+                end;
             end;
             tempList.delete(0);
         end;

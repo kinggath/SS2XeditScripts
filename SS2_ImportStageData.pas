@@ -536,7 +536,7 @@ begin
                 if(lvl = 0) then begin
                     if(isSkinMode()) then continue;
 
-                    if (curRow = 'default') then begin
+                    if (LowerCase(curRow) = 'default') then begin
                         // special shortcut for buildMats
                         plotData.S['buildMats'] := '';
                         continue;
