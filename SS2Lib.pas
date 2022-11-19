@@ -57,6 +57,8 @@ unit SS2Lib;
 		miscItemCacheFileName = ProgramPath + 'Edit Scripts\SS2\PlotMiscItemCache.json';
         miscItemCacheFileVersion = 3;
 
+		SS1toSS2EdidMap = ProgramPath + 'Edit Scripts\SS2\SS1toSS2EdidMap.txt';
+		SS2TranslationSuffixes = ProgramPath + 'Edit Scripts\SS2\SS2Suffixes.txt';
     // variables, templates and such
     var
         ss2masterFile: IInterface;
@@ -379,7 +381,7 @@ unit SS2Lib;
 
         // lists
         plotTypeNames, plotSizeNames, plotSubtypeNames: TStringList;
-        hardcodedEdidMappingKeys, hardcodedEdidMappingValues: TStringList;
+        hardcodedEdidMappingKeys, hardcodedEdidMappingValues, extraSS2SuffixList: TStringList;
 
         plotSubtypeMapping: TJsonObject;
 
@@ -421,7 +423,7 @@ unit SS2Lib;
         allBuildingPlansCache: TList;
 
         // cached addon config stuff
-        currentAddonQuest, currentAddonConfig: IInterface;
+        currentAddonQuest, currentAddonQuestScript, currentAddonConfig: IInterface;
 
         themeTagList, selectedThemeTagList: TStringList;
         hasSelectedThemes: boolean;
@@ -2022,6 +2024,7 @@ unit SS2Lib;
         plotDialogOkBtn := nil;
 
         currentAddonQuest := nil;
+        currentAddonQuestScript := nil;
         currentAddonConfig := nil;
 
         ss2masterFile := FileByName(ss2Filename);
@@ -2302,13 +2305,58 @@ unit SS2Lib;
 
         hardcodedEdidMappingKeys   := TStringList.create;
         hardcodedEdidMappingValues := TStringList.create;
+        extraSS2SuffixList := TStringList.create;
 
-        registerHardcodedSSTranslation('kgSIM_SettingsHolotape_MainMenu', 'SS2_CityManager_MainMenu');
-        registerHardcodedSSTranslation('kgSIM_FlagSelector', 'SS2_CityPlannerDeskObject_FlagSelector');
+        //registerHardcodedSSTranslation('kgSIM_SettingsHolotape_MainMenu', 'SS2_CityManager_MainMenu');
+        //registerHardcodedSSTranslation('kgSIM_FlagSelector', 'SS2_CityPlannerDeskObject_FlagSelector');
+        loadSS1toSS2EdidMap();
+        loadSS2Suffixes();
 
         validMastersList := TSTringList.create;
         validMastersList.Duplicates := dupIgnore;
         validMastersList.CaseSensitive := false;
+    end;
+
+    procedure loadSS2Suffixes();
+    begin
+        if(not FileExists(SS2TranslationSuffixes)) then begin
+            exit;
+        end;
+        extraSS2SuffixList.loadFromFile(SS2TranslationSuffixes);
+    end;
+
+    procedure loadSS1toSS2EdidMap();
+    var
+        lines : TStringList;
+        i, j, breakPos: integer;
+        curLine, curKey, curVal: string;
+    begin
+        if(not FileExists(SS1toSS2EdidMap)) then begin
+            exit;
+        end;
+
+        lines := TStringList.create;
+        lines.LoadFromFile(SS1toSS2EdidMap);
+
+        for i:=0 to lines.count-1 do begin
+            curLine := lines[i];
+            breakPos := -1;
+
+            for j:=1 to length(curLine) do begin
+                if(curLine[j] = '=') then begin
+                    breakPos := j;
+                    break;
+                end;
+            end;
+
+            if breakPos <> -1 then begin
+                curKey := trim(copy(curLine, 0, breakPos-1));
+                curVal := trim(copy(curLine, breakPos+1, length(curLine)));
+
+                registerHardcodedSSTranslation(curKey, curVal);
+            end;
+        end;
+        lines.free();
     end;
 
     procedure cleanupSS2Lib();
@@ -2324,6 +2372,7 @@ unit SS2Lib;
 
         hardcodedEdidMappingKeys.free();
         hardcodedEdidMappingValues.free();
+        extraSS2SuffixList.free();
 
         //if(miscItemCache <> nil) then begin
             //miscItemCache.free();
@@ -2617,7 +2666,7 @@ unit SS2Lib;
     end;
 
     {
-        Tries to find the adodn quest in targetFile. Does not auto-create it
+        Tries to find the addon quest in targetFile. Does not auto-create it
     }
     function findAddonQuest(targetFile: IInterface; edid: string): IInterface;
     var
@@ -2657,6 +2706,7 @@ unit SS2Lib;
                     // yes
                     Result := curQuest;
                     currentAddonQuest := Result;
+                    currentAddonQuestScript := curScript;
                     exit;
                 end;
 
@@ -2699,6 +2749,7 @@ unit SS2Lib;
 
 
         currentAddonQuest  := fallbackQuest;
+        currentAddonQuestScript := fallbackQuestScipt;
         currentAddonConfig := addonConfig;
         // currentAddonQuestScriptName := geevt(curScript, 'scriptName');
         Result := fallbackQuest;
@@ -2723,6 +2774,7 @@ unit SS2Lib;
         // try finding it
         questEdid := generateEdid('', addonQuestSuffix);
         addonQuest := findAddonQuest(targetFile, questEdid);
+        questScript := currentAddonQuestScript;
         // findAddonQuest might have found the config
         if (assigned(currentAddonConfig) and assigned(addonQuest)) then begin
             Result := getScript(currentAddonConfig, 'SimSettlementsV2:MiscObjects:AddonPackConfiguration');
@@ -2744,6 +2796,7 @@ unit SS2Lib;
         end;
 
         if(not assigned(questScript)) then begin
+            // in this case, it could be a script which extends AddonPack
             questScript := getScript(addonQuest, 'SimSettlementsV2:Quests:AddonPack');
         end;
 
@@ -4048,7 +4101,7 @@ unit SS2Lib;
 
         ss2Group := GroupBySignature(ss2MasterFile, sig);
 
-        Result := MainRecordByEditorID(ss2Group, edid);
+        Result := findFormInGroupWithSuffixList(ss2Group, edid);
         if(assigned(Result)) then begin
             exit;
         end;
@@ -4056,7 +4109,34 @@ unit SS2Lib;
         // try replacing kgSIM_ with SS2_
 
         newEdid := getSS2VersionEdid(edid);
-        Result := MainRecordByEditorID(ss2Group, newEdid);
+        Result := findFormInGroupWithSuffixList(ss2Group, newEdid);
+    end;
+    
+    function findFormInGroupWithSuffixList(grp: IInterface; edidBase: string): IInterface;
+    var
+        i: integer;
+        edid, suffix: string;
+    begin
+        edid := edidBase;
+        //AddMessage('Trying '+edid);
+        Result := MainRecordByEditorID(grp, edid);
+        if(assigned(Result)) then begin
+            //AddMessage('-> found!');
+            exit;
+        end;
+
+        for i:=0 to extraSS2SuffixList.count-1 do begin
+            suffix := trim(extraSS2SuffixList[i]);
+            if(suffix <> '') then begin
+                edid := edidBase + suffix;
+                //AddMessage('Trying '+edid);
+                Result := MainRecordByEditorID(grp, edid);
+                if(assigned(Result)) then begin
+                    //AddMessage('-> found!');
+                    exit;
+                end;
+            end;
+        end;
     end;
 
     procedure translateElementScripts(newElem: IInterface);
@@ -4238,6 +4318,7 @@ unit SS2Lib;
 
 
         // hack. forms below 0x800 should be vanilla
+        // potential bug source: since esp header version 1.0, they might legally have formIDs below 0x800...
         if(FormID(oldForm) < 2048) then begin
             Result := oldForm;
             exit;
@@ -6766,7 +6847,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
         Result := nil;
     end;
-    
+
     function findSlotMiscFromKeyword(keyword: IInterface): IInterface;
     var
         curRef, UpgradeSlotKeyword: IInterface;
@@ -6794,7 +6875,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         // find the misc from the kw
         Result := findSlotMiscFromKeyword(TagKeyword);
     end;
-    
+
     function GetRoomSlotName(slotMisc: IInterface): string;
 	var
 		miscScript, slotKw: IInterface;
@@ -6828,7 +6909,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result := getScriptProp(curScript, 'UpgradeSlotKeyword');
         end;
     end;
-    
+
     function getCobjConditionValue(conditions: IInterface): integer;
     var
         i: integer;
@@ -6845,7 +6926,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
         Result := -1;
     end;
-    
+
     function findRoomUpgradeCOBJWithComplexityOvr(acti: IInterface): TJsonObject;
     var
         i, curComplexity: integer;
@@ -6872,7 +6953,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
         Result := nil;
     end;
-    
+
     function findRoomUpgradeCOBJWithComplexity(acti: IInterface): TJsonObject;
     var
         i,j, curComplexity: integer;
@@ -6891,7 +6972,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         Result := findRoomUpgradeCOBJWithComplexityOvr(actiMaster);
 
     end;
-    
+
     procedure postprocessRoomUpgradeActivatorsAndCobjs(json: TJsonObject);
     var
         i:  integer;
@@ -7050,7 +7131,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         // postprocess
         postprocessRoomUpgradeActivatorsAndCobjs(Result);
     end;
-    
+
     function getRoomShapeKeywordFromConfig(roomConfig: IInterface): IInterface;
     var
         configScript: IInterface;

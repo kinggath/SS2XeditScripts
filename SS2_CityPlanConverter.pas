@@ -19,6 +19,7 @@ unit CityPlanConverter;
         lastSelectedFileName: string;
         designerName: string;
         createPowerPoles: boolean;
+        testMode: boolean;
 
     procedure loadConfig();
     var
@@ -33,6 +34,7 @@ unit CityPlanConverter;
         oldFormPrefix := '';
         lastSelectedFileName := '';
         createPowerPoles := true;
+        testMode := false;
 
         if(not FileExists(configFile)) then begin
             exit;
@@ -66,6 +68,8 @@ unit CityPlanConverter;
                     lastSelectedFileName := curVal;
                 end else if(curKey = 'CreatePowerPoles') then begin
                     createPowerPoles := StrToBool(curVal);
+                end else if(curKey = 'TestMode') then begin
+                    testMode := StrToBool(curVal);
                 end;
             end;
         end;
@@ -83,6 +87,7 @@ unit CityPlanConverter;
         lines.add('OldPrefix='+oldFormPrefix);
         lines.add('LastFile='+GetFileName(targetFile));
         lines.add('CreatePowerPoles='+BoolToStr(createPowerPoles));
+        lines.add('TestMode='+BoolToStr(testMode));
 
         lines.saveToFile(configFile);
         lines.free();
@@ -225,7 +230,7 @@ unit CityPlanConverter;
     begin
         oldStrIndex := IntToStr(startLevel) +'_'+ IntToStr(oldIndex);
         hasConnector := hasKeywordByPath(baseElem, 'WorkshopPowerConnection', 'KWDA');
-        
+
         // AddMessage('DEBUG: Adding '+EditorID(baseElem)+' ('+IntToStr(oldIndex)+') as index='+IntToStr(newIndex)+', type='+IntToStr(newType)+', startLevel='+IntToStr(startLevel)+', endLevel='+IntToStr(removeAtLevel));
 
         if(powerGridMap.O[oldStrIndex].count > 0) then begin
@@ -243,14 +248,14 @@ unit CityPlanConverter;
                 end;
             end;
         end;
-        
+
 
         powerGridMap.O[oldStrIndex].I['index'] := newIndex;
         powerGridMap.O[oldStrIndex].I['type']  := newType;
         powerGridMap.O[oldStrIndex].I['start'] := startLevel;
         powerGridMap.O[oldStrIndex].I['end']   := removeAtLevel;
         powerGridMap.O[oldStrIndex].B['conn']  := hasConnector;
-        
+
     end;
 
     procedure appendSpawn(baseElem: IInterface; curFileName: string; curFormId: cardinal; itemData: TJsonObject; targetArray: IInterface; isResObj: boolean; startLevel, removeAtLevel: integer);
@@ -836,12 +841,12 @@ unit CityPlanConverter;
         // checkShowPlotDialog: TCheckBox;
         s: string;
         curIndex, selectedIndex: integer;
-        checkboxPoles: TCheckBox;
+        checkboxPoles, doTestMode: TCheckBox;
     begin
         loadConfig();
 
         Result := false;
-        frm := CreateDialog('City Plan Converter', 370, 260);
+        frm := CreateDialog('City Plan Converter', 370, 280);
 
         CreateLabel(frm, 10, 17, 'Target file');
         selectTargetFile := CreateComboBox(frm, 80, 15, 200, nil);
@@ -884,13 +889,16 @@ unit CityPlanConverter;
         checkboxPoles := CreateCheckbox(frm, 10, 170, 'Create Power Poles');
         checkboxPoles.checked := createPowerPoles;
 
+        doTestMode := CreateCheckbox(frm, 10, 190, 'Test Mode');
+        doTestMode.checked := testMode;
 
 
-        btnOk := CreateButton(frm, 50, 200, 'Start Conversion');
+
+        btnOk := CreateButton(frm, 50, 220, 'Start Conversion');
         btnOk.ModalResult := mrYes;
         btnOk.Default := true;
 
-        btnCancel := CreateButton(frm, 250, 200, 'Cancel');
+        btnCancel := CreateButton(frm, 250, 220, 'Cancel');
         btnCancel.ModalResult := mrCancel;
 
         resultCode := frm.ShowModal;
@@ -900,6 +908,7 @@ unit CityPlanConverter;
             oldFormPrefix := trim(inputOldPrefix.text);
             designerName  := trim(inputDesignerName.text);
             createPowerPoles := checkboxPoles.checked;
+            testMode := doTestMode.checked;
 
             if(newFormPrefix = '') then begin
                 AddMessage('You must enter a new prefix');
@@ -949,7 +958,7 @@ unit CityPlanConverter;
     function setExternalFormData(jsonRoot: TJsonObject; key, pluginName: string; id: cardinal): boolean;
     var
         masterType: integer;
-        elem, elemFile: IInterface;
+        oldElem, elem, elemFile: IInterface;
     begin
         Result := false;
         if(pluginName = '') or (id = 0) then begin
@@ -967,16 +976,16 @@ unit CityPlanConverter;
         if(masterType = 2) then begin
             // AddMessage('Attempting to translate 0x'+IntToHex(id, 8)+' '+pluginName);
 
-            elem := getFormByFilenameAndFormID(pluginName, id);
-            if (not assigned(elem)) then begin
+            oldElem := getFormByFilenameAndFormID(pluginName, id);
+            if (not assigned(oldElem)) then begin
                 AddMessage('Failed to find 0x'+IntToHex(id, 8)+' in '+pluginName);
                 exit;
             end;
 
 
-            elem := translateFormToFile(elem, sourceFile, targetFile);
+            elem := translateFormToFile(oldElem, sourceFile, targetFile);
             if(not assigned(elem)) then begin
-                AddMessage('Failed to translate 0x'+IntToHex(id, 8)+', '+pluginName);
+                AddMessage('Failed to translate 0x'+IntToHex(id, 8)+':'+pluginName+' EditorID: '+EditorID(oldElem));
                 exit;
             end;
 
@@ -1736,9 +1745,12 @@ unit CityPlanConverter;
             processLayer(curLayer, plotData);
         end;
 
-
-        AddMessage('Finished reading layers, begin writing SS2 BP');
-        writeNewCityPlan();
+        if(testMode) then begin
+            AddMessage('Test Mode! No SS2 City Plan will be written!');
+        end else begin
+            AddMessage('Finished reading layers, begin writing SS2 City Plan');
+            writeNewCityPlan();
+        end;
 
         plotData.free();
         powerGridMap.free();
