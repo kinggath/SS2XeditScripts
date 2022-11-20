@@ -962,6 +962,7 @@ unit CityPlanConverter;
     begin
         Result := false;
         if(pluginName = '') or (id = 0) then begin
+            // AddMessage('Invalid form entry: '+pluginName+':'+IntToHex(id, 8));
             exit;
         end;
 
@@ -978,14 +979,15 @@ unit CityPlanConverter;
 
             oldElem := getFormByFilenameAndFormID(pluginName, id);
             if (not assigned(oldElem)) then begin
-                AddMessage('Failed to find 0x'+IntToHex(id, 8)+' in '+pluginName);
+                // AddMessage('Failed to find 0x'+IntToHex(id, 8)+' in '+pluginName);
+                AddMessage('Failed to find form '+pluginName+':'+IntToHex(id, 8);
                 exit;
             end;
 
 
             elem := translateFormToFile(oldElem, sourceFile, targetFile);
             if(not assigned(elem)) then begin
-                AddMessage('Failed to translate 0x'+IntToHex(id, 8)+':'+pluginName+' EditorID: '+EditorID(oldElem));
+                AddMessage('Failed to translate form '+pluginName+':'+IntToHex(id, 8)+' "'+EditorID(oldElem)+'"');
                 exit;
             end;
 
@@ -1464,7 +1466,7 @@ unit CityPlanConverter;
                     curLayerData.F['fScale'] := fScale;
                     curLayerData.B['bForceStatic'] := bForceStatic;
                 end else begin
-                    AddMessage('FAILED to set '+FormPlugin+' 0x'+IntToHex(curFormId, 8));
+                    //AddMessage('FAILED to set '+FormPlugin+' 0x'+IntToHex(curFormId, 8));
                     curLayerRoot.O[IntToStr(iRemoveAtLevel)].A['items'].delete(currentDataIndex);
                 end;
             end;
