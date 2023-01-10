@@ -462,10 +462,11 @@ unit SS2Lib;
         Result := e;
         if(not assigned(e)) then exit;
         if(isUpdatingOverride) then begin
-            eFile := GetFile(MasterOrSelf(e));
-            if(FilesEqual(eFile, overrideSourceFile)) then begin
-                Result := getOrCreateElementOverride(e, targetFile);
-            end;
+            // if we are doing override updating, we probably always want an override to be created in targetFile
+            //eFile := GetFile(MasterOrSelf(e));
+            //if(FilesEqual(eFile, overrideSourceFile)) then begin
+            Result := getOrCreateElementOverride(e, targetFile);
+            //end;
         end;
     end;
 

@@ -1402,7 +1402,7 @@ unit PraUtil;
 
         Result := ElementAssign(elemAtPath, HighInteger, nil, False);
     end;
-    
+
     {
         Removes the elem located at path from elem.
     }
@@ -1509,7 +1509,7 @@ unit PraUtil;
     begin
         Result := strEndsWith(LowerCase(haystack), LowerCase(needle));
     end;
-    
+
     function getStringAfter(str, separator: string): string;
     var
         p: integer;
@@ -2328,7 +2328,7 @@ unit PraUtil;
 
         SetLinksTo(ElementByPath(newEntry, 'Object v2\FormID'), newObject);
     end;
-    
+
     {
         Appends an object to an "Array of Object" property value, unless it already exists
     }
@@ -2341,7 +2341,7 @@ unit PraUtil;
         if(not assigned(propValue)) then begin
             propValue := prop; // assume we were given the array of object already
         end;
-        
+
         for i:=0 to ElementCount(propValue)-1 do begin
             curEntry := ElementByIndex(propValue, i);
             if(IsSameForm(newObject, PathLinksTo(curEntry, 'Object v2\FormID'))) then begin
@@ -2353,7 +2353,7 @@ unit PraUtil;
 
         SetPathLinksTo(newEntry, 'Object v2\FormID', newObject);
     end;
-    
+
     procedure removeObjectFromProperty(prop: IInterface; objectToRemove: IInterface);
     var
         newEntry, propValue, curEntry: IInterface;
@@ -2363,7 +2363,7 @@ unit PraUtil;
         if(not assigned(propValue)) then begin
             propValue := prop; // assume we were given the array of object already
         end;
-        
+
         for i:=0 to ElementCount(propValue)-1 do begin
             curEntry := ElementByIndex(propValue, i);
             if(IsSameForm(objectToRemove, PathLinksTo(curEntry, 'Object v2\FormID'))) then begin
@@ -2867,6 +2867,37 @@ unit PraUtil;
             Result.items := items;
         end;
 	end;
+
+    function CreateFileSelectDropdown(frm: TForm; left: Integer; top: Integer; width: Integer; preselectedFile: IInterface; prependNewFileEntry: boolean): TComboBox;
+    var
+        cbFiles: TComboBox;
+        btnOk, btnCancel: TButton;
+        i, selIndex, fileIndex: integer;
+        curFileName: string;
+        curFile: IInteerface;
+    begin
+        Result := CreateComboBox(frm, left, top, width, nil);
+
+        if(prependNewFileEntry) then begin
+            Result.Items.Add('-- CREATE NEW FILE --');
+        end;
+
+        selIndex := 0;
+        for i := 0 to FileCount - 1 do begin
+            curFile := FileByIndex(i);
+
+            curFileName := GetFileName(curFile);
+            //if (Pos(s, bethesdaFiles) > 0) then Continue;// maybe add this back in?
+            fileIndex := Result.Items.Add(curFileName);
+
+            if(assigned(preselectedFile)) then begin
+                if(FilesEqual(curFile, preselectedFile)) then begin
+                    selIndex := fileIndex;
+                end;
+            end;
+        end;
+        cbFiles.ItemIndex := selIndex;
+    end;
 
     {
         Shows a dialog with input fields for x, y and z.
