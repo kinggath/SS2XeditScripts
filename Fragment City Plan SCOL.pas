@@ -334,6 +334,7 @@ unit FragmentCityPlanSCOL;
         posX, posY, posZ, rotX, rotY, rotZ, scale, partScale: float;
         edid, scaleString: string;
 
+        anythingDone: boolean;
 
         layerScript, itemArray, curStruct, srcForm, partsRoot, curPart, curPartBase, curPlacement, placements: IInterface;
         scolPos, scolRot, partPosVector, partPosVectorScaled, partRotVector, rotatedData: TJsonObject;
@@ -343,6 +344,7 @@ unit FragmentCityPlanSCOL;
 
         //currentPrependIndex := 0;
         entriesToDelete.clear();
+        entriesToPrepend.clear();
 
         BeginUpdate(layout);
 
@@ -353,6 +355,8 @@ unit FragmentCityPlanSCOL;
 
         currentLayoutIndexOffset := iIndexOffset;
 
+        anythingDone := false;
+
         for i:=0 to ElementCount(itemArray)-1 do begin
             curStruct := ElementByIndex(itemArray, i);
             srcForm := getStructMember(curStruct, 'ObjectForm');
@@ -360,7 +364,7 @@ unit FragmentCityPlanSCOL;
             if(assigned(srcForm)) then begin
                 if(scolsToFragment.indexOf(EditorID(srcForm)) >= 0) then begin
 
-                // if(IsSameForm(srcForm, scol)) then begin
+                    anythingDone := true;
 
                     rotX := getStructMemberDefault(curStruct, 'fAngleX', 0.0);
                     rotY := getStructMemberDefault(curStruct, 'fAngleY', 0.0);
@@ -434,14 +438,21 @@ unit FragmentCityPlanSCOL;
             end;
         end;
 
-        AddMessage('Resyncing power grid');
-        resyncPowerGrid(itemArray, iIndexOffset);
+        if(anythingDone) then begin
 
-        AddMessage('Processing prepending');
-        processEntriesToPrepend(itemArray);
+            AddMessage('Resyncing power grid');
+            resyncPowerGrid(itemArray, iIndexOffset);
 
-        // delete the entries marked for deletion
-        processEntriesToDelete(itemArray);
+            AddMessage('Processing prepending');
+            processEntriesToPrepend(itemArray);
+
+            // delete the entries marked for deletion
+            processEntriesToDelete(itemArray);
+        end else begin
+            AddMessage('Did not do anything for this layout');
+            entriesToPrepend.clear();
+            entriesToDelete.clear();
+        end;
 
         EndUpdate(layout);
 
@@ -526,41 +537,6 @@ unit FragmentCityPlanSCOL;
 
     end;
 
-    procedure processScol(scol: IInterface);
-    var
-        i, numRefs: integer;
-        layouts: TStringList;
-        curRef, curLayout: IInterface;
-        edid: string;
-    begin
-        if(not isMaster(scol)) then begin
-            initOverrideUpdating(GetFile(Master(scol)));
-            //scol := getOverriddenForm(scol, targetFile);
-        end;
-        // find all layouts where this one is used, then for each, add each part as spawn, and remove self
-        layouts := TStringList.create;
-        numRefs := ReferencedByCount(scol)-1;
-        for i:=0 to numRefs do begin
-            curRef := ReferencedByIndex(scol, i);
-            // accept if it has SimSettlementsV2:Weapons:CityPlanLayout
-            if(assigned(getScript(curRef, 'SimSettlementsV2:Weapons:CityPlanLayout'))) then begin
-                AddMessage('Found relevant layout: '+DisplayName(curRef));
-                edid := EditorID(curRef);
-                if(layouts.indexOf(edid) < 0) then begin
-                    layouts.addObject(edid, curRef);
-                end;
-            end;
-        end;
-
-        for i:= 0 to layouts.count-1 do begin
-            curLayout := ObjectToElement(layouts.Objects[i]);
-            curLayout := getOverriddenForm(curLayout, targetFile);
-            AddMessage('Doing layout: '+DisplayName(curLayout));
-            fragmentScolForLayout(scol, curLayout);
-        end;
-        layouts.free();
-    end;
-
     // called for every record selected in xEdit
     function Process(e: IInterface): integer;
     var
@@ -587,9 +563,9 @@ unit FragmentCityPlanSCOL;
                 curRef := ReferencedByIndex(e, i);
                 // accept if it has SimSettlementsV2:Weapons:CityPlanLayout
                 if(assigned(getScript(curRef, 'SimSettlementsV2:Weapons:CityPlanLayout'))) then begin
-                    AddMessage('Found relevant layout: '+EditorID(curRef));
                     edid := EditorID(curRef);
                     if(layoutsToProcess.indexOf(edid) < 0) then begin
+                        AddMessage('Found relevant layout: '+EditorID(curRef));
                         layoutsToProcess.addObject(edid, curRef);
                     end;
                 end;
@@ -598,8 +574,6 @@ unit FragmentCityPlanSCOL;
         end;
 
 
-
-        //processScol(e);
 
     end;
 

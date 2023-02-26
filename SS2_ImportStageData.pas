@@ -204,9 +204,9 @@ begin
         end else if(typeSelect.ItemIndex = 2) then begin
             currentMode := MODE_SKIN_ROOT;
             Result := true;
-        end else if(typeSelect.ItemIndex = 4) then begin        
+        end else if(typeSelect.ItemIndex = 4) then begin
             currentMode := MODE_SUBSPAWNER;
-            
+
             Result := true;
         end else begin
             selectedLevelNr := StrToInt(levelInput.text);
@@ -235,13 +235,13 @@ var
     numOcc1, numOcc2, numOcc3: integer;
     plotLevelScript, subspawnerScript: IInterface;
     plotLevelNr, plotLevelOcc: integer;
-    
-    
+
+
 begin
     Result := false;
 
     isSkin := false;
-    
+
     occupantsOnLevel1 := 0;
     occupantsOnLevel2 := 0;
     occupantsOnLevel3 := 0;
@@ -299,7 +299,7 @@ begin
 
             plotLevelNr := getScriptProp(plotLevelScript, 'iRequiredLevel');
             plotLevelOcc := getScriptPropDefault(plotLevelScript, 'iMaxOccupants', 1);
-            
+
             case plotLevelNr of
                 1: numOcc1 := plotLevelOcc;
                 2: numOcc2 := plotLevelOcc;
@@ -344,7 +344,7 @@ begin
             subspawnerScript := getScript(targetElem, 'SimSettlementsV2:ObjectReferences:PlotSubSpawner');
             reckeckItems := getScriptPropDefault(subspawnerScript, 'bRecheckItemsWithRequirements', false);
         end;
-    
+
         resultData := ShowSubspawnerCreateDialog(
             'Subspawner Data Import',
             plotId, modPrefix, isNewEntry, reckeckItems
@@ -352,14 +352,14 @@ begin
         if(not assigned(resultData)) then begin
             exit;
         end;
-        
+
         itemFilePath  := resultData.S['itemsFile'];
         plotId        := resultData.S['edid'];
         modPrefix     := resultData.S['prefix'];
         subspawnerRecheckItems     := resultData.B['reckeckItems'];
         importSpawnsMode := IMPORT_MODE_SUBSPAWNER;
     end else begin
-    
+
 
         if(isSkin) then begin
             // old skin target
@@ -396,7 +396,7 @@ begin
             modPrefix     := resultData.S['prefix'];
             skinSpawnsMode:= resultData.B['itemsReplace'];
             skinTargetEdid:= resultData.S['targetPlot'];
-            
+
             if(resultData.B['itemsReplace']) then begin
                 importSpawnsMode := IMPORT_MODE_SKIN_REPLACE;
             end else begin
@@ -461,7 +461,9 @@ begin
 
             stageFilePath := resultData.S['modelsFile'];
             itemFilePath  := resultData.S['itemsFile'];
-            currentType   := resultData.I['type'];
+
+            currentType := resultData.I['type'];
+
             plotName      := resultData.S['name'];
             plotId        := resultData.S['edid'];
             modPrefix     := resultData.S['prefix'];
@@ -647,7 +649,7 @@ var
     lineRest: string;
 begin
     lineRest := trim(StringReplace(line, ',', '', [rfReplaceAll]));
-    
+
     Result := (lineRest = '');
 end;
 
@@ -712,7 +714,7 @@ begin
             13 => iVendorLevel
             14 => iOwnerNumber
             15 => sSpawnName
-            16 => Requirements 
+            16 => Requirements
         }
 
         if(importMode = IMPORT_MODE_SUBSPAWNER) then begin
@@ -723,12 +725,12 @@ begin
                 (csvCols.Strings[4] = '') or
                 (csvCols.Strings[5] = '') or
                 (csvCols.Strings[6] = '') or
-                (csvCols.Strings[7] = '') then begin 
+                (csvCols.Strings[7] = '') then begin
                 AddMessage('Line "'+curLine+'" is not valid, skipping');
                 csvCols.Free;
                 continue;
             end;
-            
+
             lvl := 1;
             maxStage := 1;
         end else begin
@@ -747,7 +749,7 @@ begin
             end;
             // find correct level and stage
             lvl := StrToInt(csvCols.Strings[8]);
-            
+
             if (plotData.O['levels'].O[lvl].I['maxStage'] <= 0) then begin
                 maxStage := findMaxStageForLevel(lvl);
                 plotData.O['levels'].O[lvl].I['maxStage'] := maxStage;
@@ -755,7 +757,7 @@ begin
                 maxStage := plotData.O['levels'].O[lvl].I['maxStage'];
             end;
         end;
-        
+
         lvlObj := plotData.O['levels'].O[lvl];
 
         stage := -1;
@@ -1001,14 +1003,14 @@ begin
             levelBlueprint := getBuildingPlanForLevel(targetFile, edidBase, curLevel);
         end;
     end;
-    
+
     numOccupants := 0;
     case curLevel of
         1: numOccupants := occupantsOnLevel1;
         2: numOccupants := occupantsOnLevel2;
         3: numOccupants := occupantsOnLevel3;
     end;
-    
+
     levelBlueprint := getOverriddenForm(levelBlueprint, targetFile);
 
     curLevelBlueprintScript := getScript(levelBlueprint, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
@@ -1098,7 +1100,7 @@ begin
 
         AddMessage('+++ Filling Spawns complete +++');
     end;
-    
+
     Result := levelBlueprint;
 end;
 
@@ -1155,6 +1157,11 @@ begin
 
     {plotName, plotId, modPrefix, plotDescription}
     AddMessage('Preparing blueprint root');
+
+    if(currentType < 0) then begin
+        AddMessage('ERROR: plot type is '+IntToStr(currentType)+' in generateBlueprint! This is very bad!');
+        exit;
+    end;
 
     subType := extractPlotSubtype(currentType);
     descrString := getSubtypeDescriptionString(subType) + descrString;
@@ -1304,7 +1311,7 @@ begin
     if(plotData.B['hasItems']) then begin
         checkSpawnItems();
     end;
-    
+
 
 
     //AddMessage('=== DEBUG: intermediate json ===');
@@ -1391,13 +1398,13 @@ var
     itemSpawnEdid: string;
     j: integer;
 begin
- 
+
     cleanItemSpawnsForSubspawner(getRawScriptProp(subspawnerScript, 'SubSpawns'), subspawner, targetFile);
 
     curLevelSpawns := plotData.O['levels'].O['1'].A['spawns'];
 
     if(curLevelSpawns.count > 0) then begin
-    
+
         // this is a pure array of form, not array of struct
         spawnsArray := getOrCreateScriptPropArrayOfObject(subspawnerScript, 'SubSpawns');
         for j:=0 to curLevelSpawns.count-1 do begin
@@ -1563,7 +1570,7 @@ begin
         // spawns
         // spawnsPropKey
     end;
-    
+
     Result := currentLevelSkin;
 end;
 
@@ -1624,12 +1631,12 @@ begin
         subspawnerRecheckItems     := resultData.B['reckeckItems'];
     }
     isNewElem := (not assigned(tagetSubspawner));
-    
+
     subspawnerRoot   := prepareSubspawnerRoot(targetFile, tagetSubspawner, plotId);
     subspawnerScript := getScript(subspawnerRoot, 'SimSettlementsV2:ObjectReferences:PlotSubSpawner');
     //AddMessage('subspawnerRecheckItems='+BoolToStr(subspawnerRecheckItems));
     setScriptPropDefault(subspawnerScript, 'bRecheckItemsWithRequirements', subspawnerRecheckItems, false);
-    
+
     //subspawner, subspawnerScript: IInterface): IInterface;
     fillSubspawner(subspawnerRoot, subspawnerScript);
 end;
@@ -1669,7 +1676,7 @@ begin
 
         fillSkinLevelBlueprint(currentLevelSkin, i, hasModels, hasItems, skinRoot, spawnsPropKey, lvlFormName);
     end;
-    
+
     if(not hasModels) then begin
         setupStackedMovementForContentIfEnabled(skinRoot);
     end;

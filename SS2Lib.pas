@@ -5416,7 +5416,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             end;
         end;
 
-        if(mainType > 0) and (size > 0) and (subType > 0) then begin
+        if(mainType > -1) and (size > -1) and (subType > -1) then begin
             Result := packPlotType(mainType, size, subType);
         end;
 
@@ -6446,7 +6446,6 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
     end;
 
 
-    ///AAA
     function ShowSkinCreateDialog(title, text, initialPlotName, initialPlotId, initialModPrefix: string; existingPlotTarget: IInterface; isFullSkin: boolean; initialThemes: TStringList; autoRegister, makePreview, setupStacking, isNewEntry: boolean): TJsonObject;
     var
         frm: TForm;
