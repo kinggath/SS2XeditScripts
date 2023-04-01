@@ -286,6 +286,10 @@ begin
 
         if(currentMode = MODE_BP_ROOT) then begin
             plotType := getNewPlotType(targetElem);
+            // edgecase: plotType must not be -1 here!
+            if(plotType < 0) then begin
+                plotType := 0;
+            end;
             existingPlotThemes := getPlotThemes(targetElem);
             dialogLabel := 'Selected Blueprint: '+plotId;
 
@@ -432,6 +436,7 @@ begin
                 exit;
             end;
         end else begin
+
             resultData := ShowPlotCreateDialog(
                     'Plot Data Import',
                     dialogLabel,
@@ -463,6 +468,7 @@ begin
             itemFilePath  := resultData.S['itemsFile'];
 
             currentType := resultData.I['type'];
+
 
             plotName      := resultData.S['name'];
             plotId        := resultData.S['edid'];
