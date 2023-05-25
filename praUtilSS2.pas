@@ -986,7 +986,7 @@ unit PraUtil;
 		theFormId: cardinal;
 		theFilename: string;
 	begin
-		theFile := GetFile(form);
+		theFile := GetFile(MasterOrSelf(form));
 		theFilename := GetFileName(theFile);
 		theFormId := getLocalFormId(theFile, FormID(form));
 

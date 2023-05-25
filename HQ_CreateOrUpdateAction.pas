@@ -4911,8 +4911,16 @@ unit ImportHqRoom;
 //		departmentList.free();
 		frm.free();
 	end;
+    
+    function getRoomConfigEdidPart(configMisc: IInterface): string;
+	var
+		edid, confName: string;
+	begin
+		edid := EditorID(configMisc);
+		Result := regexReplace(edid, '[^_]+_HQ[^_]*_Action_AssignRoomConfig_', '');
+	end;
 
-	function createRoomLayout(existingElem, hq: IInterface; layoutName, csvPath, upgradeNameSpaceless, slotNameSpaceless: string; upgradeSlot, descriptionMsg, designerMisc: IInterface): IInterface;
+	function createRoomLayout(existingElem, hq, roomConfig: IInterface; layoutName, csvPath, upgradeNameSpaceless, slotNameSpaceless: string; upgradeSlot, descriptionMsg, designerMisc: IInterface): IInterface;
 	var
 		resultEdid, layoutNameSpaceless, curLine, curEditorId, curFileName, slotEdid: string;
 		spawnData: TJsonObject;
@@ -4931,11 +4939,11 @@ unit ImportHqRoom;
 	begin
         if(not assigned(existingElem)) then begin
             layoutNameSpaceless := cleanStringForEditorID(layoutName);
-            resultEdid := generateEdid('HQRoomLayout_', upgradeNameSpaceless+'_'+slotNameSpaceless+'_'+layoutNameSpaceless);
+
+            resultEdid := generateEdid('HQRoomLayout_', findHqNameShort(hq)+'_'+getRoomConfigEdidPart(roomConfig)+'_'+upgradeNameSpaceless+'_'+slotNameSpaceless+'_'+layoutNameSpaceless);
             Result := getCopyOfTemplateOA(targetFile, SS2_HQRoomLayout_Template, resultEdid);
         end else begin
             Result := getOrCreateElementOverride(existingElem, targetFile);
-            //
         end;
 
 		resultScript := getScript(Result, 'SimSettlementsV2:HQ:Library:Weapons:HQRoomLayout');
@@ -5820,7 +5828,7 @@ unit ImportHqRoom;
 
             RoomLayouts := getOrCreateScriptPropArrayOfObject(script, 'RoomLayouts');
             if(assigned(existingElem)) then begin
-                updateExistingLayouts(targetHq, RoomLayouts, layouts, upgradeNameSpaceless, slotNameSpaceless, descriptionMsg, designerMisc);
+                updateExistingLayouts(targetHq, RoomLayouts, targetRoomConfig, layouts, upgradeNameSpaceless, slotNameSpaceless, descriptionMsg, designerMisc);
 
             end else begin
                 // create layouts from scratch
@@ -5832,7 +5840,7 @@ unit ImportHqRoom;
                     selectedSlotStr := resourceJson.S['slot'];
                     upgradeSlotLayout := StrToForm(selectedSlotStr);
 
-                    curLayout := createRoomLayout(nil, targetHq, curLayoutName, curLayoutPath, upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout, descriptionMsg, designerMisc);
+                    curLayout := createRoomLayout(nil, targetHq, targetRoomConfig, curLayoutName, curLayoutPath, upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout, descriptionMsg, designerMisc);
 
                     appendObjectToProperty(RoomLayouts, curLayout);
                 end;
@@ -6033,7 +6041,7 @@ unit ImportHqRoom;
         end;
     end;
 
-    procedure updateExistingLayouts(targetHq, RoomLayouts: IInterface; layouts: TStringList; upgradeNameSpaceless, slotNameSpaceless: string; descriptionMsg, designerMisc: IInterface);
+    procedure updateExistingLayouts(targetHq, RoomLayouts, roomConfig: IInterface; layouts: TStringList; upgradeNameSpaceless, slotNameSpaceless: string; descriptionMsg, designerMisc: IInterface);
     var
         prevLayouts, recycleLayouts, usedLayouts, newLayouts: TStringList;
         i: integer;
@@ -6098,7 +6106,7 @@ unit ImportHqRoom;
             if(assigned(curLayout)) then begin
                 // updating
                 AddMessage('Updating '+EditorID(curLayout));
-                newLayout := createRoomLayout(curLayout, targetHq, curJsonData.S['name'], curJsonData.S['path'], upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout, descriptionMsg, designerMisc);
+                newLayout := createRoomLayout(curLayout, targetHq, roomConfig, curJsonData.S['name'], curJsonData.S['path'], upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout, descriptionMsg, designerMisc);
 
                 newLayouts.addObject(EditorID(newLayout), newLayout);
             end else begin
@@ -6110,7 +6118,7 @@ unit ImportHqRoom;
                 end;
                 if(curJsonData.S['path'] <> '') then begin
                     //AddMessage('Generating layout. Using recycled? '+BoolToStr(curLayout));
-                    newLayout := createRoomLayout(curLayout, targetHq, curJsonData.S['name'], curJsonData.S['path'], upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout, descriptionMsg, designerMisc);
+                    newLayout := createRoomLayout(curLayout, targetHq, roomConfig, curJsonData.S['name'], curJsonData.S['path'], upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout, descriptionMsg, designerMisc);
                     newLayouts.addObject(EditorID(newLayout), newLayout);
                 end;
             end;
@@ -6626,7 +6634,7 @@ unit ImportHqRoom;
 
             slotMisc := ObjectToElement(roomSlotsOptional.Objects[selectUpgradeSlot.ItemIndex]);
 
-            createRoomLayout(layer, targetHQ, layoutName, csvPath, '', '', slotMisc, nil, nil);
+            createRoomLayout(layer, targetHQ, targetRoomConfig, layoutName, csvPath, '', '', slotMisc, nil, nil);
         end;
         frm.free();
 

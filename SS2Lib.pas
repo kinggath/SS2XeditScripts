@@ -2622,7 +2622,7 @@ unit SS2Lib;
         end;
 
         // before doing anything else, see if this edid is used already
-        newElem := FindObjectInFileByEdid(targetFile, newEdid);
+        newElem := FindObjectByEdid(newEdid);
         if(assigned(newElem)) then begin
             if(useOverrides) then begin
                 Result := getOrCreateElementOverride(newElem, targetFile);
