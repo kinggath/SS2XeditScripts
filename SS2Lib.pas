@@ -258,8 +258,8 @@ unit SS2Lib;
 
         SS2_PlotTypeSubClass_Martial_OutpostType_Armory,
         SS2_PlotTypeSubClass_Martial_OutpostType_BattlefieldScavengers,
-        // SS2_PlotTypeSubClass_Martial_OutpostType_FieldHospital,
-        SS2_PlotTypeSubClass_Martial_OutpostType_FieldSurgeon,
+
+        SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics,
         SS2_PlotTypeSubClass_Martial_OutpostType_Prison,
         SS2_PlotTypeSubClass_Martial_OutpostType_RecruitmentCenter,
         SS2_PlotTypeSubClass_Martial_OutpostType_WatchTower,
@@ -291,7 +291,7 @@ unit SS2Lib;
         SS2_PlotTypeSubClass_Recreational_StrengthTraining,
 
         SS2_PlotTypeSubClass_Recreational_OutpostType_MessHall,
-        SS2_PlotTypeSubClass_Recreational_OutpostType_TrainingYard,
+        SS2_PlotTypeSubClass_Recreational_OutpostType_MilitaryTraining,
         // residential
         SS2_PlotTypeSubClass_Residential_Default_SinglePerson,
         SS2_PlotTypeSubClass_Residential_MultiPerson: IInterface;
@@ -2261,7 +2261,7 @@ unit SS2Lib;
         SS2_PlotTypeSubClass_Martial_HighTech                           := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_HighTech');
         SS2_PlotTypeSubClass_Martial_OutpostType_Armory                 := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_Armory');
         SS2_PlotTypeSubClass_Martial_OutpostType_BattlefieldScavengers  := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_BattlefieldScavengers');
-        // SS2_PlotTypeSubClass_Martial_OutpostType_FieldHospital          := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_FieldHospital');
+        SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics          := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics');
         SS2_PlotTypeSubClass_Martial_OutpostType_Prison                 := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_Prison');
         SS2_PlotTypeSubClass_Martial_OutpostType_RecruitmentCenter      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_RecruitmentCenter');
         SS2_PlotTypeSubClass_Martial_OutpostType_WatchTower             := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_WatchTower');
@@ -2289,7 +2289,7 @@ unit SS2Lib;
         SS2_PlotTypeSubClass_Recreational_IntelligenceTraining          := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_IntelligenceTraining');
         SS2_PlotTypeSubClass_Recreational_LuckTraining                  := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_LuckTraining');
         SS2_PlotTypeSubClass_Recreational_OutpostType_MessHall          := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_OutpostType_MessHall');
-        SS2_PlotTypeSubClass_Recreational_OutpostType_TrainingYard      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_OutpostType_TrainingYard');
+        SS2_PlotTypeSubClass_Recreational_OutpostType_MilitaryTraining      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_OutpostType_MilitaryTraining');
         SS2_PlotTypeSubClass_Recreational_PerceptionTraining            := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_PerceptionTraining');
         SS2_PlotTypeSubClass_Recreational_StrengthTraining              := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_StrengthTraining');
         SS2_PlotTypeSubClass_Residential_Default_SinglePerson           := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Residential_Default_SinglePerson');
@@ -2503,14 +2503,14 @@ unit SS2Lib;
             // martial
             PLOT_SC_MAR_OutpostType_Armory                  := plotSubtypeNames.add('Armory');
             PLOT_SC_MAR_OutpostType_BattlefieldScavengers   := plotSubtypeNames.add('Battlefield Scavengers');
-            PLOT_SC_MAR_OutpostType_FieldSurgeon            := plotSubtypeNames.add('Field Surgeon');
+            PLOT_SC_MAR_OutpostType_FieldSurgeon            := plotSubtypeNames.add('Field Medics');
             PLOT_SC_MAR_OutpostType_Prison                  := plotSubtypeNames.add('Prison');
             PLOT_SC_MAR_OutpostType_RecruitmentCenter       := plotSubtypeNames.add('Recruitment Center');
             PLOT_SC_MAR_OutpostType_WatchTower              := plotSubtypeNames.add('Watchtower');
 
             // recreational
             PLOT_SC_REC_OutpostType_MessHall        := plotSubtypeNames.add('Outpost Mess Hall');
-            PLOT_SC_REC_OutpostType_TrainingYard    := plotSubtypeNames.add('Outpost Training Yard');
+            PLOT_SC_REC_OutpostType_TrainingYard    := plotSubtypeNames.add('Outpost Military Yard');
         end;
 
 
@@ -5083,14 +5083,14 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
                 // martial
                 PLOT_SC_MAR_OutpostType_Armory:                 Result := SS2_PlotTypeSubClass_Martial_OutpostType_Armory;
                 PLOT_SC_MAR_OutpostType_BattlefieldScavengers:  Result := SS2_PlotTypeSubClass_Martial_OutpostType_BattlefieldScavengers;
-                PLOT_SC_MAR_OutpostType_FieldSurgeon:           Result := SS2_PlotTypeSubClass_Martial_OutpostType_FieldSurgeon;
+                PLOT_SC_MAR_OutpostType_FieldSurgeon:           Result := SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics;
                 PLOT_SC_MAR_OutpostType_Prison:                 Result := SS2_PlotTypeSubClass_Martial_OutpostType_Prison;
                 PLOT_SC_MAR_OutpostType_RecruitmentCenter:      Result := SS2_PlotTypeSubClass_Martial_OutpostType_RecruitmentCenter;
                 PLOT_SC_MAR_OutpostType_WatchTower:             Result := SS2_PlotTypeSubClass_Martial_OutpostType_WatchTower;
 
                 // recreational
                 PLOT_SC_REC_OutpostType_MessHall:       Result := SS2_PlotTypeSubClass_Recreational_OutpostType_MessHall;
-                PLOT_SC_REC_OutpostType_TrainingYard:   Result := SS2_PlotTypeSubClass_Recreational_OutpostType_TrainingYard;
+                PLOT_SC_REC_OutpostType_TrainingYard:   Result := SS2_PlotTypeSubClass_Recreational_OutpostType_MilitaryTraining;
             end;
         end;
     end;
@@ -5218,7 +5218,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result := PLOT_SC_MUN_CaravanServices;
             exit;
         end;
-        if(edid = 'SS2_PlotTypeSubClass_Municipal_CommunicationStation') then begin
+        if(edid = 'SS2_PlotTypeSubClass_Municipal_Communications') then begin
             Result := PLOT_SC_MUN_CommunicationsStation;
             exit;
         end;
@@ -5328,7 +5328,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
                 Result := PLOT_SC_MAR_OutpostType_BattlefieldScavengers;
                 exit;
             end;
-            if(edid = 'SS2_PlotTypeSubClass_Martial_OutpostType_FieldSurgeon') then begin
+            if(edid = 'SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics') then begin
                 Result := PLOT_SC_MAR_OutpostType_FieldSurgeon;
                 exit;
             end;
@@ -5350,7 +5350,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
                 Result := PLOT_SC_REC_OutpostType_MessHall;
                 exit;
             end;
-            if(edid = 'SS2_PlotTypeSubClass_Recreational_OutpostType_TrainingYard') then begin
+            if(edid = 'SS2_PlotTypeSubClass_Recreational_OutpostType_MilitaryTraining') then begin
                 Result := PLOT_SC_REC_OutpostType_TrainingYard;
                 exit;
             end;
