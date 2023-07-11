@@ -659,6 +659,16 @@ begin
     Result := (lineRest = '');
 end;
 
+function parseCsvFloat(s: string): float;
+var
+    fixedS: string;
+begin
+    fixedS := s;
+    fixedS := StringReplace(fixedS, ',', '.', [rfReplaceAll]);
+    Result := StrToFloat(fixedS);
+end;
+
+
 function importItemData(itemsSheet: string; importMode: ingeger): boolean;
 var
     csvLines, csvCols: TStringList;
@@ -819,13 +829,13 @@ begin
             curSpawnObj := spawnsArr.addObject();
 
             curSpawnObj.S['Form'] := FormToStr(curElement);
-            curSpawnObj.F['posX'] := StrToFloat(csvCols.Strings[1]);
-            curSpawnObj.F['posY'] := StrToFloat(csvCols.Strings[2]);
-            curSpawnObj.F['posZ'] := StrToFloat(csvCols.Strings[3]);
-            curSpawnObj.F['rotX'] := StrToFloat(csvCols.Strings[4]);
-            curSpawnObj.F['rotY'] := StrToFloat(csvCols.Strings[5]);
-            curSpawnObj.F['rotZ'] := StrToFloat(csvCols.Strings[6]);
-            curSpawnObj.F['scale']:= StrToFloat(csvCols.Strings[7]);
+            curSpawnObj.F['posX'] := parseCsvFloat(csvCols.Strings[1]);
+            curSpawnObj.F['posY'] := parseCsvFloat(csvCols.Strings[2]);
+            curSpawnObj.F['posZ'] := parseCsvFloat(csvCols.Strings[3]);
+            curSpawnObj.F['rotX'] := parseCsvFloat(csvCols.Strings[4]);
+            curSpawnObj.F['rotY'] := parseCsvFloat(csvCols.Strings[5]);
+            curSpawnObj.F['rotZ'] := parseCsvFloat(csvCols.Strings[6]);
+            curSpawnObj.F['scale']:= parseCsvFloat(csvCols.Strings[7]);
 
             // 11 = type
             // 12 = sVendorType
@@ -840,13 +850,13 @@ begin
         curSpawnObj := spawnsArr.addObject();
 
         curSpawnObj.S['Form'] := FormToStr(curElement);//IntToStr(GetLoadOrderFormID(curElement));
-        curSpawnObj.F['posX'] := StrToFloat(csvCols.Strings[1]);
-        curSpawnObj.F['posY'] := StrToFloat(csvCols.Strings[2]);
-        curSpawnObj.F['posZ'] := StrToFloat(csvCols.Strings[3]);
-        curSpawnObj.F['rotX'] := StrToFloat(csvCols.Strings[4]);
-        curSpawnObj.F['rotY'] := StrToFloat(csvCols.Strings[5]);
-        curSpawnObj.F['rotZ'] := StrToFloat(csvCols.Strings[6]);
-        curSpawnObj.F['scale']:= StrToFloat(csvCols.Strings[7]);
+        curSpawnObj.F['posX'] := parseCsvFloat(csvCols.Strings[1]);
+        curSpawnObj.F['posY'] := parseCsvFloat(csvCols.Strings[2]);
+        curSpawnObj.F['posZ'] := parseCsvFloat(csvCols.Strings[3]);
+        curSpawnObj.F['rotX'] := parseCsvFloat(csvCols.Strings[4]);
+        curSpawnObj.F['rotY'] := parseCsvFloat(csvCols.Strings[5]);
+        curSpawnObj.F['rotZ'] := parseCsvFloat(csvCols.Strings[6]);
+        curSpawnObj.F['scale']:= parseCsvFloat(csvCols.Strings[7]);
 
         if (getArrayElemDefault(csvCols, 11, '') <> '')then begin
             curSpawnObj.I['type'] := StrToInt(getArrayElemDefault(csvCols, 11, '0'));

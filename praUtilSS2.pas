@@ -1,8 +1,10 @@
 {
     Some useful functions
+    
+    Version 2023-07-11
 }
 unit PraUtil;
-    uses 'SS2\mteFunctions';
+    uses 'SS2\mteFunctions';// deprecated, to be eventually removed
 
     const STRING_LINE_BREAK = #13#10;
 
@@ -31,6 +33,61 @@ unit PraUtil;
     function isSameFile(file1, file2: IwbFile): boolean;
     begin
         Result := FilesEqual(file1, file2);
+    end;
+
+    {
+        Returns if e is either deleted, or flagged as initially disabled and opposite to player
+    }
+    function isConsideredDeleted(e: IInterface): boolean;
+    var
+        xesp: IInterface;
+        flags: integer;
+    begin
+        Result := true;
+        if(GetIsDeleted(e)) then exit;
+
+        if(GetIsInitiallyDisabled(e)) then begin
+            xesp := pathLinksTo(e, 'XESP\Reference');
+            if(FormID(xesp) = 20) then begin
+                flags := GetElementNativeValues(e, 'XESP\Flags');
+                // yes player
+                if((flags or 1) <> 0) then begin
+                    //AddMessage('the flags are '+IntToStr(flags));
+                    exit;
+                end;
+            end;
+
+        end;
+        Result := false;
+    end;
+
+    {
+        Returns if e is scrappable, either directly or via a scrap FLST, recursively
+    }
+    function isBaseObjectScrappable(e: IInterface): boolean;
+    var
+        i: integer;
+        curRef, product: IInterface;
+    begin
+        Result := false;
+        for i:=0 to ReferencedByCount(e)-1 do begin
+            curRef := ReferencedByIndex(e, i);
+
+            if(Signature(curRef) = 'COBJ') then begin
+                product := LinksTo(ebp(curRef, 'CNAM'));
+
+                if(isSameForm(product, e)) then begin
+                    Result := true;
+                    exit;
+                end;
+            end else if(Signature(curRef) = 'FLST') then begin
+                if(isBaseObjectScrappable(curRef)) then begin
+                    Result := true;
+                    exit;
+                end;
+            end;
+        end;
+
     end;
 
     {
@@ -165,6 +222,96 @@ unit PraUtil;
         end;
     end;
 
+    {
+        Tries to find a reference with a given editor id. Iterates all the cells. Probably even worse than FindObjectByEdid
+    }
+    function FindReferenceByEdid(edid: string): IInterface;
+    var
+        iFiles: integer;
+        curFile: IInterface;
+        curRecord: IInterface;
+    begin
+        Result := nil;
+
+        if(edid = '') then exit;
+
+        curRecord := nil;
+        for iFiles := 0 to FileCount-1 do begin
+            curFile := FileByIndex(iFiles);
+
+            if(assigned(curFile)) then begin
+
+                curRecord := FindReferenceInFileByEdid(curFile, edid);
+                if (assigned(curRecord)) then begin
+                    Result := curRecord;
+                    exit;
+                end;
+            end;
+        end;
+    end;
+
+    function FindReferenceInBlockGrpByEdid(blockGrp: IInterface; edid: string; checkPersistentCell: boolean): IInterface;
+    var
+        iWorlds, blockidx, subblockidx, cellidx: integer;
+        worlds, interiors, wrldgrup, block, subblock, cell, wrld: IInterface;
+        foo: IInterface;
+        curSig: string;
+    begin
+        // traverse Blocks
+        for blockidx := 0 to ElementCount(blockGrp)-1 do begin
+            block := ElementByIndex(blockGrp, blockidx);
+
+            // traverse SubBlocks
+            for subblockidx := 0 to ElementCount(block)-1 do begin
+                subblock := ElementByIndex(block, subblockidx);
+                if(Signature(subblock) <> 'GRUP') then begin
+                    continue;
+                end;
+                // traverse Cells
+                for cellidx := 0 to ElementCount(subblock)-1 do begin
+                    cell := ElementByIndex(subblock, cellidx);
+                    curSig := Signature(cell);
+
+                    if (curSig = 'CELL') then begin
+                        Result := findNamedReference(cell, edid);
+                        if (assigned(Result)) then exit;
+                    end else if(isReferenceSignature(curSig)) then begin
+                        // this happens for persistent cells...
+                        if(EditorID(cell) = edid) then begin
+                            Result := cell;
+                            exit;
+                        end;
+                    end;
+                end;
+            end;
+        {
+        }
+        end;
+    end;
+
+    function FindReferenceInFileByEdid(theFile: IInterface; edid: string): IInterface;
+    var
+        iWorlds, blockidx, subblockidx, cellidx: integer;
+        worlds, interiors, wrldgrup, block, subblock, cell, wrld: IInterface;
+
+    begin
+        // interiors
+        interiors := GroupBySignature(theFile, 'CELL');
+        Result := FindReferenceInBlockGrpByEdid(interiors, edid, false);
+        if(assigned(Result)) then exit;
+
+        // exteriors
+        worlds := GroupBySignature(theFile, 'WRLD');
+        for iWorlds:=0 to ElementCount(worlds)-1 do begin
+            wrld := ElementByIndex(worlds, iWorlds);
+            // need to find this world's persistent cell
+            wrldgrup := ChildGroup(wrld);
+            Result := FindReferenceInBlockGrpByEdid(wrldgrup, edid, true);
+            if(assigned(Result)) then exit;
+        end;
+    end;
+
+
     function GetFormByEdid(edid: string): IInterface;
     begin
         Result := FindObjectByEdid(edid);
@@ -247,6 +394,7 @@ unit PraUtil;
             end;
         end;
 
+        // temporary
         test := FindChildGroup(ChildGroup(cell), 9, cell);
         for i:=0 to ElementCount(test)-1 do begin
             cur := ElementByIndex(test, i);
@@ -339,6 +487,7 @@ unit PraUtil;
 
     {
         Tries to find a form by strings like:
+            - Fallout4.esm:00031901
             - REObjectJS01Note "Note" [BOOK:00031901]
             - 00031901
             - REObjectJS01Note
@@ -348,6 +497,10 @@ unit PraUtil;
     var
         maybeFormId: cardinal;
     begin
+        Result := AbsStrToForm(someStr);
+        if(assigned(Result)) then begin
+            exit;
+        end;
         maybeFormId := findFormIdInString(someStr);
         if(maybeFormId > 0) then begin
             Result := getFormByLoadOrderFormID(maybeFormId);
@@ -357,6 +510,31 @@ unit PraUtil;
 
         Result := FindObjectByEdid(someStr);
     end;
+
+    {
+        Like above, but also tries to find a reference
+    }
+    function findFormOrRefByString(someStr: string): IInterface;
+    var
+        maybeFormId: cardinal;
+    begin
+        Result := AbsStrToForm(someStr);
+        if(assigned(Result)) then begin
+            exit;
+        end;
+        maybeFormId := findFormIdInString(someStr);
+        if(maybeFormId > 0) then begin
+            Result := getFormByLoadOrderFormID(maybeFormId);
+            // return nil here if it failed, too
+            exit;
+        end;
+
+        Result := FindObjectByEdid(someStr);
+        if(not assigned(Result)) then begin
+            Result := FindReferenceByEdid(someStr);
+        end;
+    end;
+
 
     {
         Go upwards from a child to a main record
@@ -2108,6 +2286,15 @@ unit PraUtil;
     end;
 
     {
+        Returns whenever the given signature is the signature of any objectreference
+    }
+    function isReferenceSignature(sig: string): boolean;
+    begin
+        // todo are these all?
+        Result := ( (sig = 'REFR') or (sig = 'ACHR') or (sig = 'PGRE') );
+    end;
+
+    {
         Set the value of a raw script property or struct member
     }
     procedure setPropertyValue(propElem: IInterface; value: variant);
@@ -2539,9 +2726,7 @@ unit PraUtil;
         // ugh this is a horrible mess
         // it seems like my FileBy* functions are also slow AF
 
-
-        // sourceFile := GetFile(elem);
-        curFormID := FormID(elem);
+        curFormID := GetLoadOrderFormID(elem);// FormID(elem) so this returns the FormID from the parent file's PoV, it seems
         mainLoadOrder := (curFormID and $FF000000) shr 24;
         if(mainLoadOrder = $FE) then begin
             // an ESL is targeted
@@ -2552,6 +2737,57 @@ unit PraUtil;
         end;
     end;
 
+    procedure ReportRequiredMastersFull_Recursive(e: IInterface; list, loopPreventer: TStringList);
+    var
+        masters: TStringList;
+        i: integer;
+        child, maybeLinksTo: IInterface;
+        curKey: string;
+    begin
+        curKey := FormToStr(e);
+        if (loopPreventer.indexOf(curKey) > -1) then exit;
+        loopPreventer.add(curKey);
+
+        // first, do the vanilla thing
+        ReportRequiredMasters(e, list, true, true);
+
+        // now, do it recursively
+        for i := 0 to ElementCount(e)-1 do begin
+            child := ElementByIndex(e, i);
+            maybeLinksTo := LinksTo(child);
+            if(assigned(maybeLinksTo)) then begin
+                ReportRequiredMastersFull_Recursive(maybeLinksTo, list, loopPreventer);
+            end;
+        end;
+
+    end;
+
+    {
+        Similar to ReportRequiredMasters, but should actually report every single master required, even for REFRs
+    }
+    function ReportRequiredMastersFull(e: IInterface): TStringList;
+    var
+        loopPreventer: TStringList;
+        i: integer;
+        child, maybeLinksTo: IInterface;
+
+    begin
+        Result := TStringList.create;
+        Result.Duplicates := dupIgnore;
+        Result.CaseSensitive := false;
+        Result.Sorted := true; // important, or dupIgnore won't work
+
+        // keep track of everything we recurse into, to prevent endless loops
+        // because there are indeed circular links
+        loopPreventer := TStringList.create;
+        loopPreventer.Duplicates := dupIgnore;
+        loopPreventer.CaseSensitive := false;
+        loopPreventer.Sorted := true;
+
+        ReportRequiredMastersFull_Recursive(e, Result, loopPreventer);
+
+        loopPreventer.free();
+    end;
 
     procedure addRequiredMastersSilent_Single(fromElement, toFile: IInterface);
     var
@@ -2560,8 +2796,6 @@ unit PraUtil;
         toFileName: string;
         fromElemFile: IInterface;
     begin
-        masters := TStringList.create;
-
         toFileName := GetFileName(toFile);
         fromElemFile := GetFile(fromElement);
 
@@ -2569,7 +2803,7 @@ unit PraUtil;
             AddMasterIfMissing(toFile, GetFileName(fromElemFile));
         end;
 
-        ReportRequiredMasters(fromElement, masters, true, true);
+        masters := ReportRequiredMastersFull(fromElement);
         for i:=0 to masters.count-1 do begin
             if(toFileName <> masters[i]) then begin
                 AddMasterIfMissing(toFile, masters[i]);
@@ -2586,7 +2820,6 @@ unit PraUtil;
     var
         curMaster, injectedMaster: IInterface;
     begin
-        // AddMessage('WTF addRequiredMastersSilent: '+EditorID(fromElement));
         if(not isMaster(fromElement)) then begin
             curMaster := Master(fromElement);
             addRequiredMastersSilent_Single(curMaster, toFile);
@@ -2633,11 +2866,11 @@ unit PraUtil;
     var
         masterElem, curOverride, prevOverride: IINterface;
         numOverrides, i: integer;
-        targetFileName: string;
+
     begin
 
         masterElem := MasterOrSelf(sourceElem);
-        targetFileName := GetFileName(targetFile);
+
         Result := masterElem;
 
         if(FilesEqual(notInThisFile,  GetFile(masterElem))) then begin
@@ -2870,7 +3103,6 @@ unit PraUtil;
 
     function CreateFileSelectDropdown(frm: TForm; left: Integer; top: Integer; width: Integer; preselectedFile: IInterface; prependNewFileEntry: boolean): TComboBox;
     var
-        cbFiles: TComboBox;
         btnOk, btnCancel: TButton;
         i, selIndex, fileIndex: integer;
         curFileName: string;
@@ -2896,7 +3128,8 @@ unit PraUtil;
                 end;
             end;
         end;
-        cbFiles.ItemIndex := selIndex;
+        Result.ItemIndex := selIndex;
+        Result.Style := csDropDownList;
     end;
 
     {
