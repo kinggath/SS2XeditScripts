@@ -52,7 +52,7 @@ unit SS2Lib;
         tagOpenChars = '[|({<';
         tagCloseChars = ']|)}>';
 
-        enableOutpostSubtype = false;
+        enableOutpostSubtype = true;
 
 		miscItemCacheFileName = ProgramPath + 'Edit Scripts\SS2\PlotMiscItemCache.json';
         miscItemCacheFileVersion = 3;

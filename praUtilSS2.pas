@@ -1,7 +1,7 @@
 {
     Some useful functions
     
-    Version 2023-07-11
+    Version 2023-07-24
 }
 unit PraUtil;
     uses 'SS2\mteFunctions';// deprecated, to be eventually removed
@@ -1047,6 +1047,15 @@ unit PraUtil;
             // code here seems to be unreachable
         end;
     end;
+    
+    {
+        Fixed version of HighestOverrideOrSelf
+    }
+    function WinningOverrideOrSelf(e: IInterface): IInterface;
+    begin
+        Result := HighestOverrideOrSelf(e, 9000);
+    end;
+   
 
     {
         A potentially fixed version of seev, where path is created if it doesn't exist
