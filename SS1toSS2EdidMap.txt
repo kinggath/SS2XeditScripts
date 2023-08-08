@@ -1,2 +1,0 @@
-kgSIM_SettingsHolotape_MainMenu=SS2_CityManager_MainMenu
-kgSIM_FlagSelector=SS2_CityPlannerDeskObject_FlagSelector

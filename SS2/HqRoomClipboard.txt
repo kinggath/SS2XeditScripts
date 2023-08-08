@@ -1,0 +1,1 @@
+{"type":"resources","data":[{"count":10,"form":"SS2.esm:0004DAAC"},{"count":20,"form":"SS2.esm:0004B21A"}]}

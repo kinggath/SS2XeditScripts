@@ -1,0 +1,4 @@
+Form,Pos X,Pos Y,Pos Z,Rot X,Rot Y,Rot Z,Scale,iLevel,iStageNum,iStageEnd,iType,sVendorType,iVendorLevel,iOwnerNumber,sSpawnName,Requirements
+SomeForm,23.5,0.0000,0.0000,0.0000,0.0000,90.0000,1.0000,1,,,,,,,,
+SomeOtherForm,0.0000,10.0000,0.0000,0.0000,0.0000,0.0000,1.0000,2,1,4,,,,,,
+YetAnotherForm,0.0000,0.0000,8.0000,45.0000,0.0000,0.0000,0.9500,3,,,9,,,,,
