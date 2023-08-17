@@ -2,7 +2,7 @@
     Replace a script name
 }
 unit userscript;
-    uses 'SS2\praUtilSS2';
+    uses 'SS2\praUtil';
 
     var
         propSearch, propReplace: string;

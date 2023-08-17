@@ -68,7 +68,7 @@ var
 	i: integer;
 begin
 	Result := '';
-	scripts := ebp(e, 'VMAD - Virtual Machine Adapter\Scripts');
+	scripts := ElementByPath(e, 'VMAD - Virtual Machine Adapter\Scripts');
 
 	for i := 0 to ElementCount(scripts)-1 do begin
 		curScript := ElementByIndex(scripts, i);

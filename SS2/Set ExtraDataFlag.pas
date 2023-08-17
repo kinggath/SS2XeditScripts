@@ -2,7 +2,7 @@
     Run on some forms, it will edit city plans in-place
 }
 unit userscript;
-    uses 'SS2\praUtilSS2';
+    uses 'SS2\praUtil';
     
     procedure processCityPlan(layoutScript: IInterface; baseForm: IInterface);
     var

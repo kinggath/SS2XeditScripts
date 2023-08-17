@@ -2,7 +2,7 @@
     Run on a cell, select spawns CSV
 }
 unit ImportCsvToCell;
-    uses 'SS2\praUtilSS2';
+    uses 'SS2\praUtil';
 
     var
         csvLines: TStringList;
@@ -138,13 +138,13 @@ unit ImportCsvToCell;
         SetEditValue(ensurePath(Result, 'NAME'), IntToHex(GetLoadOrderFormID(baseForm), 8));
         SetEditValue(ensurePath(Result, 'XSCL'), FloatToStr(scale));
 
-        seev(Result, 'DATA\Position\X', posX);
-        seev(Result, 'DATA\Position\Y', posY);
-        seev(Result, 'DATA\Position\Z', posZ);
+        SetElementEditValues(Result, 'DATA\Position\X', posX);
+        SetElementEditValues(Result, 'DATA\Position\Y', posY);
+        SetElementEditValues(Result, 'DATA\Position\Z', posZ);
 
-        seev(Result, 'DATA\Rotation\X', rotX);
-        seev(Result, 'DATA\Rotation\Y', rotY);
-        seev(Result, 'DATA\Rotation\Z', rotZ);
+        SetElementEditValues(Result, 'DATA\Rotation\X', rotX);
+        SetElementEditValues(Result, 'DATA\Rotation\Y', rotY);
+        SetElementEditValues(Result, 'DATA\Rotation\Z', rotZ);
 
     end;
 

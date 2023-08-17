@@ -411,7 +411,7 @@ unit PlotConverter;
         propRoot, prop, curFlst: IInterface;
         i: integer;
     begin
-        propRoot := ebp(script, 'Properties');
+        propRoot := ElementByPath(script, 'Properties');
         Result := '';
 
         if(not assigned(propRoot)) then begin
@@ -421,10 +421,10 @@ unit PlotConverter;
         for i := 0 to ElementCount(propRoot)-1 do begin
             prop := ElementByIndex(propRoot, i);
 
-            if(geev(prop, 'Type') = 'Object') then begin
-                curFlst := LinksTo(ebp(prop, 'Value\Object Union\Object v2\FormID'));
+            if(GetElementEditValues(prop, 'Type') = 'Object') then begin
+                curFlst := pathLinksTo(prop, 'Value\Object Union\Object v2\FormID');
                 if(Equals(curFlst, obj)) then begin
-                    Result := geev(prop, 'propertyName');
+                    Result := GetElementEditValues(prop, 'propertyName');
                     exit;
                 end;
             end;
@@ -1009,7 +1009,7 @@ unit PlotConverter;
                     end;
                     if i = FileCount - 1 then begin
                         AddMessage('The script couldn''t find the file you entered.');
-                        targetFile := FileSelect('Select another file');
+                        targetFile := ShowFileSelectDialog('Select another file');
                     end;
                 end;
             end;
@@ -1666,7 +1666,7 @@ unit PlotConverter;
             curLevelStop := StrToInt(GetEditValue(ElementByIndex(levelStopsArr, curLevelNr)));
             curLevelBlueprint := getOrCreateBuildingPlanForLevel(targetFile, newBlueprint, planEdidBase, curTargetLevelNr);
             // set the level plan name
-            SetEditValueByPath(curLevelBlueprint, 'FULL', geev(newBlueprint, 'FULL')+' Level '+IntToStr(curTargetLevelNr));
+            SetEditValueByPath(curLevelBlueprint, 'FULL', GetElementEditValues(newBlueprint, 'FULL')+' Level '+IntToStr(curTargetLevelNr));
             // append it to the formlist
             addToFormlist(levelFormlist, curLevelBlueprint);
 
@@ -1821,7 +1821,7 @@ unit PlotConverter;
             levelPlanOffsets := createRawScriptProp(targetScript, propName);
             SetEditValueByPath(levelPlanOffsets, 'Type', 'Array of Float');
 
-            propValue := ebp(levelPlanOffsets, 'Value\Array of Float');
+            propValue := ElementByPath(levelPlanOffsets, 'Value\Array of Float');
             newEntry := ElementAssign(propValue, HighInteger, nil, false);
             SetEditValue(newEntry, levelPlanOffsetX);
             newEntry := ElementAssign(propValue, HighInteger, nil, false);
@@ -1899,7 +1899,7 @@ unit PlotConverter;
             numStages := ElementCount(oldStageModels);
             for j:= 0 to numStages-1 do begin
                 // applyModel
-                curStageModel := pathLinksTo(ElementByIndex(oldStageModels, j), 'Object v2\FormID');//LinksTo(ebp(ElementByIndex(oldStageModels, j), 'Object v2\FormID'));
+                curStageModel := pathLinksTo(ElementByIndex(oldStageModels, j), 'Object v2\FormID');
                 curStageModel := translateForm(curStageModel);
 
                 addToStackEnabledListIfEnabled(curStageModel);
@@ -2011,7 +2011,7 @@ unit PlotConverter;
         curSubPlan, newRoot, formList, curSubPlanScript: IInterface;
         BaseUpgradeMaterials, CreateResources, WorkshopAVsToSet, BuildingPlans: IInterface;
     begin
-        AddMessage('Converting BRANCHING blueprint '+geev(e, 'FULL'));
+        AddMessage('Converting BRANCHING blueprint '+GetElementEditValues(e, 'FULL'));
         //extraInfo := getScriptProp(script, 'ExtraPlaqueInfo');
 
         planEdidBase := StripPrefix(masterBuildingPlanPrefix, StripPrefix(buildingPlanPrefix, StripPrefix(oldFormPrefix, EditorID(e))));
@@ -2020,7 +2020,7 @@ unit PlotConverter;
 
         // e doesn't have much information on it, besides the FULL
 
-        oldName := geev(e, 'FULL - Name');
+        oldName := GetElementEditValues(e, 'FULL - Name');
         newRoot := prepareBlueprintRoot(targetFile, nil, bpEdId, oldName, oldName + ' Description', oldName + ' Confirmation');
 
 
@@ -2988,7 +2988,7 @@ unit PlotConverter;
 
         newEdid := GenerateEdid('', stripPrefix(oldFormPrefix, oldEdid));
         newObj := getCopyOfTemplate(targetFile, oldSpawn, newEdid);
-        oldScripts := ebp(newObj, 'VMAD - Virtual Machine Adapter\Scripts');
+        oldScripts := ElementByPath(newObj, 'VMAD - Virtual Machine Adapter\Scripts');
 
         for i:=0 to ElementCount(oldScripts)-1 do begin
             oldScript := ElementByIndex(oldScripts, i);
@@ -4009,7 +4009,6 @@ unit PlotConverter;
     begin
 		plotMapping := nil;
 
-        //f4esm := FileByName('Fallout4.esm');
         //targetFile := showFileSelectionDialog();
         if(not showInitialConfigDialog()) then begin
             AddMessage('Cancelled');

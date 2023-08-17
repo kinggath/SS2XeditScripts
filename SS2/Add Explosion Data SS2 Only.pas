@@ -28,7 +28,7 @@ unit userscript;
         end;
 
         // mainFile :=
-        extFile := FileByName(extName);
+        extFile := FindFile(extName);
         if(not assigned(extFile)) then begin
             Result := 1;
             addMessage('Could not find '+extName);

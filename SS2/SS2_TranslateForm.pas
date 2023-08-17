@@ -174,7 +174,7 @@ unit TranslateForm;
             end;
 
             if(selectSourceFile.ItemIndex <> -1) then begin
-                sourceFile := FileByName(selectSourceFile.Items[selectSourceFile.ItemIndex]);
+                sourceFile := FindFile(selectSourceFile.Items[selectSourceFile.ItemIndex]);
             end else begin
                 Result := false;
             end;
@@ -192,7 +192,7 @@ unit TranslateForm;
                     end;
                     if i = FileCount - 1 then begin
                         AddMessage('The script couldn''t find the file you entered.');
-                        targetFile := FileSelect('Select another file');
+                        targetFile := ShowFileSelectDialog('Select another file');
                     end;
                 end;
             end;

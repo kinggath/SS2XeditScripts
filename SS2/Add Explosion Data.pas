@@ -28,15 +28,7 @@ unit userscript;
             Result := 1;
             exit;
         end;
-{
-        // mainFile :=
-        extFile := FileByName(extName);
-        if(not assigned(extFile)) then begin
-            Result := 1;
-            addMessage('Could not find '+extName);
-            exit;
-        end;
-}
+
         SS2_Template_ExplosionDebris := FindObjectInFileByEdid(ss2masterFile, 'SS2_Template_ExplosionDebris');
         SS2_Template_BuildingExplosionChain := FindObjectInFileByEdid(ss2masterFile, 'SS2_Template_BuildingExplosionChain');
         SS2_Template_BuildingExplosion := FindObjectInFileByEdid(ss2masterFile, 'SS2_Template_BuildingExplosion');

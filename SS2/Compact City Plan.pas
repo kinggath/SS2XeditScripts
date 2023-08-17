@@ -303,7 +303,7 @@ unit CompactCityPlan;
                 partRotVector := getRotationVector(curPlacement, '');
 
                 partScale := 1.0;
-                scaleString := geev(curPlacement, 'Scale');
+                scaleString := GetElementEditValues(curPlacement, 'Scale');
                 if(scaleString <> '') then begin
                     // AddMessage('scaleString='+scaleString);
                     partScale := StrToFloat(scaleString);

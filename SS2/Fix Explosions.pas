@@ -4,7 +4,7 @@
 }
 unit userscript;
     
-    uses 'SS2\praUtilSS2';
+    uses 'SS2\praUtil';
     
     // Called before processing
     // You can remove it if script doesn't require initialization code

@@ -1,6 +1,6 @@
 unit FindPluginInCityPlanItems;
 
-uses 'SS2\praUtilSS2';
+uses 'SS2\praUtil';
 
 var
   bInputEntered: boolean;

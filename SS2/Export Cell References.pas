@@ -2,7 +2,7 @@
     Run in a cell. You will be asked which layers to export.
 }
 unit ExportCellRefs;
-    uses 'SS2\praUtilSS2';
+    uses 'SS2\praUtil';
 
     var
         elemCache: TList;

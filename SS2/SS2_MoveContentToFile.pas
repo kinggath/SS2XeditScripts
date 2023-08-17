@@ -282,7 +282,7 @@ unit MoveContentToFile;
                     end;
                     if i = FileCount - 1 then begin
                         AddMessage('The script couldn''t find the file you entered.');
-                        targetFile := FileSelect('Select another file');
+                        targetFile := ShowFileSelectDialog('Select another file');
                     end;
                 end;
             end;

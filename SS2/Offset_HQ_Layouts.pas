@@ -2,7 +2,7 @@
     Run on any number of HQ Layouts
 }
 unit OffsetCellRefs;
-    uses 'SS2\praUtilSS2';
+    uses 'SS2\praUtil';
 
     var
         targetCell, targetFile: IInterface;

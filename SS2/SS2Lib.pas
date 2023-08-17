@@ -1,6 +1,6 @@
 unit SS2Lib;
 
-    uses 'SS2\praUtilSS2';
+    uses 'SS2\praUtil';
 
     const
         // maximal length of editorIDs. Anything longer will be partially hashed
@@ -1276,7 +1276,7 @@ unit SS2Lib;
         end;
 
         if(Signature(target) = 'ARMO') then begin
-            modelRoot := ebp(target, 'Male world model');
+            modelRoot := ElementByPath(target, 'Male world model');
             if(not assigned(modelRoot)) then begin
                 modelRoot := Add(target, 'Male world model', true);
             end;
@@ -1289,7 +1289,7 @@ unit SS2Lib;
             if(assigned(modc)) then SetEditValueByPath(modelRoot, 'MODC', GetEditValue(modc));
             if(assigned(swap)) then SetPathLinksTo(modelRoot, 'MO2S', swap); //SetEditValueByPath(modelRoot, 'MO2S', GetEditValue(mods));
         end else begin
-            modelRoot := ebp(target, 'Model');
+            modelRoot := ElementByPath(target, 'Model');
             if(not assigned(modelRoot)) then begin
                 modelRoot := Add(target, 'Model', true);
             end;
@@ -2028,14 +2028,14 @@ unit SS2Lib;
         currentAddonQuestScript := nil;
         currentAddonConfig := nil;
 
-        ss2masterFile := FileByName(ss2Filename);
+        ss2masterFile := FindFile(ss2Filename);
         if(not assigned(ss2masterFile)) then begin
             AddMessage('Could not find '+ss2Filename+', this won''t work without.');
             Result := false;
             exit;
         end;
 
-        wsfrMasterFile := FileByName(wsfrFilename);
+        wsfrMasterFile := FindFile(wsfrFilename);
         if(not assigned(wsfrMasterFile)) then begin
             AddMessage('Could not find '+wsfrFilename+', how did you even load SS2 without it??');
             Result := false;
@@ -2043,7 +2043,7 @@ unit SS2Lib;
         end;
 
 
-        f4File := FileByName('Fallout4.esm');
+        f4File := FindFile('Fallout4.esm');
         keywordRecipeScrap := MainRecordByEditorId(GroupBySignature(f4File, 'KYWD'), 'WorkshopRecipeFilterScrap');
 
         miscGroup := GroupBySignature(ss2masterFile, 'MISC');
@@ -3350,7 +3350,7 @@ unit SS2Lib;
 
         spawnDetails := createRawScriptProp(spawnItemScript, 'SpawnDetails');
         SetEditValueByPath(spawnDetails, 'Type', 'Struct');
-        spawnDetails := ebp(spawnDetails, 'Value\Struct');
+        spawnDetails := ElementByPath(spawnDetails, 'Value\Struct');
 
         // setStructMember(spawnDetails, 'ObjectForm', formToSpawn);
         setStructMember(spawnDetails, 'iFormID', iFormID);
@@ -3403,7 +3403,7 @@ unit SS2Lib;
 
         spawnDetails := createRawScriptProp(spawnItemScript, 'SpawnDetails');
         SetEditValueByPath(spawnDetails, 'Type', 'Struct');
-        spawnDetails := ebp(spawnDetails, 'Value\Struct');
+        spawnDetails := ElementByPath(spawnDetails, 'Value\Struct');
 
         setStructMember(spawnDetails, 'ObjectForm', formToSpawn);
 

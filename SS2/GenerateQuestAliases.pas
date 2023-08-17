@@ -23,7 +23,7 @@
 
 }
 unit GenerateQuestAliases;
-    uses 'SS2\praUtilSS2';
+    uses 'SS2\praUtil';
 
     const
         // hardcoded for now

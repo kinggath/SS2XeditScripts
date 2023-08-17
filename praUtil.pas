@@ -1,10 +1,9 @@
 {
     Some useful functions.
 
-    Version 2023-07-11
+    Version 2023-09-17
 }
 unit PraUtil;
-    uses mteFunctions;// deprecated, to be eventually removed
 
     const STRING_LINE_BREAK = #13#10;
 
@@ -74,7 +73,7 @@ unit PraUtil;
             curRef := ReferencedByIndex(e, i);
 
             if(Signature(curRef) = 'COBJ') then begin
-                product := LinksTo(ebp(curRef, 'CNAM'));
+                product := pathLinksTo(curRef, 'CNAM');
 
                 if(isSameForm(product, e)) then begin
                     Result := true;
@@ -1049,6 +1048,14 @@ unit PraUtil;
     end;
 
     {
+        Fixed version of HighestOverrideOrSelf
+    }
+    function WinningOverrideOrSelf(e: IInterface): IInterface;
+    begin
+        Result := HighestOverrideOrSelf(e, 9000);
+    end;
+
+    {
         A potentially fixed version of seev, where path is created if it doesn't exist
     }
     procedure SetEditValueByPath(e: IInterface; path, value: string);
@@ -1713,6 +1720,17 @@ unit PraUtil;
 			Result := Result + str;
 		end;
 	end;
+
+    function StringReverse(s: string): string;
+    var
+        i, len: integer;
+    begin
+        Result := '';
+        len := Length(s);
+        for i := len downto 1 do begin
+            Result := Result + Copy(s, i, 1);
+        end;
+    end;
 
     function strUpperCaseFirst(str: string): string;
     var
@@ -3101,7 +3119,58 @@ unit PraUtil;
         end;
 	end;
 
+    function ShowFileSelectDialog(caption: string): IInterface;
+    begin
+        Result := ShowFileSelectDialogExtended(caption, true, true, nil);
+    end;
+
+    function ShowFileSelectDialogExtended(caption: string; prependNewFileEntry, skipNotEditable: boolean; preselectedFile: IInterface): IInterface;
+    var
+        frm: TForm;
+        targetFileBox: TComboBox;
+        btnOk, btnCancel: TButton;
+        resultCode: cardinal;
+        newFileName: string;
+    begin
+        Result := nil;
+        frm := CreateDialog('Select File', 400, 150);
+
+        CreateLabel(frm, 50, 10, caption);
+        targetFileBox := CreateFileSelectDropdownExtended(frm, 50, 30, 280, preselectedFile, prependNewFileEntry, skipNotEditable);
+
+        btnOk := CreateButton(frm, 50, 60, '    OK    ');
+        btnCancel := CreateButton(frm, 230, 60, '  Cancel  ');
+
+        btnCancel.ModalResult := mrCancel;
+        btnOk.ModalResult := mrOk;
+
+        resultCode := frm.showModal();
+        if(resultCode <> mrOk) then begin
+            frm.free();
+            exit;
+        end;
+
+        if(prependNewFileEntry and targetFileBox.ItemIndex = 0) then begin
+            Result := AddNewFile();
+        end else begin
+            newFileName := targetFileBox.Items[targetFileBox.ItemIndex];
+            Result := FindFile(newFileName);
+        end;
+
+        frm.free();
+    end;
+
     function CreateFileSelectDropdown(frm: TForm; left: Integer; top: Integer; width: Integer; preselectedFile: IInterface; prependNewFileEntry: boolean): TComboBox;
+    var
+        btnOk, btnCancel: TButton;
+        i, selIndex, fileIndex: integer;
+        curFileName: string;
+        curFile: IInteerface;
+    begin
+        Result := CreateFileSelectDropdownExtended(frm, left, top, width, preselectedFile, prependNewFileEntry, false);
+    end;
+
+    function CreateFileSelectDropdownExtended(frm: TForm; left: Integer; top: Integer; width: Integer; preselectedFile: IInterface; prependNewFileEntry, skipNotEditable: boolean): TComboBox;
     var
         btnOk, btnCancel: TButton;
         i, selIndex, fileIndex: integer;
@@ -3119,7 +3188,10 @@ unit PraUtil;
             curFile := FileByIndex(i);
 
             curFileName := GetFileName(curFile);
-            //if (Pos(s, bethesdaFiles) > 0) then Continue;// maybe add this back in?
+            if(not isEditable(curFile)) then begin
+                continue;
+            end;
+
             fileIndex := Result.Items.Add(curFileName);
 
             if(assigned(preselectedFile)) then begin
