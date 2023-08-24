@@ -1,25 +1,103 @@
 {
-    Poor man's PEX parser.
-    Can get some info, but not much...
+    Poor man's PEX "decompiler".
+    Doesn't actually fully decompile it, but provides some info about the pex
 
     Sources:
-        - https://en.uesp.net/wiki/Tes5Mod:Compiled_Script_File_Format
-            (Kinda, that is for Skyrim, F4 is similar, but different)
         - http://f4se.silverlock.org/
             The source code of scriptdump
+        - https://en.uesp.net/wiki/Tes5Mod:Compiled_Script_File_Format
+            (Kinda, that is for Skyrim, F4 is similar, but different)
 
     Usage:
-        - call either pexReadFile or pexReadStream. It will return a TJsonObject. Clean it up manually.
+        - call either readPexResource, pexReadFile, or pexReadStream. It will return a TJsonObject. Clean it up manually.
 
-    Known values for userFlags
-        properties:
-            - 1: hidden
-            - 32: mandatory
-        variables:
-            ( const is not a flag, it's a const=true  )
-            - 2: conditional
-    It seems "userFlags" on the top level of the object is a key of sorts to the flags.
-    The 0-5 numbers are the leftshift argument, that is, "5" for "mandatory" means it's actually 1 shl 5 = 32
+    Output Json structure:
+        - "header": object
+            - "majorVersion": int
+            - "minorVersion": int
+            - "gameId": int
+            - "compileTime1": uint
+            - "compileTime2": uint
+            - "sourceName": string
+            - "userName": string
+            - "machineName": string
+        - "userFlags": object
+            Contains this:
+                "0": "hidden",
+                "1": "conditional",
+                "2": "default",
+                "3": "collapsedonref",
+                "4": "collapsedonbase",
+                "5": "mandatory"
+            Essentially the same as th PEX_FLAG_ constants.
+            The 0-5 numbers are the leftshift argument, that is, "5" for "mandatory" means it's actually 1 shl 5 = 32
+            These are also represented by the PEX_FLAG_* constants
+        - "objects": array of PEXObject
+            The objects represent the PEXObjects ("classes") contained within the pex file. Usually only one,
+            but it seems like the format supports multiple, too.
+
+    PEXObject structure:
+        - "name": string
+        - "extends": string
+        - "docblock": string
+        - "const": bool
+        - "userFlags": int
+        - "autoStateName": string
+            if no auto state is defined, this will be ""
+        - "structs": array of PEXStruct
+        - "variables": array of PEXVariable
+        - "properties": array of PEXProperty
+        - "states": array of PEXState
+        
+    PEXStruct structure:
+        - "name": string
+        - "members": array of PEXStructMember
+        
+    PEXStructMember structure:
+        - "name": string
+        - "type": string
+        - "userFlags": int
+        - "value": PEXValue
+            this represents the default value of the variable
+        - "const": boolean
+        - "docblock": string
+
+    PEXVariable structure:
+        - "name": string
+            if this begins with "::" and ends with "_var", then it's an auto-generated local variable of a property.
+        - "type": string
+        - "userFlags": int
+        - "value": PEXValue
+            this represents the default value of the variable
+        - "const": bool
+
+    PEXProperty structure:
+        - "name": string
+        - "type": string
+        - "docblock": string
+        - "userFlags": int
+        - "flags": int
+
+    PEXState structure:
+        - "name": string
+            This is "" for the "empty state"
+        - "functions": array of PEXFunction
+
+    PEXFunction structure:
+        - "name": string
+        - "data": object
+            - "returnType": string
+            - "docBlock": string
+            - "userFlags": int
+            - "flags": int
+            - "params": PEXParam
+            - "locals": PEXParam
+        This doesn't contain any actual code of the function
+        
+    PEXParam structure:
+        - "name": string
+        - "type": string
+
 }
 unit PexToJson;
     const
@@ -129,7 +207,11 @@ unit PexToJson;
 
         _pexCleanUp();
     end;
-    
+
+    // ==========================================================================
+    // === END of "public" functions. Please do not call anything below manually.
+    // ==========================================================================
+
     // TODO: also port checkScriptExtends and findScriptInElementByName
 
     procedure _pexCleanUp();
@@ -279,7 +361,7 @@ unit PexToJson;
             objName := pexBr.ReadUInt16();
             orderName := pexBr.ReadUInt16();
             varCount := pexBr.ReadUInt16();
-            
+
 
             skipBytes(varCount * 2);
         end;
@@ -307,7 +389,7 @@ unit PexToJson;
                 _pexReadDebugFunction();
             end;
             if(_isEOF()) then exit;
-            
+
             _pexReadPropertyGroups();
             if(_isEOF()) then exit;
             _pexReadStructOrder();
