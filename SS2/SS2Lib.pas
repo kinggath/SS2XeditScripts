@@ -262,7 +262,7 @@ unit SS2Lib;
         SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics,
         SS2_PlotTypeSubClass_Martial_OutpostType_Prison,
         SS2_PlotTypeSubClass_Martial_OutpostType_RecruitmentCenter,
-        SS2_PlotTypeSubClass_Martial_OutpostType_WatchTower,
+        SS2_PlotTypeSubClass_Martial_WatchTower,
         // municipial
         SS2_PlotTypeSubClass_Municipal_CaravanServices,
         SS2_PlotTypeSubClass_Municipal_CommunicationStation,
