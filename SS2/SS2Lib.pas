@@ -345,7 +345,7 @@ unit SS2Lib;
         PLOT_SC_MAR_OutpostType_FieldSurgeon,
         PLOT_SC_MAR_OutpostType_Prison,
         PLOT_SC_MAR_OutpostType_RecruitmentCenter,
-        PLOT_SC_MAR_OutpostType_WatchTower,
+        PLOT_SC_MAR_WatchTower,
         // municipial
         PLOT_SC_MUN_CaravanServices,
         PLOT_SC_MUN_CommunicationsStation,
@@ -2264,7 +2264,7 @@ unit SS2Lib;
         SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics          := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics');
         SS2_PlotTypeSubClass_Martial_OutpostType_Prison                 := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_Prison');
         SS2_PlotTypeSubClass_Martial_OutpostType_RecruitmentCenter      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_RecruitmentCenter');
-        SS2_PlotTypeSubClass_Martial_OutpostType_WatchTower             := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_WatchTower');
+        SS2_PlotTypeSubClass_Martial_WatchTower             := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_WatchTower');
         SS2_PlotTypeSubClass_Municipal_CaravanServices                  := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_CaravanServices');
         SS2_PlotTypeSubClass_Municipal_CommunicationStation             := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Communications');
         SS2_PlotTypeSubClass_Municipal_Default_Other                    := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Default_Other');
@@ -2506,7 +2506,7 @@ unit SS2Lib;
             PLOT_SC_MAR_OutpostType_FieldSurgeon            := plotSubtypeNames.add('Field Medics');
             PLOT_SC_MAR_OutpostType_Prison                  := plotSubtypeNames.add('Prison');
             PLOT_SC_MAR_OutpostType_RecruitmentCenter       := plotSubtypeNames.add('Recruitment Center');
-            PLOT_SC_MAR_OutpostType_WatchTower              := plotSubtypeNames.add('Watchtower');
+            PLOT_SC_MAR_WatchTower              := plotSubtypeNames.add('Watchtower');
 
             // recreational
             PLOT_SC_REC_OutpostType_MessHall        := plotSubtypeNames.add('Outpost Mess Hall');
@@ -2578,7 +2578,7 @@ unit SS2Lib;
             stArr_mar.add(PLOT_SC_MAR_OutpostType_FieldSurgeon);
             stArr_mar.add(PLOT_SC_MAR_OutpostType_Prison);
             stArr_mar.add(PLOT_SC_MAR_OutpostType_RecruitmentCenter);
-            stArr_mar.add(PLOT_SC_MAR_OutpostType_WatchTower);
+            stArr_mar.add(PLOT_SC_MAR_WatchTower);
 
             stArr_rec.add(PLOT_SC_REC_OutpostType_MessHall);
             stArr_rec.add(PLOT_SC_REC_OutpostType_TrainingYard);
@@ -3637,7 +3637,7 @@ unit SS2Lib;
                 PLOT_SC_MAR_OutpostType_FieldSurgeon:          Result := '[Field Surgeon]';
                 PLOT_SC_MAR_OutpostType_Prison:                Result := '[Prison]';
                 PLOT_SC_MAR_OutpostType_RecruitmentCenter:     Result := '[Recruitment Center]';
-                PLOT_SC_MAR_OutpostType_WatchTower:            Result := '[Watchtower]';
+                PLOT_SC_MAR_WatchTower:            Result := '[Watchtower]';
 
                 PLOT_SC_REC_OutpostType_MessHall:         Result := '[Mess Hall]';
                 PLOT_SC_REC_OutpostType_TrainingYard:     Result := '[Training Yard]';
@@ -5086,7 +5086,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
                 PLOT_SC_MAR_OutpostType_FieldSurgeon:           Result := SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics;
                 PLOT_SC_MAR_OutpostType_Prison:                 Result := SS2_PlotTypeSubClass_Martial_OutpostType_Prison;
                 PLOT_SC_MAR_OutpostType_RecruitmentCenter:      Result := SS2_PlotTypeSubClass_Martial_OutpostType_RecruitmentCenter;
-                PLOT_SC_MAR_OutpostType_WatchTower:             Result := SS2_PlotTypeSubClass_Martial_OutpostType_WatchTower;
+                PLOT_SC_MAR_WatchTower:             Result := SS2_PlotTypeSubClass_Martial_WatchTower;
 
                 // recreational
                 PLOT_SC_REC_OutpostType_MessHall:       Result := SS2_PlotTypeSubClass_Recreational_OutpostType_MessHall;
@@ -5340,8 +5340,8 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
                 Result := PLOT_SC_MAR_OutpostType_RecruitmentCenter;
                 exit;
             end;
-            if(edid = 'SS2_PlotTypeSubClass_Martial_OutpostType_WatchTower') then begin
-                Result := PLOT_SC_MAR_OutpostType_WatchTower;
+            if(edid = 'SS2_PlotTypeSubClass_Martial_WatchTower') then begin
+                Result := PLOT_SC_MAR_WatchTower;
                 exit;
             end;
 

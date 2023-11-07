@@ -177,7 +177,7 @@ unit PlotConverter;
         end;
 
         if(oldEdid = 'kgSIM_PlotTypeOverride_WatchTower') then begin
-            Result := PLOT_SC_MAR_OutpostType_WatchTower;
+            Result := PLOT_SC_MAR_WatchTower;
             exit;
         end;
     end;
@@ -551,7 +551,7 @@ unit PlotConverter;
             exit;
         end;
         if(curEdid = 'kgSIM_PlotTypeOverride_WatchTower') then begin
-            Result := PLOT_SC_MAR_OutpostType_WatchTower;
+            Result := PLOT_SC_MAR_WatchTower;
             exit;
         end;
     end;
