@@ -663,7 +663,7 @@ unit SS2Lib;
         dataEntry.S['FormID']   := IntToStr(getRelativeFormId(curFile, misc));
         dataEntry.S['Hash']     := getSpawnMiscHash(misc);
 
-        AddMessage('Added to lookup for '+FormToAbsStr(misc)+': '+lookupString+' -> '+dataEntry.toString());
+        // AddMessage('Added to lookup for '+FormToAbsStr(misc)+': '+lookupString+' -> '+dataEntry.toString());
 
         //miscItemLookupTable.AddObject(hashedString, misc);
     end;
@@ -810,7 +810,7 @@ unit SS2Lib;
 
 		curFileName := GetFileName(targetFile);
 
-        AddMessage('-> Looking for MISC: '+key+' in '+curFileName);
+        // AddMessage('-> Looking for MISC: '+key+' in '+curFileName);
 		curArray := spawnMiscData.O['files'].O[curFileName].O['spawns'];
 		//i := curArray.IndexOfName(key);
         if (curArray.Types[key] <> JSON_TYPE_OBJECT) then exit;
@@ -4495,15 +4495,15 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         for i:=0 to getPropertyArrayLength(levelSkinsArray)-1 do begin
 
             curLvl := getObjectFromProperty(levelSkinsarray, i);//LinksTo(ElementByIndex(levelSkinsarray, i));
-            AddMessage('checking '+EditorID(curLvl));
+            //AddMessage('checking '+EditorID(curLvl));
             curLvlScript :=  getScript(curLvl, 'SimSettlementsV2:Weapons:BuildingLevelSkin');
 
             curLvlTarget := getScriptProp(curLvlScript, 'TargetBuildingLevelPlan');
-            AddMessage('got target '+EditorID(curLvlTarget));
+            //AddMessage('got target '+EditorID(curLvlTarget));
 
             curLvlTargetScript := getScript(curLvlTarget, 'SimSettlementsV2:Weapons:BuildingLevelPlan');
             curLvlNr := getScriptProp(curLvlTargetScript, 'iRequiredLevel');
-            AddMessage('lvl nr '+IntToStr(curLvlNr));
+            //AddMessage('lvl nr '+IntToStr(curLvlNr));
             if(curLvlNr = lvlNr) then begin
                 Result := curLvl;
                 exit;
