@@ -222,6 +222,78 @@ unit PraUtil;
     end;
 
     {
+        Gets an object by editor ID from the given file and any group.
+    }
+    function FindObjectInFileByEdid(theFile: IInterface; edid: string): IInterface;
+    var
+        iSigs: integer;
+        curGroup: IInterface;
+        curRecord: IInterface;
+    begin
+        Result := nil;
+
+        if(edid = '') then exit;
+
+        curRecord := nil;
+        for iSigs:=0 to ElementCount(theFile)-1 do begin
+            curGroup := ElementByIndex(theFile, iSigs);
+            if (Signature(curGroup) = 'GRUP') then begin
+                curRecord := MainRecordByEditorID(curGroup, edid);
+                if(assigned(curRecord)) then begin
+                    Result := curRecord;
+                    exit;
+                end;
+            end;
+        end;
+    end;
+
+    {
+        Gets an object by editor ID from any currently loaded file and any group.
+        This is not a performant function.
+    }
+    function FindObjectByEdidAndSignature(edid, sig: String): IInterface;
+    var
+        iFiles: integer;
+        curFile: IInterface;
+        curRecord: IInterface;
+    begin
+        Result := nil;
+
+        if(edid = '') then exit;
+
+        curRecord := nil;
+        for iFiles := 0 to FileCount-1 do begin
+            curFile := FileByIndex(iFiles);
+
+            if(assigned(curFile)) then begin
+
+                curRecord := FindObjectInFileByEdidAndSignature(curFile, edid, sig);
+                if (assigned(curRecord)) then begin
+                    Result := curRecord;
+                    exit;
+                end;
+            end;
+        end;
+    end;
+
+    {
+        Gets an object by editor ID and signature from the given file and any group.
+    }
+    function FindObjectInFileByEdidAndSignature(theFile: IInterface; edid, sig: string): IInterface;
+    var
+        curGroup: IInterface;
+    begin
+        Result := nil;
+
+        if (edid = '') or (sig = '') then exit;
+
+        curGroup := GroupBySignature(theFile, sig);
+        if(assigned(curGroup)) then begin
+            Result := MainRecordByEditorID(curGroup, edid);
+        end;
+    end;
+
+    {
         Tries to find a reference with a given editor id. Iterates all the cells. Probably even worse than FindObjectByEdid
     }
     function FindReferenceByEdid(edid: string): IInterface;
@@ -316,33 +388,6 @@ unit PraUtil;
         Result := FindObjectByEdid(edid);
     end;
 
-    {
-        Gets an object by editor ID from the given file and any group.
-        This is not a performant function.
-    }
-    function FindObjectInFileByEdid(theFile: IInterface; edid: string): IInterface;
-    var
-        iSigs: integer;
-        curGroup: IInterface;
-        curRecord: IInterface;
-    begin
-        Result := nil;
-
-        if(edid = '') then exit;
-
-        curRecord := nil;
-        for iSigs:=0 to ElementCount(theFile)-1 do begin
-            curGroup := ElementByIndex(theFile, iSigs);
-            if (Signature(curGroup) = 'GRUP') then begin
-                curRecord := MainRecordByEditorID(curGroup, edid);
-                if(assigned(curRecord)) then begin
-                    Result := curRecord;
-                    exit;
-                end;
-            end;
-        end;
-    end;
-    
     function findInteriorCellByEdid(edid: string): IInterface;
     var
         iFiles: integer;
@@ -1442,6 +1487,59 @@ unit PraUtil;
 
     end;
 
+    // linkage
+    {
+        Returns whatever `fromRef` might be linked to using `usingKw`
+    }
+    function getLinkedRef(fromRef, usingKw: IInterface): IInterface;
+    var
+        i: integer;
+        outLinks, lnk, kw: IInterface;
+    begin
+        Result := nil;
+        outLinks := ElementByPath(fromRef, 'Linked References');
+        if(not assigned(outLinks)) then exit;
+
+        for i:=0 to ElementCount(outLinks)-1 do begin
+            lnk := ElementByIndex(outLinks, i);
+
+            kw := pathLinksTo(lnk, 'Keyword/Ref');
+
+            if(not assigned(usingKw)) then begin
+                if(not assigned(kw)) then begin
+                    Result := pathLinksTo(lnk, 'Ref');
+                    exit;
+                end;
+            end else begin
+                if (isSameForm(kw, usingKw)) then begin
+                    Result := pathLinksTo(lnk, 'Ref');
+                    exit;
+                end;
+            end;
+        end;
+    end;
+
+    {
+        Returns a TList of ObjectReferences which are linked to `toRef` using `usingKw`
+    }
+    function getLinkedRefChildren(toRef, usingKw: IInterface): TList;
+    var
+        i: integer;
+        curRef, linkBack: IInterface;
+    begin
+        Result := TList.create;
+
+        for i:= 0 to ReferencedByCount(toRef)-1 do begin
+            curRef := WinningOverrideOrSelf(ReferencedByIndex(toRef, i));
+            // linked?
+            linkBack := getLinkedRef(curRef, usingKw);
+
+            if(isSameForm(linkBack, toRef)) then begin
+                Result.add(curRef);
+            end;
+        end;
+    end;
+
     // Formlist-Manipulation functions
 
     {
@@ -1915,6 +2013,17 @@ unit PraUtil;
                 exit;
             end;
         end;
+    end;
+
+    {
+        Returns the fragment script of the given form, if it has any
+    }
+    function getFragmentScript(e: IInterface): IInterface;
+    var
+        curScript, scripts: IInterface;
+        i: integer;
+    begin
+        Result := ElementByPath(e, 'VMAD - Virtual Machine Adapter\Script Fragments\Script');
     end;
 
     {
@@ -3102,6 +3211,19 @@ unit PraUtil;
         Result.Width := width;
         Result.height := height;
         Result.Text := escapeString(text);
+    end;
+
+    function CreateLabelledInput(frm: TForm; left, top, width, height: Integer; caption, text: String): TLabeledEdit;
+    begin
+        Result := TLabeledEdit.Create(frm);
+        Result.Parent := frm;
+
+        Result.Left := left;
+        Result.Top := top;
+        Result.Width := width;
+        Result.LabelPosition := lpAbove;
+        Result.EditLabel.Caption := caption;
+        Result.Text := text;
     end;
 
     function CreateGroup(frm: TForm; left: Integer; top: Integer; width: Integer; height: Integer; caption: String): TGroupBox;
