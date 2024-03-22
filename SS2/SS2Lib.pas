@@ -1,3 +1,8 @@
+{
+    Utility Library for SimSettlements 2.
+
+    Version 2.0
+}
 unit SS2Lib;
 
     uses 'SS2\praUtil';
@@ -2611,18 +2616,25 @@ unit SS2Lib;
     function getCopyOfTemplateWithOverride(targetFile, template: IInterface; newEdid: string; useOverrides: boolean): IInterface;
     var
         group, newElem: IInterface;
-        tmpEdid, templateSig: string;
+        tmpEdid, templateSig, newElemSig: string;
         i: integer;
         isAssignedWat: boolean;
     begin
         templateSig := signature(template);
         if(templateSig = '') then begin
-            AddMessage('=== COULD NOT COPY TEMPLATE FOR '+newEdid+'. THIS IS VERY BAD ===');
+            AddMessage('=== COULD NOT COPY TEMPLATE FOR '+newEdid+': given template has no signature! THIS IS VERY BAD! ===');
             exit;
         end;
 
         // before doing anything else, see if this edid is used already
         newElem := FindObjectByEdid(newEdid);
+        newElemSig := signature(newElem);
+
+        if(newElemSig <> templateSig) then begin
+            AddMessage('WARNING: requested a '+templateSig+' with EditorID '+newEdid+', got '+newElemSig+' instead. Will create a duplicate EditorID!');
+            newElem := nil;
+        end;
+
         if(assigned(newElem)) then begin
             if(useOverrides) then begin
                 Result := getOrCreateElementOverride(newElem, targetFile);
@@ -3669,8 +3681,13 @@ unit SS2Lib;
 
             bpEdid := EditorID(newRoot);
         end;
-        //AddMessage('1 Have NewRoot, edid '+EditorID(newRoot));
+
         newScript := getScript(newRoot, 'SimSettlementsV2:Weapons:BuildingPlan');
+        if(not assigned(newScript)) then begin
+            AddMessage('=== FAILED to prepare Blueprint Root: no BuildingPlan script! Tried to prepare: '+Name(newRoot));
+
+            exit;
+        end;
         formList := getScriptProp(newScript, 'LevelPlansList');
 
 
@@ -4112,7 +4129,7 @@ unit SS2Lib;
         newEdid := getSS2VersionEdid(edid);
         Result := findFormInGroupWithSuffixList(ss2Group, newEdid);
     end;
-    
+
     function findFormInGroupWithSuffixList(grp: IInterface; edidBase: string): IInterface;
     var
         i: integer;
@@ -4434,6 +4451,12 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result := getOverriddenForm(existingElem, targetFile);
         end;
         newScript := getScript(Result, 'SimSettlementsV2:Weapons:BuildingSkin');
+        if(not assigned(newScript)) then begin
+            AddMessage('=== FAILED to prepare Skin Root: no BuildingSkin script! Tried to prepare: '+Name(Result));
+
+            exit;
+        end;
+
         SetElementEditValues(Result, 'FULL', fullName);
 
         newDescription := getScriptProp(newScript, 'BuildingPlanSkinDescription');
