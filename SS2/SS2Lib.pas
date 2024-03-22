@@ -1,7 +1,7 @@
 {
     Utility Library for SimSettlements 2.
 
-    Version 2.0
+    Version 2.0.1
 }
 unit SS2Lib;
 
@@ -2628,11 +2628,14 @@ unit SS2Lib;
 
         // before doing anything else, see if this edid is used already
         newElem := FindObjectByEdid(newEdid);
+
         newElemSig := signature(newElem);
 
-        if(newElemSig <> templateSig) then begin
-            AddMessage('WARNING: requested a '+templateSig+' with EditorID '+newEdid+', got '+newElemSig+' instead. Will create a duplicate EditorID!');
-            newElem := nil;
+        if(assigned(newElem)) then begin
+            if(newElemSig <> templateSig) then begin
+                AddMessage('WARNING: requested a '+templateSig+' with EditorID '+newEdid+', got '+newElemSig+' instead. Will create a duplicate EditorID!');
+                newElem := nil;
+            end;
         end;
 
         if(assigned(newElem)) then begin
