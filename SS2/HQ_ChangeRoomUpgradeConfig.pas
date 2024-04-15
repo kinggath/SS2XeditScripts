@@ -129,14 +129,14 @@ unit ChangeRoomConfig;
                 newSlotIndex := curIndex;
             end;}
         end;
-        
+
         frm := CreateDialog('Change Room Config', 540, 200);
         curY := 10;
         //CreateLabel(frm, 10, curY, 'HQ: '+EditorID(curHq)+'.');
         // curY := curY + 18;
         CreateLabel(frm, 10, curY, 'Room: '+EditorID(room)+'.');
         curY := curY + 18;
-		
+
 
         curSlotsOld := getScriptProp(oldConfigScript, 'RoomUpgradeSlots');
 		for i:=0 to ElementCount(curSlotsOld)-1 do begin
@@ -163,7 +163,7 @@ unit ChangeRoomConfig;
             // selectRoomConfig.onChange := updateRoomUpgrade1OkBtn;
         end;
 
-       
+
 
         curY := curY + 24;
 		btnOk := CreateButton(frm, 200, curY, 'Next');
@@ -204,7 +204,7 @@ unit ChangeRoomConfig;
         i: integer;
         oldConfigScript, newConfigScript, RoomRequiredKeywords: IInterface;
         oldShapeKw, newShapeKw: IInterface;
-        oldRoomSlot, newRoomSlot, curSlots, oldSlotMisc, oldSlotKw, oldTagKw, layoutScript: IInterface;
+        oldRoomSlot, newRoomSlot, curSlots, oldSlotMisc, oldSlotKw, oldTagKw, layoutScript, newRoomSlotKeyword: IInterface;
         slotMapping: TJsonObject;
         oldSlotKey, oldShapePart, newShapePart, oldEdid, newEdid, oldSlotNameSpaceless, newSlotNameSpaceless: string;
         acti, cobj: IInterface;
@@ -212,9 +212,9 @@ unit ChangeRoomConfig;
         // find the stuff
         selectedRoomConfig := findRoomConfigFromRoomUpgrade(e);
         curHq := getHqFromRoomUpdate(script);
-        AddMessage('thing itself='+EditorID(e));
-        AddMessage('config='+EditorID(selectedRoomConfig));
-        AddMessage('curHq='+EditorID(curHq));
+        // AddMessage('thing itself='+EditorID(e));
+        // AddMessage('config='+EditorID(selectedRoomConfig));
+        // AddMessage('curHq='+EditorID(curHq));
 
         newConfig := showTargetConfigSelection(curHq, e, script, selectedRoomConfig);
 
@@ -231,7 +231,7 @@ unit ChangeRoomConfig;
         oldConfigScript := getScript(selectedRoomConfig, 'simsettlementsv2:hq:library:miscobjects:requirementtypes:actiontypes:hqroomconfig');
         newConfigScript := getScript(newConfig, 'simsettlementsv2:hq:library:miscobjects:requirementtypes:actiontypes:hqroomconfig');
 
-        
+
 
 
         slotMapping := showSlotSelection(e, oldConfigScript, newConfigScript);
@@ -239,7 +239,7 @@ unit ChangeRoomConfig;
             AddMessage('Cancelled slot mapping');
             exit;
         end;
-        
+
         // newSlotKw := findSlotKeywordFromSlotMisc(newRoomSlot);
 
 
@@ -259,13 +259,13 @@ unit ChangeRoomConfig;
         ensureKeywordByPath(e, newSlotKw, 'KWDA');
         // 2. Change the TargetUpgradeSlot script property, to the slot selected in step 2.
         setScriptProp(script, 'TargetUpgradeSlot', newRoomSlot);
-        
+
         oldShapeKw := getScriptProp(oldConfigScript, 'RoomShapeKeyword');
         newShapeKw := getScriptProp(newConfigScript, 'RoomShapeKeyword');
         oldShapePart := getRoomShapeUniquePart(EditorID(oldShapeKw));
         newShapePart := getRoomShapeUniquePart(EditorID(newShapeKw));
-        
-        
+
+
 
         // find layouts
         RoomLayouts := getScriptProp(script, 'RoomLayouts');
@@ -280,31 +280,32 @@ unit ChangeRoomConfig;
             oldSlotMisc := findSlotMiscFromKeyword(oldTagKw);
             oldSlotKey := FormToStr(oldSlotMisc);
             newRoomSlot := StrToForm(slotMapping.S[oldSlotKey]);
-            setScriptProp(layoutScript, 'TagKeyword', newRoomSlot);
-            
+            newRoomSlotKeyword := findSlotKeywordFromSlotMisc(newRoomSlot);
+            setScriptProp(layoutScript, 'TagKeyword', newRoomSlotKeyword);
+
             if(not isSameForm(oldShapeKw, newShapeKw)) then begin
                 oldSlotNameSpaceless := cleanStringForEditorID(GetRoomSlotName(oldSlotMisc));
                 newSlotNameSpaceless := cleanStringForEditorID(GetRoomSlotName(newRoomSlot));
                 //AddMessage('oldSlotNameSpaceless='+oldSlotNameSpaceless+', newSlotNameSpaceless='+newSlotNameSpaceless);
-            
+
                 // 1. Change the portion of the EDID with the room shape to match the new one.
                 oldEdid := EditorID(layout);
-                
-                
+
+
                 newEdid := StringReplace(oldEdid, oldSlotNameSpaceless, newSlotNameSpaceless, [rfReplaceAll]);
                 newEdid := StringReplace(newEdid, oldShapePart, newShapePart, [rfReplaceAll]);
                 //StringReplace(EditorID(e), oldShapePart, newShapePart, [rfReplaceAll])
                 // resultEdid := generateEdid('HQRoomLayout_', upgradeNameSpaceless+'_'+slotNameSpaceless+'_'+layoutNameSpaceless);
-                
+
                 //SetElementEditValues(layout, 'EDID', );
                 SetElementEditValues(layout, 'EDID', newEdid);
             end;
         end;
         slotMapping.free();
-        
-        
+
+
         // if room shape changed, do the other stuff
-        
+
         if(isSameForm(oldShapeKw, newShapeKw)) then begin
             exit;
         end;
@@ -313,23 +314,23 @@ unit ChangeRoomConfig;
         //1. Change the RoomShape keyword that's on the Action form to the one from the new config.
         removeKeywordByPath(e, oldShapeKw, 'KWDA');
         ensureKeywordByPath(e, newShapeKw, 'KWDA');
-        
+
         // 2. Change the RoomRequiredKeywords script property, it will have the old config's room shape as one of the entries, which will need to be changed to the new config's room shape.
         RoomRequiredKeywords := getScriptProp(script, 'RoomRequiredKeywords');
         removeObjectFromProperty(RoomRequiredKeywords, oldShapeKw);
         ensurePropertyHasObject(RoomRequiredKeywords, newShapeKw);
 
 
-        
+
         //3. Change the portion of the EDID with the room shape to match the new room shape.
         SetElementEditValues(e, 'EDID', StringReplace(EditorID(e), oldShapePart, newShapePart, [rfReplaceAll]));
-        
+
         // Looks like the RoomShape is also used in the EDIDs for the Activator and COBJ records as well, so basically if the RoomShape keyword is different, need to go update all the EDIDs.
         actisAndCobis := findRoomUpgradeActivatorsAndCobjs(e);
         for i:=1 to 3 do begin
             acti := getOrCreateElementOverride(StrToForm(actisAndCobis.O[IntToStr(i)].S['acti']), targetFile);
             cobj := getOrCreateElementOverride(StrToForm(actisAndCobis.O[IntToStr(i)].S['cobj']), targetFile);
-            
+
             oldEdid := EditorID(acti);
             newEdid := StringReplace(oldEdid, oldShapePart, newShapePart, [rfReplaceAll]);
             SetElementEditValues(acti, 'EDID', newEdid);
@@ -483,6 +484,7 @@ unit ChangeRoomConfig;
         curFileName: string;
     begin
         Result := TStringList.create;
+        Result.sorted := true;
         masterList := getMasterList(targetFile);
 
         for i:=0 to masterList.count-1 do begin
