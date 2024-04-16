@@ -79,7 +79,7 @@ unit SS2Lib;
         confirmMessageTemplate: IInterface; //SS2_Template_BuildingPlanConfirmation
         addonQuestTemplate: IInterface;//SS2_AddonTemplate [QUST:0900D33A]
         addonDataTemplate: IInterface;//SS2_Template_AddonConfig
-        versionGlobalTemplate: IInterface;//SS2_ModVersion [GLOB:0900D163]
+        versionGlobalTemplate: IInterface;//SS2_AAA_ModVersion [GLOB:0900D163]
 
         buildingLevelSkinTemplate: IInterface; // SS2_Template_BuildingLevelSkin "Weapon Based Building Level Skin Template" [WEAP:090338BC]
         buildingSkinTemplate: IInterface; // SS2_Template_BuildingSkin "Weapon Based Building Plan Skin Template" [WEAP:090338BA]
@@ -2104,7 +2104,7 @@ unit SS2Lib;
 
         addonDataTemplate := MainRecordByEditorID(miscGroup, 'SS2_Template_AddonConfig');
 
-        versionGlobalTemplate := MainRecordByEditorID(GroupBySignature(ss2masterFile, 'GLOB'), 'SS2_ModVersion');
+        versionGlobalTemplate := MainRecordByEditorID(GroupBySignature(ss2masterFile, 'GLOB'), 'SS2_AAA_ModVersion');
 
         buildingLevelSkinTemplate := MainRecordByEditorID(weapGroup, 'SS2_Template_BuildingLevelSkin');
         buildingSkinTemplate := MainRecordByEditorID(weapGroup, 'SS2_Template_BuildingSkin');
