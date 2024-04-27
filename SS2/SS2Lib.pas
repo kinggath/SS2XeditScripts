@@ -1,7 +1,7 @@
 {
     Utility Library for SimSettlements 2.
 
-    Version 2.0.1
+    Version 2.0.2
 }
 unit SS2Lib;
 
@@ -6294,16 +6294,12 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         if (isFullPlot) then begin
 
 
-            descriptionInput := TMemo.create(frm);
 
             descrLabel := CreateLabel(frm, 10, yOffset, 'Description');
 
-            descriptionInput.Parent := frm;
-            descriptionInput.Left := 10;
-            descriptionInput.Top := yOffset+16;
-            descriptionInput.Width := 230;
-            descriptionInput.height := 70;
-            descriptionInput.Text := escapeString(description);
+
+            descriptionInput := CreateMultilineInput(frm, 10, yOffset+16, 230, 70, description);
+
             descriptionInput.ScrollBars := ssVertical;
 
             CreateLabel(frm, 10, yOffset+90, '(Without subtype prefix)');
@@ -6313,12 +6309,9 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             //descrLabel.WordWrap := True;
             //descrLabel.Width := 120;
             //descrLabel.Height := 60;
-            confirmationInput := TMemo.create(frm);
-            confirmationInput.Parent := frm;
-            confirmationInput.Left := 250;
-            confirmationInput.Top := yOffset+16;
-            confirmationInput.Width := 230;
-            confirmationInput.height := 70;
+
+            confirmationInput := CreateMultilineInput(frm, 250, yOffset+16, 230, 70, description);
+
             confirmationInput.ScrollBars := ssVertical;
             confirmationInput.Name := 'confirmationInput';
             confirmationInput.Text := escapeString(confirmation);
