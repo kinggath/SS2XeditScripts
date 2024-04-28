@@ -3657,14 +3657,14 @@ unit ImportHqRoom;
     procedure regenerateMechancisDescription(sender: TObject);
     var
         dialogParent: TForm;
-        inputMechanics: TMemo; //CreateMultilineInput
+        inputMechanics: TCustomMemo; //CreateMultilineInput
         resourceBox: TListBox;
         inputDuration: TEdit;
         roomFuncsGroup :TGroupBox;
         duration: float;
     begin
         dialogParent := findComponentParentWindow(sender);
-        inputMechanics := TMemo(dialogParent.findComponent('inputMechanics'));
+        inputMechanics := TCustomMemo(dialogParent.findComponent('inputMechanics'));
 
         resourceBox := TListBox(currentUpgradeDialog.FindComponent('roomFuncsBox'));
         inputDuration := TEdit(currentUpgradeDialog.FindComponent('inputDuration'));
@@ -3686,7 +3686,7 @@ unit ImportHqRoom;
 		btnOk, btnCancel: TButton;
         resultCode, yOffset, i: integer;
         inputDesigner: TEdit;
-        inputMechanics, inputDesign: TMemo; //CreateMultilineInput
+        inputMechanics, inputDesign: TCustomMemo; //CreateMultilineInput
 
 		resourceBox: TListBox;
         roomFuncsGroup :TGroupBox;
@@ -4027,7 +4027,7 @@ unit ImportHqRoom;
         MiscModelFilename := shapeKeywordBase+'.nif';
         ArtObjEdid := 'SS2C2_AO_RoomShape_'+shapeKeywordBase;
 
-		frm := CreateDialog(windowCaption, 620, 600);// x=+30 y=+20
+		frm := CreateDialog(windowCaption, 630, 610);// x=+30 y=+20
 		frm.Name := 'roomUpgradeDialog2';
 		curY := 0;
 		//if(not assigned(existingElem)) then begin
@@ -4490,7 +4490,7 @@ unit ImportHqRoom;
 
         actiData : TJsonObject;
 
-        descriptionInput: TMemo;
+        descriptionInput: TCustomMemo;
 	begin
 		// load the slots for what we have
         //currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHQ, targetRoomConfig);

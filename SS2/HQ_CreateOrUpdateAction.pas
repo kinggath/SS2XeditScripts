@@ -2173,7 +2173,6 @@ unit ImportHqRoom;
 				curForm := ObjectToElement(dropDown.Items.Objects[i]);
 
 				if(FormsEqual(curForm, form)) then begin
-                    AddMessage('setItemIndexByForm found');
 					dropDown.ItemIndex := i;
 					exit;
 				end;
@@ -3781,14 +3780,14 @@ unit ImportHqRoom;
     procedure regenerateMechancisDescription(sender: TObject);
     var
         dialogParent: TForm;
-        inputMechanics: TMemo; //CreateMultilineInput
+        inputMechanics: TCustomMemo; //CreateMultilineInput
         resourceBox: TListBox;
         inputDuration: TEdit;
         roomFuncsGroup :TGroupBox;
         duration: float;
     begin
         dialogParent := findComponentParentWindow(sender);
-        inputMechanics := TMemo(dialogParent.findComponent('inputMechanics'));
+        inputMechanics := TCustomMemo(dialogParent.findComponent('inputMechanics'));
 
         resourceBox := TListBox(currentUpgradeDialog.FindComponent('roomFuncsBox'));
         inputDuration := TEdit(currentUpgradeDialog.FindComponent('inputDuration'));
@@ -3810,7 +3809,7 @@ unit ImportHqRoom;
 		btnOk, btnCancel: TButton;
         resultCode, yOffset, i: integer;
         inputDesigner: TEdit;
-        inputMechanics, inputDesign: TMemo; //CreateMultilineInput
+        inputMechanics, inputDesign: TCustomMemo; //CreateMultilineInput
 
 		resourceBox: TListBox;
         roomFuncsGroup :TGroupBox;
@@ -4433,7 +4432,6 @@ unit ImportHqRoom;
 
             targetDepartment := WinningOverrideOrSelf(getScriptProp(existingMiscScript, 'NewDepartmentOnCompletion'));
             if(assigned(targetDepartment)) then begin
-                AddMessage('yes targetDepartment '+FullPath(targetDepartment));
                 setItemIndexByForm(selectDepartment, targetDepartment);
             end;
 
@@ -4620,7 +4618,7 @@ unit ImportHqRoom;
 
         actiData : TJsonObject;
 
-        descriptionInput: TMemo;
+        descriptionInput: TCustomMemo;
 	begin
 		// load the slots for what we have
         //currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHQ, targetRoomConfig);
