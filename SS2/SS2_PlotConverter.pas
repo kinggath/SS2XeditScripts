@@ -5,8 +5,8 @@ unit PlotConverter;
 
     uses 'SS2\SS2Lib';
     const
-        configFile = ProgramPath + 'Edit Scripts\SS2\SS2_PlotConverter.cfg';
-        plotMappingFile = ProgramPath + 'Edit Scripts\SS2\PlotMapping.csv';
+        configFile = ScriptsPath + 'SS2\SS2_PlotConverter.cfg';
+        plotMappingFile = ScriptsPath + 'SS2\PlotMapping.csv';
 
     var
         newModName: string;

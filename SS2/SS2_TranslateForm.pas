@@ -4,7 +4,7 @@
 unit TranslateForm;
     uses 'SS2\SS2Lib';
     const
-        configFile = ProgramPath + 'Edit Scripts\SS2_PlotConverter.cfg';
+        configFile = ScriptsPath + 'SS2_PlotConverter.cfg';
     var
         sourceFile, targetFile : IInterface;
         lastSelectedFileName, lastSelectedTargetFileName, newModName: string;

@@ -4,7 +4,7 @@
 unit MoveContentToFile;
     uses 'SS2\SS2Lib';
     const
-        configFile = ProgramPath + 'Edit Scripts\SS2_MoveContentToFile.cfg';
+        configFile = ScriptsPath + 'SS2_MoveContentToFile.cfg';
         flidPrefix = 'SS2_FLID_';
     var
         sourceFile, targetFile : IInterface;

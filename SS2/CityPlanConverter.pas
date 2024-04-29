@@ -7,7 +7,7 @@ unit CityPlanConverter;
     uses 'SS2\CobbLibrary';
 
     const
-        configFile = ProgramPath + 'Edit Scripts\SS2_CityPlanConverter.cfg';
+        configFile = ScriptsPath + 'SS2_CityPlanConverter.cfg';
 
     var
         plotData: TJsonObject;

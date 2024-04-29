@@ -11,7 +11,7 @@ const
     MODE_SKIN_ROOT  = 4;
     MODE_SKIN_LEVEL = 5;
     MODE_SUBSPAWNER = 6;
-    configFile = ProgramPath + 'Edit Scripts\SS2\SS2_ImportStageData.cfg';
+    configFile = ScriptsPath + 'SS2\SS2_ImportStageData.cfg';
 
     IMPORT_MODE_PLAN = 0; //regular building plan
     IMPORT_MODE_SKIN_REPLACE = 1; //skin replace

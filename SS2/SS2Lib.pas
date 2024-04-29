@@ -59,11 +59,11 @@ unit SS2Lib;
 
         enableOutpostSubtype = true;
 
-		miscItemCacheFileName = ProgramPath + 'Edit Scripts\SS2\PlotMiscItemCache.json';
+		miscItemCacheFileName = ScriptsPath + 'SS2\PlotMiscItemCache.json';
         miscItemCacheFileVersion = 3;
 
-		SS1toSS2EdidMap = ProgramPath + 'Edit Scripts\SS2\SS1toSS2EdidMap.txt';
-		SS2TranslationSuffixes = ProgramPath + 'Edit Scripts\SS2\SS2Suffixes.txt';
+		SS1toSS2EdidMap = ScriptsPath + 'SS2\SS1toSS2EdidMap.txt';
+		SS2TranslationSuffixes = ScriptsPath + 'SS2\SS2Suffixes.txt';
     // variables, templates and such
     var
         ss2masterFile: IInterface;
@@ -79,7 +79,7 @@ unit SS2Lib;
         confirmMessageTemplate: IInterface; //SS2_Template_BuildingPlanConfirmation
         addonQuestTemplate: IInterface;//SS2_AddonTemplate [QUST:0900D33A]
         addonDataTemplate: IInterface;//SS2_Template_AddonConfig
-        versionGlobalTemplate: IInterface;//SS2_AAA_ModVersion [GLOB:0900D163]
+        versionGlobalTemplate: IInterface;//SS2_ModVersion [GLOB:0900D163]
 
         buildingLevelSkinTemplate: IInterface; // SS2_Template_BuildingLevelSkin "Weapon Based Building Level Skin Template" [WEAP:090338BC]
         buildingSkinTemplate: IInterface; // SS2_Template_BuildingSkin "Weapon Based Building Plan Skin Template" [WEAP:090338BA]
@@ -351,7 +351,7 @@ unit SS2Lib;
         PLOT_SC_MAR_OutpostType_Prison,
         PLOT_SC_MAR_OutpostType_RecruitmentCenter,
         PLOT_SC_MAR_WatchTower,
-        // municipal
+        // municipial
         PLOT_SC_MUN_CaravanServices,
         PLOT_SC_MUN_CommunicationsStation,
         PLOT_SC_MUN_Default_Other,
@@ -2104,7 +2104,7 @@ unit SS2Lib;
 
         addonDataTemplate := MainRecordByEditorID(miscGroup, 'SS2_Template_AddonConfig');
 
-        versionGlobalTemplate := MainRecordByEditorID(GroupBySignature(ss2masterFile, 'GLOB'), 'SS2_AAA_ModVersion');
+        versionGlobalTemplate := MainRecordByEditorID(GroupBySignature(ss2masterFile, 'GLOB'), 'SS2_ModVersion');
 
         buildingLevelSkinTemplate := MainRecordByEditorID(weapGroup, 'SS2_Template_BuildingLevelSkin');
         buildingSkinTemplate := MainRecordByEditorID(weapGroup, 'SS2_Template_BuildingSkin');
@@ -2475,7 +2475,7 @@ unit SS2Lib;
         PLOT_SC_MAR_HighTech                            := plotSubtypeNames.add('High-Tech Martial');
 
         // municipial
-        PLOT_SC_MUN_Default_Other           := plotSubtypeNames.add('Default/Other Municipal');
+        PLOT_SC_MUN_Default_Other           := plotSubtypeNames.add('Default/Other Municipial');
         PLOT_SC_MUN_CaravanServices         := plotSubtypeNames.add('Caravan Services');
         PLOT_SC_MUN_CommunicationsStation   := plotSubtypeNames.add('Communications Station');
         PLOT_SC_MUN_PowerPlant_Basic        := plotSubtypeNames.add('Powerplant (Basic)');

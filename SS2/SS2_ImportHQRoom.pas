@@ -24,9 +24,9 @@ unit ImportHqRoom;
 	uses 'SS2\PexParser';
 
 	const
-		cacheFile = ProgramPath + 'Edit Scripts\SS2\HqRoomCache.json';
+		cacheFile = ScriptsPath + 'SS2\HqRoomCache.json';
         cacheFileVersion = 10;
-		fakeClipboardFile = ProgramPath + 'Edit Scripts\SS2\HqRoomClipboard.txt';
+		fakeClipboardFile = ScriptsPath + 'SS2\HqRoomClipboard.txt';
 
 		progressBarChar = '|';
 		progressBarLength = 70;
