@@ -831,17 +831,28 @@ unit SS2Lib;
         i: integer;
     begin
         Result := 0;
-        tmp := s;
+        tmp := trim(s);
         curPart := '';
 
         for i:=1 to length(tmp) do begin
             curChar := tmp[i];
             if (curChar >= '0') and (curChar <= '9') then begin
                 curPart := curPart + curChar;
+            end else begin
+                if ((i = 1) and (curChar = '-')) then begin
+
+                    // this is valid
+                    tmp := copy(tmp, 2, length(tmp)-1);
+                    Result := tryToParseInt(tmp) * -1;
+                end;
+                // if this isn't a fully-numeric string, do not the string.
+                exit;
             end;
         end;
 
-        if(curPart <> '') then begin
+        if(curPart <> '') and (curPart <= '2147483647') then begin
+            // max int: 2147483647 = (2^64)/2 - 1
+            // technically 2147483648 would be valid for negative numbers, but whatever
             Result := StrToInt(curPart);
         end;
     end;
@@ -858,12 +869,6 @@ unit SS2Lib;
 	begin
 		spawnMiscDataLoaded := true;
 		AddMessage('Loading Spawn Misc cache from '+miscItemCacheFileName);
-        {
-            tempStringList := TStringList.create;
-            tempStringList.LoadFromFile(miscItemCacheFileName);
-            testwhat := testConcat(tempStringList);
-            spawnMiscData := spawnMiscData.parse(testwhat);
-        }
 
         spawnMiscData.LoadFromFile(miscItemCacheFileName);
 
@@ -6309,7 +6314,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             //descrLabel.WordWrap := True;
             //descrLabel.Width := 120;
             //descrLabel.Height := 60;
-            
+
             confirmationInput := CreateMultilineInput(frm, 250, yOffset+16, 230, 70, description);
 
             // confirmationInput.ScrollBars := ssVertical;
