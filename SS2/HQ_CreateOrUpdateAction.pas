@@ -3780,14 +3780,14 @@ unit ImportHqRoom;
     procedure regenerateMechancisDescription(sender: TObject);
     var
         dialogParent: TForm;
-        inputMechanics: TCustomMemo; //CreateMultilineInput
+        inputMechanics: TMemo; //CreateMultilineInput
         resourceBox: TListBox;
         inputDuration: TEdit;
         roomFuncsGroup :TGroupBox;
         duration: float;
     begin
         dialogParent := findComponentParentWindow(sender);
-        inputMechanics := TCustomMemo(dialogParent.findComponent('inputMechanics'));
+        inputMechanics := TMemo(dialogParent.findComponent('inputMechanics'));
 
         resourceBox := TListBox(currentUpgradeDialog.FindComponent('roomFuncsBox'));
         inputDuration := TEdit(currentUpgradeDialog.FindComponent('inputDuration'));
@@ -3809,7 +3809,7 @@ unit ImportHqRoom;
 		btnOk, btnCancel: TButton;
         resultCode, yOffset, i: integer;
         inputDesigner: TEdit;
-        inputMechanics, inputDesign: TCustomMemo; //CreateMultilineInput
+        inputMechanics, inputDesign: TMemo; //CreateMultilineInput
 
 		resourceBox: TListBox;
         roomFuncsGroup :TGroupBox;
@@ -4432,6 +4432,7 @@ unit ImportHqRoom;
 
             targetDepartment := WinningOverrideOrSelf(getScriptProp(existingMiscScript, 'NewDepartmentOnCompletion'));
             if(assigned(targetDepartment)) then begin
+                AddMessage('yes targetDepartment '+FullPath(targetDepartment));
                 setItemIndexByForm(selectDepartment, targetDepartment);
             end;
 
@@ -4618,7 +4619,7 @@ unit ImportHqRoom;
 
         actiData : TJsonObject;
 
-        descriptionInput: TCustomMemo;
+        descriptionInput: TMemo;
 	begin
 		// load the slots for what we have
         //currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHQ, targetRoomConfig);
