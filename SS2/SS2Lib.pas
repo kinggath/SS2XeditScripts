@@ -6372,13 +6372,15 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         stackCb  := CreateCheckbox(frm, 320, yOffset+2, 'Setup stacked moving');
 
         //autoRegister, makePreview
-        registerCb.checked := autoRegister;
         previewCb.checked := makePreview;
         stackCb.checked := setupStacking;
 
         if(not isFullPlot) then begin
             // registerCb.checked := false;
             registerCb.Enabled := false;
+            registerCb.checked := false;
+        end else begin
+            registerCb.checked := autoRegister;
         end;
 
         yOffset := yOffset + 25;
@@ -6439,7 +6441,12 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result.S['edid'] := Trim(inputPlotEdid.text);
             Result.S['prefix'] := Trim(inputModPrefix.text);
 
-            Result.B['registerPlot'] := registerCb.checked;
+            if(isFullPlot)
+                Result.B['registerPlot'] := registerCb.checked;
+            else
+                Result.B['registerPlot'] := false;
+            end;
+
             Result.B['makePreview'] := previewCb.checked;
             Result.B['setupStacking'] := stackCb.checked;
 
@@ -6574,9 +6581,11 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         previewCb  := CreateCheckbox(frm, 160, yOffset+2, 'Setup building previews');
         stackCb    := CreateCheckbox(frm, 320, yOffset+2, 'Setup stacked moving');
 
-        registerCb.checked := autoRegister;
         if(not isFullSkin) then begin
+            registerCb.checked := false;
             registerCb.Enabled := false;
+        end else begin
+            registerCb.checked := autoRegister;
         end;
         previewCb.checked := makePreview;
         stackCb.checked := setupStacking;
@@ -6661,7 +6670,14 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result.S['prefix'] := Trim(inputModPrefix.text);
             Result.B['itemsReplace'] := (spawnsModeSelector.ItemIndex = 0);
 
-            Result.B['registerPlot'] := registerCb.checked;
+            if(isFullSkin) then begin
+                Result.B['registerPlot'] := registerCb.checked;
+            end else begin
+                Result.B['registerPlot'] := false;
+            end;
+
+
+
             Result.B['makePreview'] := previewCb.checked;
             Result.B['setupStacking'] := stackCb.checked;
 
