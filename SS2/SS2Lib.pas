@@ -6818,6 +6818,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         upgradeScript, TargetUpgradeSlot, RoomLayouts, curLayout: IInterface;
         i: integer;
     begin
+
         upgradeScript := getScript(existingElem, 'SimSettlementsV2:HQ:BaseActionTypes:HQRoomUpgrade');
 
 
@@ -6836,8 +6837,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         if(assigned(RoomLayouts)) then begin
             for i:=0 to ElementCount(RoomLayouts)-1 do begin
                 curLayout := getObjectFromProperty(RoomLayouts, i);
-                AddMessage('Checking layout '+EditorID(curLayout));
-                Result := findRoomConfigFromLayout(curLayout);
+                Result := findRoomConfigFromLayout_Except(curLayout, existingElem);
                 if(assigned(Result)) then begin
                     exit;
                 end;
@@ -6849,10 +6849,18 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
 
     function findRoomConfigFromSlotMisc(slot: IInterface): IInterface;
+    begin
+        Result := findRoomConfigFromSlotMisc_Except(slot, nil);
+    end;
+
+
+    function findRoomConfigFromSlotMisc_Except(slot, skipUpgrade: IInterface): IInterface;
     var
         i, numRefs: integer;
         curRef, refScript, RoomUpgradeSlots: IInterface;
     begin
+        Result := nil;
+        if(not assigned(slot)) then exit;
         for i:=0 to ReferencedByCount(slot)-1 do begin
             curRef := ReferencedByIndex(slot, i);
             refScript := getScript(curRef, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:ActionTypes:HQRoomConfig');
@@ -6868,19 +6876,27 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             if(assigned(refScript)) then begin
                 RoomUpgradeSlots := getScriptProp(refScript, 'AdditionalUpgradeSlots');
                 if(hasObjectInProperty(RoomUpgradeSlots, slot)) then begin
-                    Result := findRoomConfigFromRoomUpgrade(curRef);
-                    if(assigned(Result)) then exit;
+                    if (not isSameForm(skipUpgrade, curRef)) then begin
+                        Result := findRoomConfigFromRoomUpgrade(curRef);
+                        if(assigned(Result)) then exit;
+                    end;
                 end;
             end;
         end;
     end;
 
     function findRoomConfigFromLayout(layout: IInterface): IInterface;
+    begin
+        Result := findRoomConfigFromLayout_Except(layout, nil);
+    end;
+
+
+    function findRoomConfigFromLayout_Except(layout, skipUpgrade: IInterface): IInterface;
     var
         slotMisc: IInterface;
     begin
         slotMisc := findSlotMiscFromLayout(layout);
-        Result := findRoomConfigFromSlotMisc(slotMisc);
+        Result := findRoomConfigFromSlotMisc_Except(slotMisc, skipUpgrade);
         if(assigned(Result)) then begin
             exit;
         end;
@@ -6972,7 +6988,6 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         i, curComplexity: integer;
         curRef, conditions, complexityCondition, glob: IInterface;
     begin
-        //AddMessage('checking shit '+FullPath(acti));
         for i:=0 to ReferencedByCount(acti)-1 do begin
             curRef := ReferencedByIndex(acti, i);
             if(Signature(curRef) = 'COBJ') then begin

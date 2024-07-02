@@ -359,14 +359,14 @@ unit ImportHqRoom;
 
 		Result := edid;
 		regex := TPerlRegEx.Create();
-		
+
 		try
 			if(strStartsWith(edid, 'SS2_VirtualResource_Supplies_')) then begin
 				regex.RegEx := '^SS2_VirtualResource_Supplies_([^_]+)_([^_]+)$';
 			end else begin
 				regex.RegEx := '^SS2_VirtualResource_([^_]+)_([^_]+)$';
 			end;
-			
+
             regex.Subject := edid;
 
             if (regex.Match()) then begin
@@ -455,7 +455,7 @@ unit ImportHqRoom;
 	begin
 		registerResource(vrEdid, realEdid, groupEdid, 'SS2_c_HQ_SimpleResource_Supplies');
 	end;
-	
+
 	procedure loadResourceGroups();
 	begin
 		registerSimpleResource('SS2_VirtualResource_Caps', 'Caps001');
@@ -494,8 +494,8 @@ unit ImportHqRoom;
 		registerScrapResource('SS2_VirtualResource_BuildingMaterials_Concrete', 'c_Concrete', 'SS2_c_HQ_CategoryResource_BuildingMaterials');
 		registerScrapResource('SS2_VirtualResource_BuildingMaterials_Asbestos', 'c_Asbestos', 'SS2_c_HQ_CategoryResource_BuildingMaterials');
 		registerScrapResource('SS2_VirtualResource_BuildingMaterials_Aluminum', 'c_Aluminum', 'SS2_c_HQ_CategoryResource_BuildingMaterials');
-		
-		
+
+
 		// Supplies
 			// Ammo
 		registerSupplyResource('SS2_VirtualResource_Supplies_Ammo_Ballistic', 'SS2_c_ComponentResource_Ammo_Ballistic', 'SS2_c_HQ_CategoryResource_Ammo');
@@ -990,7 +990,6 @@ unit ImportHqRoom;
         i: integer;
         curHqKey: string;
     begin
-
         AdditionalUpgradeSlots := getScriptProp(roomUpgradeScript, 'AdditionalUpgradeSlots');
         if(not assigned(AdditionalUpgradeSlots)) then begin
             exit;
@@ -1165,7 +1164,6 @@ unit ImportHqRoom;
 
 						curHqKey := FormToAbsStr(curHq);
 
-						//AddMessage(BoolToStr(assigned(curRec)));
 						curFormID := getElementLocalFormId(curRec);
 						// put into cache file
 						currentCacheFile.O['files'].O[curFileName].O['HQData'].O[curHqKey].O['ActionGroups'].S[edid] := IntToHex(curFormID, 8);
@@ -1484,7 +1482,6 @@ unit ImportHqRoom;
 			fileHqContainer := fileContainer.O['HQData'];
 			currentHqObj := fileHqContainer.O[hqKey];
 
-// AddMessage('This is our departments: '+currentHqObj.O['Departments'].toString());
 			readFileDependentObjectList(curFileObj, listDepartmentObjects, currentHqObj.O['Departments']);
 			readFileDependentObjectList(curFileObj, listActionGroups, 	   currentHqObj.O['ActionGroups']);
 			readFileDependentObjectList(curFileObj, listRoomConfigs, 	   currentHqObj.O['RoomConfigs']);
@@ -1603,8 +1600,6 @@ unit ImportHqRoom;
                     continue;
                 end;
             end;
-
-            //AddMessage('checking file '+curFileName);
 
 			fileContainer := filesContainer.O[curFileName];
 			// this shouldn't actually be possible, but sometimes happens??
@@ -1991,20 +1986,30 @@ unit ImportHqRoom;
 		Result := PathLinksTo(cell, 'XLCN');
 	end;
 
+    procedure fixEditorID(form: IInterface);
+    var
+        curEdid, newEdid: string;
+    begin
+        curEdid := EditorID(form);
+        newEdid := shortenEdid(curEdid);
+        if(curEdid <> newEdid) then begin
+            SetElementEditValues(form, 'EDID', newEdid);
+        end;
+    end;
+
 	function getUpgradeSlot(existingMisc: IInterface; roomShape, roomName, slotName: string; forHq: IInterface): IInterface;
 	var
 		edidMisc, edidKw: string;
 		slotMisc, slotKw, miscScript: IInterface;
 	begin
-		edidMisc := globalNewFormPrefix+'HQ_RoomSlot_'+roomShape+'_'+roomName+'_'+slotName;
-		edidKw   := globalNewFormPrefix+'Tag_RoomSlot_'+roomShape+'_'+roomName+'_'+slotName;
+		edidMisc := shortenEdid(globalNewFormPrefix+'HQ_RoomSlot_'+roomShape+'_'+roomName+'_'+slotName);
+		edidKw   := shortenEdid(globalNewFormPrefix+'Tag_RoomSlot_'+roomShape+'_'+roomName+'_'+slotName);
 		// MISC: SS2_HQ_RoomSlot_GNNLowerSouthwestNookShape_CommonArea_Base
 		//       SS2_HQ_RoomSlot_<room shape>_<room name>_<slot name>
 
 		// SS2_Tag_RoomSlot_GNNLowerSouthwestNookShape_CommonArea_Base [KYWD:0B00A3AB]
 		// SS2_Tag_RoomSlot_<room shape>_<room name>_<slot name> [KYWD:0B00A3AB]
 
-        existingMisc := WinningOverrideOrSelf(existingMisc);
 
 		if(not assigned(existingMisc)) then begin
 			slotKw := getCopyOfTemplateOA(targetFile, keywordTemplate, edidKw);
@@ -2018,12 +2023,17 @@ unit ImportHqRoom;
 			end;
 			setScriptProp(miscScript, 'UpgradeSlotKeyword', slotKw);
 		end else begin
+            existingMisc := WinningOverrideOrSelf(existingMisc);
 			slotMisc := existingMisc;
 			miscScript := getScript(slotMisc, 'SimSettlementsV2:HQ:Library:MiscObjects:RequirementTypes:HQRoomUpgradeSlot_GNN');
 			if(not assigned(miscScript)) then begin
 				miscScript := getScript(slotMisc, 'simsettlementsv2:hq:library:miscobjects:requirementtypes:hqroomupgradeslot');
 			end;
 			slotKw := getScriptProp(miscScript, 'UpgradeSlotKeyword');
+
+            // fix: shorten the EDIDs of these two
+            fixEditorID(slotMisc);
+            fixEditorID(slotKw);
 		end;
 
 		SetElementEditValues(slotMisc, 'FULL', slotName);
@@ -2168,7 +2178,7 @@ unit ImportHqRoom;
         end;
 
 		for i:=0 to dropDown.Items.count-1 do begin
-            
+
 			if(dropDown.Items.Objects[i] <> nil) then begin
 				curForm := ObjectToElement(dropDown.Items.Objects[i]);
 
@@ -3780,14 +3790,14 @@ unit ImportHqRoom;
     procedure regenerateMechancisDescription(sender: TObject);
     var
         dialogParent: TForm;
-        inputMechanics: TMemo; //CreateMultilineInput
+        inputMechanics: TCustomMemo; //CreateMultilineInput
         resourceBox: TListBox;
         inputDuration: TEdit;
         roomFuncsGroup :TGroupBox;
         duration: float;
     begin
         dialogParent := findComponentParentWindow(sender);
-        inputMechanics := TMemo(dialogParent.findComponent('inputMechanics'));
+        inputMechanics := TCustomMemo(dialogParent.findComponent('inputMechanics'));
 
         resourceBox := TListBox(currentUpgradeDialog.FindComponent('roomFuncsBox'));
         inputDuration := TEdit(currentUpgradeDialog.FindComponent('inputDuration'));
@@ -3809,7 +3819,7 @@ unit ImportHqRoom;
 		btnOk, btnCancel: TButton;
         resultCode, yOffset, i: integer;
         inputDesigner: TEdit;
-        inputMechanics, inputDesign: TMemo; //CreateMultilineInput
+        inputMechanics, inputDesign: TCustomMemo; //CreateMultilineInput
 
 		resourceBox: TListBox;
         roomFuncsGroup :TGroupBox;
@@ -4432,7 +4442,6 @@ unit ImportHqRoom;
 
             targetDepartment := WinningOverrideOrSelf(getScriptProp(existingMiscScript, 'NewDepartmentOnCompletion'));
             if(assigned(targetDepartment)) then begin
-                AddMessage('yes targetDepartment '+FullPath(targetDepartment));
                 setItemIndexByForm(selectDepartment, targetDepartment);
             end;
 
@@ -4619,7 +4628,7 @@ unit ImportHqRoom;
 
         actiData : TJsonObject;
 
-        descriptionInput: TMemo;
+        descriptionInput: TCustomMemo;
 	begin
 		// load the slots for what we have
         //currentListOfUpgradeSlots := getRoomUpgradeSlots(targetHQ, targetRoomConfig);
@@ -5651,7 +5660,7 @@ unit ImportHqRoom;
         {Field for the designer's name. For this we'll need to create a MiscObject named that, and plug that into the DesignerNameHolder property on each of the layouts.
         Probably should come up with a standard name scheme so you can search it up by EDID and avoid creating duplicates.
         So something like SS2C2_NameHolder_Designer_<alphanumeric characters from the designer's name field>.}
-        
+
         if(assigned(existingElem)) then begin
             // if the name doesn't mach, create a new one
             prevName := getElementEditValues(existingElem, 'FULL');
@@ -5659,7 +5668,7 @@ unit ImportHqRoom;
                 existingElem := nil;
             end;
         end;
-        
+
         if(not assigned(existingElem)) then begin
             edid := generateEdid('NameHolder_Designer_', cleanStringForEditorID(designerName));
             Result := getElemByEdidAndSig(edid, 'MISC', targetFile);

@@ -6,7 +6,7 @@
 unit PraUtil;
     const
         // the version constant
-        PRA_UTIL_VERSION = 13.4;
+        PRA_UTIL_VERSION = 13.5;
 
 
         // file flags
@@ -480,6 +480,22 @@ unit PraUtil;
                 end;
             end;
         end;
+    end;
+
+    function getContainingForm(elem: IInterface): IInterface;
+    begin
+        // goes upward using GetContainer() until it finds a Form
+        if(not assigned(elem)) then begin
+            Result := nil;
+            exit;
+        end;
+
+        if(FormID(elem) <> 0) then begin
+            Result := elem;
+            exit;
+        end;
+
+        Result := getContainingForm(GetContainer(elem));
     end;
 
     {
@@ -2704,6 +2720,7 @@ unit PraUtil;
         if(typeStr = '') then begin
             // assume it's an array
             clearArrayProperty(prop);
+            exit;
         end;
 
         // "If it's stupid, but works, ..."
