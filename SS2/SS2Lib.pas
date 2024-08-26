@@ -1,7 +1,7 @@
 {
     Utility Library for SimSettlements 2.
 
-    Version 2.0.2
+    Version 2.0.3
 }
 unit SS2Lib;
 
@@ -6441,9 +6441,9 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result.S['edid'] := Trim(inputPlotEdid.text);
             Result.S['prefix'] := Trim(inputModPrefix.text);
 
-            if(isFullPlot)
+            if(isFullPlot) then begin
                 Result.B['registerPlot'] := registerCb.checked;
-            else
+            end else begin
                 Result.B['registerPlot'] := false;
             end;
 
