@@ -6,7 +6,7 @@
 unit PraUtil;
     const
         // the version constant
-        PRA_UTIL_VERSION = 13.5;
+        PRA_UTIL_VERSION = 14.1;
 
 
         // file flags
@@ -17,6 +17,8 @@ unit PraUtil;
 
         // xedit version constants
         XEDIT_VERSION_404 = $04000400;
+        XEDIT_VERSION_415h = $04010508;
+        XEDIT_VERSION_415j = $0401050A;
 
         // JSON constants
         JSON_TYPE_NONE      = jdtNone; // none
@@ -482,22 +484,6 @@ unit PraUtil;
         end;
     end;
 
-    function getContainingForm(elem: IInterface): IInterface;
-    begin
-        // goes upward using GetContainer() until it finds a Form
-        if(not assigned(elem)) then begin
-            Result := nil;
-            exit;
-        end;
-
-        if(FormID(elem) <> 0) then begin
-            Result := elem;
-            exit;
-        end;
-
-        Result := getContainingForm(GetContainer(elem));
-    end;
-
     {
         Iterates through all interior cells in a file, and returns the one with the matching edid
     }
@@ -622,7 +608,7 @@ unit PraUtil;
 
         maybeMatch := regexExtract(someStr, '^([0-9a-fA-F]+)$', 1);
         if (maybeMatch <> '') then begin
-            maybeFormId := IntToStr('$' + maybeMatch);
+            maybeFormId := StrToInt64('$' + maybeMatch);
             if(maybeFormId > 0) then begin
                 Result := maybeFormId;
                 exit;
@@ -631,7 +617,7 @@ unit PraUtil;
 
         maybeMatch := regexExtract(someStr, '\[....:([0-9a-fA-F]{8})\]', 1);
         if (maybeMatch <> '') then begin
-            maybeFormId := IntToStr('$' + maybeMatch);
+            maybeFormId := StrToInt64('$' + maybeMatch);
             if(maybeFormId > 0) then begin
                 Result := maybeFormId;
                 exit;
@@ -833,39 +819,19 @@ unit PraUtil;
     end;
 
     {
+        DEPRECATED: this is actually just the same as RecordByFormID.
+
         Returns an element by a formId, which is relative to the given file's master list.
         That is, if theFile has at least 2 masters and the given id is 0x01001234, it will
         try to find 0x00001234 in the second master.
-        If applicable, will return the corresponding override from theFile
+        If applicable, will return the corresponding override from theFile.
     }
     function elementByRelativeFormId(theFile: IwbFile; id: cardinal): IInterface;
     var
         numMasters, prefix, baseId: integer;
         targetMaster, formMaster: IInterface;
     begin
-        Result := nil;
-        numMasters := MasterCount(theFile);
-        prefix := (id and $FF000000) shr 24;
-        baseId := (id and $00FFFFFF);
-        if(prefix > numMasters) then begin
-            // bad
-            exit;
-        end;
-        if(prefix = numMasters) then begin
-            // from theFile itself
-            Result := getFormByFileAndFormID(theFile, baseId);
-            exit;
-        end;
-
-        // otherwise, from a master
-        targetMaster := MasterByIndex(theFile, prefix);
-
-        formMaster := getFormByFileAndFormID(targetMaster, baseId);
-
-        Result := getExistingElementOverride(formMaster, theFile);
-        if(not assigned(Result)) then begin
-            Result := formMaster;
-        end;
+        Result := RecordByFormID(theFile, id, true);
     end;
 
     {
@@ -967,17 +933,18 @@ unit PraUtil;
         end;
     end;
 
-
     function getFormByLoadOrderFormID(id: cardinal): IInterface;
     var
-        localFormId, fixedId, anotherFormId: cardinal;
-        loadOrderIndexInt, lightLOIndex, fileIndex: integer;
+        lightLOIndex, loadOrderIndexInt, localFormId, fixedId, anotherFormId: cardinal;
+        fileIndex: integer;
         theFile : IInterface;
         isLight : boolean;
+        watFoo: string;
     begin
         Result := nil;
 
         loadOrderIndexInt := ($FF000000 and id) shr 24;
+
 
         if(loadOrderIndexInt = $FE) then begin
             // fix the formID for ESL
@@ -1006,50 +973,15 @@ unit PraUtil;
         numMasters: integer;
         localFormId, fixedId, fileIndex: cardinal;
     begin
-        Result := nil;
-        // It seems like RecordByFormID doesn't care about the real load order prefix.
-        // Instead, it expects the first byte to contain the index of the file.
-        // Since RecordByFormID also expects that very same format, I suspect that
-        // xEdit uses correct light FormIDs for display only, but still gives them a full slot internally.
-        fileIndex := GetLoadOrder(theFile);
+        // it looks like fileIndex is clamped to the count of masters, so numbers > than it will still produce the correct result
+        fileIndex := MasterCount(theFile);
 
-        if(fileIndex > 255) then begin
-            AddMessage('ERROR: Cannot resolve FormID '+IntToHex(id, 8)+' for file '+GetFileName(theFile)+', because you have more than 255 files loaded. xEdit doesn''t actually support this.');
-            exit;
-        end;
+        Result := nil;
 
         fileIndex := (fileIndex shl 24) and $FF000000;
 
         fixedId := fileIndex or getLocalFormId(theFile, id);
-
-        Result := RecordByFormID(theFile, fixedId, false);
-    end;
-
-    {
-        Returns a record by it's form ID and a file. This should also work
-    }
-    function getFormByFileAndPrefixedFormID(theFile: IInterface; id: cardinal): IInterface;
-    var
-        numMasters: integer;
-        localFormId, fixedId, fileIndex: cardinal;
-    begin
-        Result := nil;
-        // It seems like RecordByFormID doesn't care about the real load order prefix.
-        // Instead, it expects the first byte to contain the index of the file.
-        // Since RecordByFormID also expects that very same format, I suspect that
-        // xEdit uses correct light FormIDs for display only, but still gives them a full slot internally.
-        fileIndex := GetLoadOrder(theFile);
-
-        if(fileIndex > 255) then begin
-            AddMessage('ERROR: Cannot resolve FormID '+IntToHex(id, 8)+' for file '+GetFileName(theFile)+', because you have more than 255 files loaded. xEdit doesn''t actually support this.');
-            exit;
-        end;
-
-        fileIndex := (fileIndex shl 24) and $FF000000;
-
-        fixedId := fileIndex or getLocalFormId(theFile, id);
-
-        Result := RecordByFormID(theFile, fixedId, false);
+        Result := RecordByFormID(theFile, fixedId, true);
     end;
 
     {
@@ -1119,6 +1051,10 @@ unit PraUtil;
         end;
     end;
 
+    {
+        Recursively outputs the given element into the given binary writer, for hashing purposes.
+        The string isn't supposed to make much sense on it's own.
+    }
     procedure WriteElementRecursive(e: IInterface; bw: TBinaryWriter; index: integer);
     var
         i: Integer;
@@ -1143,7 +1079,11 @@ unit PraUtil;
 
     end;
 
-
+    {
+        Calculates a CRC32 of the given element, by converting it into some sort of a string and hashing that.
+        This isn't going to be compatible with any other implementation, but should return the same hash
+        for equivalent elements.
+    }
     function ElementCRC32(e: IInterface): string;
     var
         ms: TMemoryStream;
@@ -1164,9 +1104,9 @@ unit PraUtil;
     end;
 
     {
-        Copypasta of the above, just using the MD5 function
-
-        IntToHex(foo, 16)
+        Calculates a MD5 of the given element, by converting it into some sort of a string and hashing that.
+        This isn't going to be compatible with any other implementation, but should return the same hash
+        for equivalent elements.
     }
     function StringMD5(s: string): cardinal;
     var
@@ -1385,17 +1325,32 @@ unit PraUtil;
 		separatorPos: integer;
 		theFilename, formIdStr: string;
 		theFormId: cardinal;
+        regex: TPerlRegEx;
 	begin
 		Result := nil;
 		separatorPos := Pos(':', str);
 		if(separatorPos <= 0) then begin
 			exit;
 		end;
+        
+        
+        regex := TPerlRegEx.Create();
 
-		theFilename := copy(str, 1, separatorPos-1);
-		formIdStr := copy(str, separatorPos+1, length(str)-separatorPos+1);
+        try
+            regex.RegEx := '(.+):([0-9a-fA-F]+)';
+            regex.Subject := str;
 
-		Result := getFormByFilenameAndFormID(theFilename, StrToInt('$'+formIdStr));
+            if(regex.Match()) then begin
+                // misnomer, is actually the highest valid index of regex.Groups
+                if(regex.GroupCount >= 2) then begin
+                    theFilename := regex.Groups[1];
+                    formIdStr := regex.Groups[2];
+                    Result := getFormByFilenameAndFormID(theFilename, StrToInt64('$'+formIdStr));
+                end;
+            end;
+        finally
+            RegEx.Free;
+        end;
 	end;
 
 	function floatEqualsWithTolerance(val1, val2, tolerance: float): boolean;
@@ -1655,18 +1610,28 @@ unit PraUtil;
     var
         i: integer;
         curRef, linkBack: IInterface;
+        dupeCheckList: TStringList;
+        lookupKey: string;
     begin
         Result := TList.create;
+        dupeCheckList := TStringList.create;
 
         for i:= 0 to ReferencedByCount(toRef)-1 do begin
             curRef := WinningOverrideOrSelf(ReferencedByIndex(toRef, i));
             // linked?
             linkBack := getLinkedRef(curRef, usingKw);
 
-            if(isSameForm(linkBack, toRef)) then begin
-                Result.add(curRef);
+            if (isSameForm(linkBack, toRef)) then begin
+                // must be deduplicated
+                lookupKey := FormToStr(curRef);
+                if(dupeCheckList.indexOf(lookupKey) < 0) then begin
+                    dupeCheckList.add(lookupKey);
+                    Result.add(curRef);
+                end;
             end;
         end;
+
+        dupeCheckList.free();
     end;
 
     // Formlist-Manipulation functions
@@ -2720,7 +2685,6 @@ unit PraUtil;
         if(typeStr = '') then begin
             // assume it's an array
             clearArrayProperty(prop);
-            exit;
         end;
 
         // "If it's stupid, but works, ..."

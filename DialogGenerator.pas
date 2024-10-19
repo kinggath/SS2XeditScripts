@@ -1,5 +1,6 @@
 {
     Run on a quest, then select CSV to import the lines
+    Made this for KG, don't remember which format the CSV must be
 }
 unit DialogGenerator;
 

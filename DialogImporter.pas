@@ -1,6 +1,5 @@
 {
-  New script template, only shows processed records
-  Assigning any nonzero value to Result will terminate script
+    Script I made for KG, can't really remember what it does...
 }
 unit DialogImporter;
     uses dubhFunctions;
@@ -32,12 +31,27 @@ unit DialogImporter;
     begin
         Result := formID or 16777216*getLoadOrder(forFile); // 0x01000000
     end;
+    
+    function getEmotionKeyword(emotion: string): IInterface;
+    var
+        edid: string;
+    begin
+        Result := nil;
+        
+        if(emotion = '') then exit;
+        
+        edid := 'AnimFaceArchetype'+strUpperCaseFirst(emotion);
+        
+        // AddMessage('Emotion KW is '+edid);
+        Result := FindObjectByEdid(edid);
+        
+    end;
         
     procedure processLine(line: string);
     var
         fields, formIdThing: TStringList;
-        formIdPart, text, formIdStr, indexStr: string;
-        targetForm, rsp: IInterface;
+        formIdPart, text, formIdStr, indexStr, emotionString: string;
+        targetForm, rsp, emotionKw, trda: IInterface;
         responseNr: integer;
         
         formID: cardinal;
@@ -48,13 +62,27 @@ unit DialogImporter;
         fields.StrictDelimiter := TRUE;
         fields.DelimitedText := line;
         
-        formIdPart := fields[0];
-        text := fields[1];
+        if(fields.count < 2) then begin
+            AddMessage('Invalid line: '+line);
+            exit;
+        end;
+        
+        formIdPart    := fields[0];
+        text          := fields[1];
+        emotionString := '';
+        if(fields.count > 2) then begin
+            emotionString := fields[2];
+        end;
         
         formIdThing := TStringList.create;
         formIdThing.Delimiter := '_';
         formIdThing.StrictDelimiter := TRUE;
         formIdThing.DelimitedText := formIdPart;
+        addMessage('formIdPart = '+formIdPart);
+        
+        if(formIdPart = '') then begin
+            exit;
+        end;
         
         formIdStr := formIdThing[0];
         indexStr := formIdThing[1];
@@ -79,6 +107,16 @@ unit DialogImporter;
         end;
         
         SetElementEditValues(rsp, 'NAM1 - Response Text', text);
+        
+        if(emotionString <> '') then begin
+            emotionKw := getEmotionKeyword(emotionString);
+            if(not assigned(emotionKw)) then begin
+                exit;
+            end;
+            
+            trda := EnsurePath(rsp, 'TRDA');
+            setPathLinksTo(trda, 'Emotion', emotionKw);
+        end;
         
     end;
 

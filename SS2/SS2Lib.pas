@@ -67,6 +67,7 @@ unit SS2Lib;
     // variables, templates and such
     var
         ss2masterFile: IInterface;
+        haveTemplateErrors: boolean;
 
         buildingPlanTemplate: IInterface;
         buldingPlanLevelTemplate: IInterface;// SS2_Template_BuildingPlan_Level
@@ -2014,6 +2015,104 @@ unit SS2Lib;
 
         Result := hardcodedEdidMappingValues[i];
     end;
+    
+    
+    {
+        Following arguments are possible:
+        - nil, string: search using the string only, using findFormByString
+
+    
+        - filename, string: search in file by EditorID
+        - filename, int:    search in file by FormID
+        - signature, string: search in all files by signature and EditorID
+
+
+        - file, string:     search in file by EditorID
+        - file, int:        search in file by FormID
+        - group, string:    search in group by EditorID
+    }
+    function loadTemplate(source: variant; search: variant): IInterface;
+    var
+        sourceType1, searchType1: integer;
+        maybeFormId: cardinal;
+        searchInFile, searchInGroup: IInterface;
+        isSearchString: boolean;
+    begin
+        sourceType1 := VarType(source); // nil=277
+        searchType1 := VarType(search);
+
+        isSearchString :=  (searchType1 = varString) or (searchType1 = varUString);
+
+        if(sourceType1 = 277) then begin
+            if isSearchString then begin
+                Result := findFormByString(search);
+                if(not assigned(Result)) then AddMessage('ERROR: Failed to load template from string "'+search+'"');
+            end else begin
+                AddMessage('ERROR: if first argument of loadTemplate is nil, second argument must be a string');
+                haveTemplateErrors := true;
+            end;
+            exit;
+        end;
+
+        // part 2: is the source a string?
+        if(sourceType1 = varString) or (sourceType1 = varUString) then begin
+            searchInFile := FindFile(search);
+            if(assigned(searchInFile)) then begin
+                // recurse
+                Result := loadTemplate(searchInFile, search);
+                exit;
+            end;
+
+            // otherwise assume source is a signature
+            if(isSearchString) then begin
+                Result := FindObjectByEdidAndSignature(source, search);
+                if(not assigned(Result)) then AddMessage('ERROR: Failed to load template from EditorID "'+search+'" and signature '+source);
+            end else begin
+                AddMessage('ERROR: if first argument of loadTemplate is a signature (it is '+source+'), second argument must be a string');
+                haveTemplateErrors := true;
+            end;
+            exit;
+        end;
+
+        // finally assume that source is an element
+        case ElementType(source) of
+            etFile:
+                begin
+                    // search in file
+                    if(isSearchString) then begin
+                        Result := FindObjectInFileByEdid(source, search);
+                        if(not assigned(Result)) then begin
+                            AddMessage('ERROR: Failed to load template by EditorID "'+search+'" in file '+GetFileName(source));
+                            haveTemplateErrors := true;
+                        end;
+                        exit;
+                    end;
+
+                    // assume it's a FormID
+                    Result := getFormByFileAndFormID(source, search);
+                    if(not assigned(Result)) then begin
+                        AddMessage('ERROR: Failed to load template by FormID "'+FormIdToHex(search)+'" in file '+GetFileName(source));
+                        haveTemplateErrors := true;
+                    end;
+                    exit;
+                end;
+            etGroupRecord:
+                begin
+                    if(isSearchString) then begin
+                        // search in group
+                        Result := MainRecordByEditorID(source, search);
+
+                        if(not assigned(Result)) then begin
+                            AddMessage('ERROR: Failed to load template by EditorID "'+search+'" in a group');
+                            haveTemplateErrors := true;
+                        end;
+                        exit;
+                    end;
+                    AddMessage('ERROR: if first argument of loadTemplate is a group, second argument must be a string');
+                    haveTemplateErrors := true;
+                end;
+        end;
+    end;
 
     {
         Loads all relevant stuff from all relevant files
@@ -2052,7 +2151,8 @@ unit SS2Lib;
 
 
         f4File := FindFile('Fallout4.esm');
-        keywordRecipeScrap := MainRecordByEditorId(GroupBySignature(f4File, 'KYWD'), 'WorkshopRecipeFilterScrap');
+        haveTemplateErrors := false;
+        keywordRecipeScrap := loadTemplate(GroupBySignature(f4File, 'KYWD'), 'WorkshopRecipeFilterScrap');
 
         miscGroup := GroupBySignature(ss2masterFile, 'MISC');
         kywdGroup := GroupBySignature(ss2masterFile, 'KYWD');
@@ -2064,244 +2164,245 @@ unit SS2Lib;
         omodGroup := GroupBySignature(ss2masterFile, 'OMOD');
         actiGroup := GroupBySignature(ss2masterFile, 'ACTI');
 
-        SS2_PlotSize_1x1 := MainRecordByEditorID(kywdGroup, 'SS2_PlotSize_1x1');
-        SS2_PlotSize_2x2 := MainRecordByEditorID(kywdGroup, 'SS2_PlotSize_2x2');
-        SS2_PlotSize_3x3 := MainRecordByEditorID(kywdGroup, 'SS2_PlotSize_3x3');
-        SS2_PlotSize_Int := MainRecordByEditorID(kywdGroup, 'SS2_PlotSize_Int');
-        SS2_PlotType_Agricultural := MainRecordByEditorID(kywdGroup, 'SS2_PlotType_Agricultural');
-        SS2_PlotType_Commercial := MainRecordByEditorID(kywdGroup, 'SS2_PlotType_Commercial');
-        SS2_PlotType_Industrial := MainRecordByEditorID(kywdGroup, 'SS2_PlotType_Industrial');
-        SS2_PlotType_Martial := MainRecordByEditorID(kywdGroup, 'SS2_PlotType_Martial');
-        SS2_PlotType_Municipal := MainRecordByEditorID(kywdGroup, 'SS2_PlotType_Municipal');
-        SS2_PlotType_Recreational := MainRecordByEditorID(kywdGroup, 'SS2_PlotType_Recreational');
-        SS2_PlotType_Residential := MainRecordByEditorID(kywdGroup, 'SS2_PlotType_Residential');
-
-        SS2_FLID_LeaderCards := MainRecordByEditorID(kywdGroup, 'SS2_FLID_LeaderCards');
-        SS2_Template_LeaderCardDescription := MainRecordByEditorID(omodGroup, 'SS2_Template_LeaderCardDescription');
-        leaderCardTemplate := MainRecordByEditorID(weapGroup, 'SS2_Template_LeaderCard');
-
-        buildingPlanTemplate := MainRecordByEditorID(weapGroup, 'SS2_Template_BuildingPlan');
-        buldingPlanLevelTemplate := MainRecordByEditorID(weapGroup, 'SS2_Template_BuildingPlan_Level');
-
-        cityPlanRootTemplate := MainRecordByEditorID(weapGroup, 'SS2_Template_CityPlan');
-        cityPlanLayerTemplate:= MainRecordByEditorID(weapGroup, 'SS2_Template_CityPlanLayout');
-        cityPlanDescriptionTemplate := MainRecordByEditorID(omodGroup, 'SS2_Template_CityPlanDescription');
-
-        ridpManagerTemplate := MainRecordByEditorId(GroupBySignature(ss2masterFile, 'ACTI') ,'SS2_RIDPManager_FurnitureStore_Template');
-        SS2_PurchaseableFurniture_Template := MainRecordByEditorId(GroupBySignature(ss2masterFile, 'MISC') ,'SS2_PurchaseableFurniture_Template');
 
 
-        furnitureCobjTemplate := MainRecordByEditorId(cobjGroup ,'SS2_co_FurnitureStoreItem_76CrateChair1');
-        // stackingCobjTemplate: IInterface;//SS2_co_StackEnable_SS
-        stackingCobjTemplate := MainRecordByEditorId(cobjGroup ,'SS2_co_StackEnable_SS');
 
-        descriptionTemplate := MainRecordByEditorID(omodGroup, 'SS2_Template_BuildingPlanDescription');
-        stageItemTemplate := MainRecordByEditorID(miscGroup, 'SS2_Template_StageItem');
+        SS2_PlotSize_1x1 := loadTemplate(kywdGroup, 'SS2_PlotSize_1x1');
+        SS2_PlotSize_2x2 := loadTemplate(kywdGroup, 'SS2_PlotSize_2x2');
+        SS2_PlotSize_3x3 := loadTemplate(kywdGroup, 'SS2_PlotSize_3x3');
+        SS2_PlotSize_Int := loadTemplate(kywdGroup, 'SS2_PlotSize_Int');
+        SS2_PlotType_Agricultural := loadTemplate(kywdGroup, 'SS2_PlotType_Agricultural');
+        SS2_PlotType_Commercial := loadTemplate(kywdGroup, 'SS2_PlotType_Commercial');
+        SS2_PlotType_Industrial := loadTemplate(kywdGroup, 'SS2_PlotType_Industrial');
+        SS2_PlotType_Martial := loadTemplate(kywdGroup, 'SS2_PlotType_Martial');
+        SS2_PlotType_Municipal := loadTemplate(kywdGroup, 'SS2_PlotType_Municipal');
+        SS2_PlotType_Recreational := loadTemplate(kywdGroup, 'SS2_PlotType_Recreational');
+        SS2_PlotType_Residential := loadTemplate(kywdGroup, 'SS2_PlotType_Residential');
 
-        usageReqsTemplate := MainRecordByEditorID(miscGroup, 'SS2_Template_UsageRequirements');
-        unlockableTemplate := MainRecordByEditorID(miscGroup, 'SS2_Template_Unlockable');
+        SS2_FLID_LeaderCards := loadTemplate(kywdGroup, 'SS2_FLID_LeaderCards');
+        SS2_Template_LeaderCardDescription := loadTemplate(omodGroup, 'SS2_Template_LeaderCardDescription');
+        leaderCardTemplate := loadTemplate(weapGroup, 'SS2_Template_LeaderCard');
 
-        confirmMessageTemplate := MainRecordByEditorID(GroupBySignature(ss2masterFile, 'MESG'), 'SS2_Template_BuildingPlanConfirmation');
+        buildingPlanTemplate := loadTemplate(weapGroup, 'SS2_Template_BuildingPlan');
+        buldingPlanLevelTemplate := loadTemplate(weapGroup, 'SS2_Template_BuildingPlan_Level');
 
-        addonQuestTemplate := MainRecordByEditorID(GroupBySignature(ss2masterFile, 'QUST'), 'SS2_AddonTemplate');
+        cityPlanRootTemplate := loadTemplate(weapGroup, 'SS2_Template_CityPlan');
+        cityPlanLayerTemplate:= loadTemplate(weapGroup, 'SS2_Template_CityPlanLayout');
+        cityPlanDescriptionTemplate := loadTemplate(omodGroup, 'SS2_Template_CityPlanDescription');
 
-        addonDataTemplate := MainRecordByEditorID(miscGroup, 'SS2_Template_AddonConfig');
+        ridpManagerTemplate := loadTemplate(GroupBySignature(ss2masterFile, 'ACTI') ,'SS2_RIDPManager_FurnitureStore_Template');
+        SS2_PurchaseableFurniture_Template := loadTemplate(GroupBySignature(ss2masterFile, 'MISC') ,'SS2_PurchaseableFurniture_Template');
 
-        versionGlobalTemplate := MainRecordByEditorID(GroupBySignature(ss2masterFile, 'GLOB'), 'SS2_ModVersion');
 
-        buildingLevelSkinTemplate := MainRecordByEditorID(weapGroup, 'SS2_Template_BuildingLevelSkin');
-        buildingSkinTemplate := MainRecordByEditorID(weapGroup, 'SS2_Template_BuildingSkin');
+        furnitureCobjTemplate := loadTemplate(cobjGroup ,'SS2_co_FurnitureStoreItem_76CrateChair1');
+
+        stackingCobjTemplate := loadTemplate(cobjGroup ,'SS2_co_StackEnable_SS');
+
+        descriptionTemplate := loadTemplate(omodGroup, 'SS2_Template_BuildingPlanDescription');
+        stageItemTemplate := loadTemplate(miscGroup, 'SS2_Template_StageItem');
+
+        usageReqsTemplate := loadTemplate(miscGroup, 'SS2_Template_UsageRequirements');
+        unlockableTemplate := loadTemplate(miscGroup, 'SS2_Template_Unlockable');
+
+        confirmMessageTemplate := loadTemplate(GroupBySignature(ss2masterFile, 'MESG'), 'SS2_Template_BuildingPlanConfirmation');
+
+        addonQuestTemplate := loadTemplate(GroupBySignature(ss2masterFile, 'QUST'), 'SS2_AddonTemplate');
+
+        addonDataTemplate := loadTemplate(miscGroup, 'SS2_Template_AddonConfig');
+
+        versionGlobalTemplate := loadTemplate(ss2masterFile, $000149CC);
+
+
+        buildingLevelSkinTemplate := loadTemplate(weapGroup, 'SS2_Template_BuildingLevelSkin');
+        buildingSkinTemplate := loadTemplate(weapGroup, 'SS2_Template_BuildingSkin');
 
         // flags
-        flagTemplate := MainRecordByEditorID(armoGroup, 'SS2_ThemeDefinition_Flags_Template');
+        flagTemplate := loadTemplate(armoGroup, 'SS2_ThemeDefinition_Flags_Template');
 
-        flagTemplate_Wall       := MainRecordByEditorID(staticGroup, 'SS2_FlagWallUSA');
-        flagTemplate_Down       := MainRecordByEditorID(staticGroup, 'SS2_FlagDown_USA');
-        flagTemplate_Waving     := MainRecordByEditorID(msttGroup, 'SS2_FlagWavingUSA01');
+        flagTemplate_Wall       := loadTemplate(staticGroup, 'SS2_FlagWallUSA');
+        flagTemplate_Down       := loadTemplate(staticGroup, 'SS2_FlagDown_USA');
+        flagTemplate_Waving     := loadTemplate(msttGroup, 'SS2_FlagWavingUSA01');
 
-        flagTemplate_Banner     := MainRecordByEditorID(staticGroup, 'SS2_StaticBanner_USA');
-        flagTemplate_BannerTorn := MainRecordByEditorID(staticGroup, 'SS2_StaticBannerTorn_USA');
-        flagTemplate_BannerTornWaving := MainRecordByEditorID(staticGroup, 'SS2_WavingBannerTorn_USA_DoNotSCOL');
-        flagTemplate_Circle01   := MainRecordByEditorID(staticGroup, 'SS2_HalfCircleFlag01_USA');
-        flagTemplate_Circle02   := MainRecordByEditorID(staticGroup, 'SS2_HalfCircleFlag02_USA');
-        flagTemplate_Matswap    := MainRecordByEditorID(GroupBySignature(ss2MasterFile, 'MSWP'), 'SS2_MS_HalfCircle_USAToMM');
-        SS2_ThemeRuleset_Flags  := MainRecordByEditorID(miscGroup, 'SS2_ThemeRuleset_Flags');
+        flagTemplate_Banner     := loadTemplate(staticGroup, 'SS2_StaticBanner_USA');
+        flagTemplate_BannerTorn := loadTemplate(staticGroup, 'SS2_StaticBannerTorn_USA');
+        flagTemplate_BannerTornWaving := loadTemplate(staticGroup, 'SS2_WavingBannerTorn_USA_DoNotSCOL');
+        flagTemplate_Circle01   := loadTemplate(staticGroup, 'SS2_HalfCircleFlag01_USA');
+        flagTemplate_Circle02   := loadTemplate(staticGroup, 'SS2_HalfCircleFlag02_USA');
+        flagTemplate_Matswap    := loadTemplate(GroupBySignature(ss2MasterFile, 'MSWP'), 'SS2_MS_HalfCircle_USAToMM');
+        SS2_ThemeRuleset_Flags  := loadTemplate(miscGroup, 'SS2_ThemeRuleset_Flags');
 
         // terraformers
-        terraformerTemplate_Misc_1x1 := MainRecordByEditorID(miscGroup, 'SS2_PlotFoundation_1x1_Terraformer_Dirt');
-        terraformerTemplate_Misc_2x2 := MainRecordByEditorID(miscGroup, 'SS2_PlotFoundation_2x2_Terraformer_Dirt');
-        terraformerTemplate_Misc_3x3 := MainRecordByEditorID(miscGroup, 'SS2_PlotFoundation_3x3_Terraformer_Dirt');
+        terraformerTemplate_Misc_1x1 := loadTemplate(miscGroup, 'SS2_PlotFoundation_1x1_Terraformer_Dirt');
+        terraformerTemplate_Misc_2x2 := loadTemplate(miscGroup, 'SS2_PlotFoundation_2x2_Terraformer_Dirt');
+        terraformerTemplate_Misc_3x3 := loadTemplate(miscGroup, 'SS2_PlotFoundation_3x3_Terraformer_Dirt');
 
-        terraformerTemplate_Cobj := MainRecordByEditorID(cobjGroup, 'SS2_COBJ_Foundation_TerraformBlock2x2_Dirt'); // the cobj, SS2_COBJ_Foundation_TerraformBlock2x2_Dirt
-        foundationTemplate_Cobj := MainRecordByEditorID(cobjGroup, 'SS2_COBJ_Foundation_Concrete_2x2'); // SS2_COBJ_Foundation_Concrete_2x2
+        terraformerTemplate_Cobj := loadTemplate(cobjGroup, 'SS2_COBJ_Foundation_TerraformBlock2x2_Dirt'); // the cobj, SS2_COBJ_Foundation_TerraformBlock2x2_Dirt
+        foundationTemplate_Cobj := loadTemplate(cobjGroup, 'SS2_COBJ_Foundation_Concrete_2x2'); // SS2_COBJ_Foundation_Concrete_2x2
 
-        subspawnerTemplate := MainRecordByEditorID(actiGroup, 'SS2_BreweryJumpTrigger'); // not really the proper template, but close enough
+        subspawnerTemplate := loadTemplate(actiGroup, 'SS2_BreweryJumpTrigger'); // not really the proper template, but close enough
 
-        foundationTemplate := MainRecordByEditorID(miscGroup, 'SS2_PlotFoundation_1x1_Concrete');
+        foundationTemplate := loadTemplate(miscGroup, 'SS2_PlotFoundation_1x1_Concrete');
 
-        terraformerTemplate_Block_1x1  := MainRecordByEditorID(actiGroup, 'SS2_Foundation_TerraformBlock1x1_Dirt');
-        terraformerTemplate_Corner_1x1 := MainRecordByEditorID(actiGroup, 'SS2_Foundation_TerraformBlock1x1_Dirt_Corner');
-        terraformerTemplate_Edge_1x1   := MainRecordByEditorID(actiGroup, 'SS2_Foundation_TerraformBlock1x1_Dirt_Edge');
+        terraformerTemplate_Block_1x1  := loadTemplate(actiGroup, 'SS2_Foundation_TerraformBlock1x1_Dirt');
+        terraformerTemplate_Corner_1x1 := loadTemplate(actiGroup, 'SS2_Foundation_TerraformBlock1x1_Dirt_Corner');
+        terraformerTemplate_Edge_1x1   := loadTemplate(actiGroup, 'SS2_Foundation_TerraformBlock1x1_Dirt_Edge');
 
-        terraformerTemplate_Block_2x2   := MainRecordByEditorID(actiGroup, 'SS2_Foundation_TerraformBlock2x2_Dirt');
-        terraformerTemplate_Corner_2x2  := MainRecordByEditorID(actiGroup, 'SS2_Foundation_TerraformBlock2x2_Dirt_Corner');
-        terraformerTemplate_Edge_2x2    := MainRecordByEditorID(actiGroup, 'SS2_Foundation_TerraformBlock2x2_Dirt_Edge');
-        terraformerTemplate_LPiece_2x2  := MainRecordByEditorID(actiGroup, 'SS2_Foundation_TerraformBlock2x2_Dirt_LPiece');
+        terraformerTemplate_Block_2x2   := loadTemplate(actiGroup, 'SS2_Foundation_TerraformBlock2x2_Dirt');
+        terraformerTemplate_Corner_2x2  := loadTemplate(actiGroup, 'SS2_Foundation_TerraformBlock2x2_Dirt_Corner');
+        terraformerTemplate_Edge_2x2    := loadTemplate(actiGroup, 'SS2_Foundation_TerraformBlock2x2_Dirt_Edge');
+        terraformerTemplate_LPiece_2x2  := loadTemplate(actiGroup, 'SS2_Foundation_TerraformBlock2x2_Dirt_LPiece');
 
-        terraformerTemplate_Block_3x3   := MainRecordByEditorID(actiGroup, 'SS2_Foundation_TerraformBlock3x3_Dirt');
-        terraformerTemplate_Corner_3x3  := MainRecordByEditorID(actiGroup, 'SS2_Foundation_TerraformBlock3x3_Dirt_Corner');
-        terraformerTemplate_Edge_3x3  := MainRecordByEditorID(actiGroup, 'SS2_Foundation_TerraformBlock3x3_Dirt_Edge');
+        terraformerTemplate_Block_3x3   := loadTemplate(actiGroup, 'SS2_Foundation_TerraformBlock3x3_Dirt');
+        terraformerTemplate_Corner_3x3  := loadTemplate(actiGroup, 'SS2_Foundation_TerraformBlock3x3_Dirt_Corner');
+        terraformerTemplate_Edge_3x3  := loadTemplate(actiGroup, 'SS2_Foundation_TerraformBlock3x3_Dirt_Edge');
 
-        //terraformerTemplate_1x1 := MainRecordByEditorID(staticGroup, 'SS2_PlotFoundation_1x1_Terraformer_Dirt');
-        //terraformerTemplate_2x2 := MainRecordByEditorID(staticGroup, 'SS2_PlotFoundation_2x2_Terraformer_Dirt');
-        //terraformerTemplate_3x3 := MainRecordByEditorID(staticGroup, 'SS2_PlotFoundation_3x3_Terraformer_Dirt');
 
         globalNewFormPrefix := '';
         globalAddonName := '';
 
-        SS2_Tag_ManagementDesk := MainRecordByEditorID(kywdGroup, 'SS2_Tag_ManagementDesk');
-        SS2_Workbench_CityPlannersDesk := MainRecordByEditorID(kywdGroup, 'SS2_Workbench_CityPlannersDesk');
-        WSFW_DoNotAutoassign := MainRecordByEditorID(GroupBySignature(wsfrMasterFile, 'KYWD'), 'WSFW_DoNotAutoassign');
+        SS2_Tag_ManagementDesk := loadTemplate(kywdGroup, 'SS2_Tag_ManagementDesk');
+        SS2_Workbench_CityPlannersDesk := loadTemplate(ss2masterFile, $14576);
+        WSFW_DoNotAutoassign := loadTemplate(GroupBySignature(wsfrMasterFile, 'KYWD'), 'WSFW_DoNotAutoassign');
 
-        deskBaseCobj := MainRecordByEditorID(cobjGroup, 'SS2_co_CityPlannerDesk'); //SS2_co_CityPlannerDesk
-        packedDeskBaseCobj := MainRecordByEditorID(cobjGroup, 'kgSIM_co_CityPlannerDesk_Packed'); //kgSIM_co_CityPlannerDesk_Packed
+        deskBaseCobj := loadTemplate(cobjGroup, 'SS2_co_CityPlannerDesk'); //SS2_co_CityPlannerDesk
+        packedDeskBaseCobj := loadTemplate(ss2masterFile, $17c14); //kgSIM_co_CityPlannerDesk_Packed
 
-        keywordTemplate := MainRecordByEditorID(kywdGroup, 'SS2_Tag_CityPlan');
+        keywordTemplate := loadTemplate(kywdGroup, 'SS2_Tag_CityPlan');
         // TYPES
         // skintypes
-        SS2_FLID_Skins_Agricultural_1x1 := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Agricultural_1x1');
-        SS2_FLID_Skins_Agricultural_2x2 := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Agricultural_2x2');
-        SS2_FLID_Skins_Agricultural_3x3 := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Agricultural_3x3');
-        SS2_FLID_Skins_Agricultural_Int := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Agricultural_Int');
-        SS2_FLID_Skins_Commercial_1x1   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Commercial_1x1');
-        SS2_FLID_Skins_Commercial_2x2   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Commercial_2x2');
-        SS2_FLID_Skins_Commercial_3x3   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Commercial_3x3');
-        SS2_FLID_Skins_Commercial_Int   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Commercial_Int');
-        SS2_FLID_Skins_Industrial_1x1   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Industrial_1x1');
-        SS2_FLID_Skins_Industrial_2x2   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Industrial_2x2');
-        SS2_FLID_Skins_Industrial_3x3   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Industrial_3x3');
-        SS2_FLID_Skins_Industrial_Int   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Industrial_Int');
-        SS2_FLID_Skins_Martial_1x1      := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Martial_1x1');
-        SS2_FLID_Skins_Martial_2x2      := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Martial_2x2');
-        SS2_FLID_Skins_Martial_3x3      := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Martial_3x3');
-        SS2_FLID_Skins_Martial_Int      := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Martial_Int');
-        SS2_FLID_Skins_Municipal_1x1    := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Municipal_1x1');
-        SS2_FLID_Skins_Municipal_2x2    := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Municipal_2x2');
-        SS2_FLID_Skins_Municipal_3x3    := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Municipal_3x3');
-        SS2_FLID_Skins_Municipal_Int    := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Municipal_Int');
-        SS2_FLID_Skins_Recreational_1x1 := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Recreational_1x1');
-        SS2_FLID_Skins_Recreational_2x2 := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Recreational_2x2');
-        SS2_FLID_Skins_Recreational_3x3 := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Recreational_3x3');
-        SS2_FLID_Skins_Recreational_Int := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Recreational_Int');
-        SS2_FLID_Skins_Residential_1x1  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Residential_1x1');
-        SS2_FLID_Skins_Residential_2x2  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Residential_2x2');
-        SS2_FLID_Skins_Residential_3x3  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Residential_3x3');
-        SS2_FLID_Skins_Residential_Int  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Skins_Residential_Int');
+        SS2_FLID_Skins_Agricultural_1x1 := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Agricultural_1x1');
+        SS2_FLID_Skins_Agricultural_2x2 := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Agricultural_2x2');
+        SS2_FLID_Skins_Agricultural_3x3 := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Agricultural_3x3');
+        SS2_FLID_Skins_Agricultural_Int := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Agricultural_Int');
+        SS2_FLID_Skins_Commercial_1x1   := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Commercial_1x1');
+        SS2_FLID_Skins_Commercial_2x2   := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Commercial_2x2');
+        SS2_FLID_Skins_Commercial_3x3   := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Commercial_3x3');
+        SS2_FLID_Skins_Commercial_Int   := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Commercial_Int');
+        SS2_FLID_Skins_Industrial_1x1   := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Industrial_1x1');
+        SS2_FLID_Skins_Industrial_2x2   := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Industrial_2x2');
+        SS2_FLID_Skins_Industrial_3x3   := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Industrial_3x3');
+        SS2_FLID_Skins_Industrial_Int   := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Industrial_Int');
+        SS2_FLID_Skins_Martial_1x1      := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Martial_1x1');
+        SS2_FLID_Skins_Martial_2x2      := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Martial_2x2');
+        SS2_FLID_Skins_Martial_3x3      := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Martial_3x3');
+        SS2_FLID_Skins_Martial_Int      := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Martial_Int');
+        SS2_FLID_Skins_Municipal_1x1    := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Municipal_1x1');
+        SS2_FLID_Skins_Municipal_2x2    := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Municipal_2x2');
+        SS2_FLID_Skins_Municipal_3x3    := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Municipal_3x3');
+        SS2_FLID_Skins_Municipal_Int    := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Municipal_Int');
+        SS2_FLID_Skins_Recreational_1x1 := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Recreational_1x1');
+        SS2_FLID_Skins_Recreational_2x2 := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Recreational_2x2');
+        SS2_FLID_Skins_Recreational_3x3 := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Recreational_3x3');
+        SS2_FLID_Skins_Recreational_Int := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Recreational_Int');
+        SS2_FLID_Skins_Residential_1x1  := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Residential_1x1');
+        SS2_FLID_Skins_Residential_2x2  := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Residential_2x2');
+        SS2_FLID_Skins_Residential_3x3  := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Residential_3x3');
+        SS2_FLID_Skins_Residential_Int  := loadTemplate(kywdGroup, 'SS2_FLID_Skins_Residential_Int');
 
         // buidplantypes
-        SS2_FLID_BuildingPlans_Agricultural_1x1 := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Agricultural_1x1');
-        SS2_FLID_BuildingPlans_Agricultural_2x2 := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Agricultural_2x2');
-        SS2_FLID_BuildingPlans_Agricultural_3x3 := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Agricultural_3x3');
-        SS2_FLID_BuildingPlans_Agricultural_Int := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Agricultural_Int');
-        SS2_FLID_BuildingPlans_Commercial_1x1   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Commercial_1x1');
-        SS2_FLID_BuildingPlans_Commercial_2x2   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Commercial_2x2');
-        SS2_FLID_BuildingPlans_Commercial_3x3   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Commercial_3x3');
-        SS2_FLID_BuildingPlans_Commercial_Int   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Commercial_Int');
-        SS2_FLID_BuildingPlans_Industrial_1x1   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Industrial_1x1');
-        SS2_FLID_BuildingPlans_Industrial_2x2   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Industrial_2x2');
-        SS2_FLID_BuildingPlans_Industrial_3x3   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Industrial_3x3');
-        SS2_FLID_BuildingPlans_Industrial_Int   := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Industrial_Int');
-        SS2_FLID_BuildingPlans_Martial_1x1      := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Martial_1x1');
-        SS2_FLID_BuildingPlans_Martial_2x2      := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Martial_2x2');
-        SS2_FLID_BuildingPlans_Martial_3x3      := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Martial_3x3');
-        SS2_FLID_BuildingPlans_Martial_Int      := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Martial_Int');
-        SS2_FLID_BuildingPlans_Municipal_1x1    := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Municipal_1x1');
-        SS2_FLID_BuildingPlans_Municipal_2x2    := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Municipal_2x2');
-        SS2_FLID_BuildingPlans_Municipal_3x3    := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Municipal_3x3');
-        SS2_FLID_BuildingPlans_Municipal_Int    := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Municipal_Int');
-        SS2_FLID_BuildingPlans_Recreational_1x1 := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Recreational_1x1');
-        SS2_FLID_BuildingPlans_Recreational_2x2 := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Recreational_2x2');
-        SS2_FLID_BuildingPlans_Recreational_3x3 := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Recreational_3x3');
-        SS2_FLID_BuildingPlans_Recreational_Int := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Recreational_Int');
-        SS2_FLID_BuildingPlans_Residential_1x1  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Residential_1x1');
-        SS2_FLID_BuildingPlans_Residential_2x2  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Residential_2x2');
-        SS2_FLID_BuildingPlans_Residential_3x3  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Residential_3x3');
-        SS2_FLID_BuildingPlans_Residential_Int  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_BuildingPlans_Residential_Int');
+        SS2_FLID_BuildingPlans_Agricultural_1x1 := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Agricultural_1x1');
+        SS2_FLID_BuildingPlans_Agricultural_2x2 := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Agricultural_2x2');
+        SS2_FLID_BuildingPlans_Agricultural_3x3 := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Agricultural_3x3');
+        SS2_FLID_BuildingPlans_Agricultural_Int := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Agricultural_Int');
+        SS2_FLID_BuildingPlans_Commercial_1x1   := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Commercial_1x1');
+        SS2_FLID_BuildingPlans_Commercial_2x2   := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Commercial_2x2');
+        SS2_FLID_BuildingPlans_Commercial_3x3   := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Commercial_3x3');
+        SS2_FLID_BuildingPlans_Commercial_Int   := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Commercial_Int');
+        SS2_FLID_BuildingPlans_Industrial_1x1   := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Industrial_1x1');
+        SS2_FLID_BuildingPlans_Industrial_2x2   := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Industrial_2x2');
+        SS2_FLID_BuildingPlans_Industrial_3x3   := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Industrial_3x3');
+        SS2_FLID_BuildingPlans_Industrial_Int   := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Industrial_Int');
+        SS2_FLID_BuildingPlans_Martial_1x1      := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Martial_1x1');
+        SS2_FLID_BuildingPlans_Martial_2x2      := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Martial_2x2');
+        SS2_FLID_BuildingPlans_Martial_3x3      := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Martial_3x3');
+        SS2_FLID_BuildingPlans_Martial_Int      := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Martial_Int');
+        SS2_FLID_BuildingPlans_Municipal_1x1    := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Municipal_1x1');
+        SS2_FLID_BuildingPlans_Municipal_2x2    := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Municipal_2x2');
+        SS2_FLID_BuildingPlans_Municipal_3x3    := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Municipal_3x3');
+        SS2_FLID_BuildingPlans_Municipal_Int    := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Municipal_Int');
+        SS2_FLID_BuildingPlans_Recreational_1x1 := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Recreational_1x1');
+        SS2_FLID_BuildingPlans_Recreational_2x2 := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Recreational_2x2');
+        SS2_FLID_BuildingPlans_Recreational_3x3 := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Recreational_3x3');
+        SS2_FLID_BuildingPlans_Recreational_Int := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Recreational_Int');
+        SS2_FLID_BuildingPlans_Residential_1x1  := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Residential_1x1');
+        SS2_FLID_BuildingPlans_Residential_2x2  := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Residential_2x2');
+        SS2_FLID_BuildingPlans_Residential_3x3  := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Residential_3x3');
+        SS2_FLID_BuildingPlans_Residential_Int  := loadTemplate(kywdGroup, 'SS2_FLID_BuildingPlans_Residential_Int');
 
-        SS2_FLID_CityPlans  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_CityPlans');
-        SS2_FLID_FurnitureStoreItems  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_FurnitureStoreItems');
-        SS2_FLID_ThemeDefinitions_Flags  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_ThemeDefinitions_Flags');
+        SS2_FLID_CityPlans  := loadTemplate(kywdGroup, 'SS2_FLID_CityPlans');
+        SS2_FLID_FurnitureStoreItems  := loadTemplate(kywdGroup, 'SS2_FLID_FurnitureStoreItems');
+        SS2_FLID_ThemeDefinitions_Flags  := loadTemplate(kywdGroup, 'SS2_FLID_ThemeDefinitions_Flags');
 
-        SS2_FLID_Unlockables  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_Unlockables');
+        SS2_FLID_Unlockables  := loadTemplate(kywdGroup, 'SS2_FLID_Unlockables');
 
-        SS2_FLID_1x1_Foundations  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_1x1_Foundations');
-        SS2_FLID_2x2_Foundations  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_2x2_Foundations');
-        SS2_FLID_3x3_Foundations  := MainRecordByEditorID(kywdGroup, 'SS2_FLID_3x3_Foundations');
+        SS2_FLID_1x1_Foundations  := loadTemplate(kywdGroup, 'SS2_FLID_1x1_Foundations');
+        SS2_FLID_2x2_Foundations  := loadTemplate(kywdGroup, 'SS2_FLID_2x2_Foundations');
+        SS2_FLID_3x3_Foundations  := loadTemplate(kywdGroup, 'SS2_FLID_3x3_Foundations');
 
         // subtypes
-        SS2_PlotTypeSubClass_Agricultural_Advanced                      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Agricultural_Advanced');
-        SS2_PlotTypeSubClass_Agricultural_Default_Basic                 := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Agricultural_Default_Basic');
-        SS2_PlotTypeSubClass_Agricultural_HighTech                      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Agricultural_HighTech');
-        SS2_PlotTypeSubClass_Commercial_ArmorStore                      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_ArmorStore');
-        SS2_PlotTypeSubClass_Commercial_Bar                             := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_Bar');
-        SS2_PlotTypeSubClass_Commercial_Beauty                          := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_Beauty');
-        SS2_PlotTypeSubClass_Commercial_Bookstore                       := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_Bookstore');
-        SS2_PlotTypeSubClass_Commercial_Clinic                          := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_Clinic');
-        SS2_PlotTypeSubClass_Commercial_ClothingStore                   := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_ClothingStore');
-        SS2_PlotTypeSubClass_Commercial_Default_Other                   := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_Default_Other');
-        SS2_PlotTypeSubClass_Commercial_FurnitureStore                  := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_FurnitureStore');
-        SS2_PlotTypeSubClass_Commercial_GeneralStore                    := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_GeneralStore');
-        SS2_PlotTypeSubClass_Commercial_PowerArmorStore                 := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_PowerArmorStore');
-        SS2_PlotTypeSubClass_Commercial_WeaponsStore                    := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_WeaponsStore');
-        SS2_PlotTypeSubClass_Commercial_PetStore                        := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_PetStore');
-        SS2_PlotTypeSubClass_Industrial_BuildingMaterials               := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_BuildingMaterials');
-        SS2_PlotTypeSubClass_Industrial_Default_General                 := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_Default_General');
-        SS2_PlotTypeSubClass_Industrial_MachineParts                    := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_MachineParts');
-        SS2_PlotTypeSubClass_Industrial_OrganicMaterials                := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_OrganicMaterials');
-        SS2_PlotTypeSubClass_Industrial_RareMaterials                   := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_RareMaterials');
-        SS2_PlotTypeSubClass_Industrial_Conversion                      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_Conversion');
-        SS2_PlotTypeSubClass_Industrial_Production                      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_Production');
+        SS2_PlotTypeSubClass_Agricultural_Advanced                      := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Agricultural_Advanced');
+        SS2_PlotTypeSubClass_Agricultural_Default_Basic                 := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Agricultural_Default_Basic');
+        SS2_PlotTypeSubClass_Agricultural_HighTech                      := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Agricultural_HighTech');
+        SS2_PlotTypeSubClass_Commercial_ArmorStore                      := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_ArmorStore');
+        SS2_PlotTypeSubClass_Commercial_Bar                             := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_Bar');
+        SS2_PlotTypeSubClass_Commercial_Beauty                          := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_Beauty');
+        SS2_PlotTypeSubClass_Commercial_Bookstore                       := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_Bookstore');
+        SS2_PlotTypeSubClass_Commercial_Clinic                          := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_Clinic');
+        SS2_PlotTypeSubClass_Commercial_ClothingStore                   := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_ClothingStore');
+        SS2_PlotTypeSubClass_Commercial_Default_Other                   := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_Default_Other');
+        SS2_PlotTypeSubClass_Commercial_FurnitureStore                  := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_FurnitureStore');
+        SS2_PlotTypeSubClass_Commercial_GeneralStore                    := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_GeneralStore');
+        SS2_PlotTypeSubClass_Commercial_PowerArmorStore                 := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_PowerArmorStore');
+        SS2_PlotTypeSubClass_Commercial_WeaponsStore                    := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_WeaponsStore');
+        SS2_PlotTypeSubClass_Commercial_PetStore                        := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_PetStore');
+        SS2_PlotTypeSubClass_Industrial_BuildingMaterials               := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_BuildingMaterials');
+        SS2_PlotTypeSubClass_Industrial_Default_General                 := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_Default_General');
+        SS2_PlotTypeSubClass_Industrial_MachineParts                    := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_MachineParts');
+        SS2_PlotTypeSubClass_Industrial_OrganicMaterials                := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_OrganicMaterials');
+        SS2_PlotTypeSubClass_Industrial_RareMaterials                   := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_RareMaterials');
+        SS2_PlotTypeSubClass_Industrial_Conversion                      := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_Conversion');
+        SS2_PlotTypeSubClass_Industrial_Production                      := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_Production');
 
 
 
-        SS2_PlotTypeSubClass_Martial_Advanced                           := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_Advanced');
-        SS2_PlotTypeSubClass_Martial_Default_Basic                      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_Default_Basic');
-        SS2_PlotTypeSubClass_Martial_HighTech                           := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_HighTech');
-        SS2_PlotTypeSubClass_Martial_OutpostType_Armory                 := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_Armory');
-        SS2_PlotTypeSubClass_Martial_OutpostType_BattlefieldScavengers  := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_BattlefieldScavengers');
-        SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics          := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics');
-        SS2_PlotTypeSubClass_Martial_OutpostType_Prison                 := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_Prison');
-        SS2_PlotTypeSubClass_Martial_OutpostType_RecruitmentCenter      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_RecruitmentCenter');
-        SS2_PlotTypeSubClass_Martial_WatchTower             := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Martial_WatchTower');
-        SS2_PlotTypeSubClass_Municipal_CaravanServices                  := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_CaravanServices');
-        SS2_PlotTypeSubClass_Municipal_CommunicationStation             := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Communications');
-        SS2_PlotTypeSubClass_Municipal_Default_Other                    := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Default_Other');
-        SS2_PlotTypeSubClass_Municipal_PowerPlant_Advanced              := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_PowerPlant_Advanced');
-        SS2_PlotTypeSubClass_Municipal_PowerPlant_Basic                 := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_PowerPlant_Basic');
-        SS2_PlotTypeSubClass_Municipal_PowerPlant_HighTech              := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_PowerPlant_HighTech');
-        SS2_PlotTypeSubClass_Municipal_PowerTransfer                    := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_PowerTransfer');
-        SS2_PlotTypeSubClass_Municipal_TaxServices                      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_TaxServices');
-        SS2_PlotTypeSubClass_Municipal_WaterPlant_Advanced              := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_WaterPlant_Advanced');
-        SS2_PlotTypeSubClass_Municipal_WaterPlant_Basic                 := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_WaterPlant_Basic');
-        SS2_PlotTypeSubClass_Municipal_WaterPlant_HighTech              := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_WaterPlant_HighTech');
-        SS2_PlotTypeSubClass_Municipal_Cemetery                         := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Cemetery');
-        SS2_PlotTypeSubClass_Municipal_Sanitation                       := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Sanitation');
-        SS2_PlotTypeSubClass_Municipal_Hospital                         := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Hospital');
+        SS2_PlotTypeSubClass_Martial_Advanced                           := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Martial_Advanced');
+        SS2_PlotTypeSubClass_Martial_Default_Basic                      := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Martial_Default_Basic');
+        SS2_PlotTypeSubClass_Martial_HighTech                           := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Martial_HighTech');
+        SS2_PlotTypeSubClass_Martial_OutpostType_Armory                 := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_Armory');
+        SS2_PlotTypeSubClass_Martial_OutpostType_BattlefieldScavengers  := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_BattlefieldScavengers');
+        SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics            := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_FieldMedics');
+        SS2_PlotTypeSubClass_Martial_OutpostType_Prison                 := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_Prison');
+        SS2_PlotTypeSubClass_Martial_OutpostType_RecruitmentCenter      := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Martial_OutpostType_RecruitmentCenter');
+        SS2_PlotTypeSubClass_Martial_WatchTower                         := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Martial_WatchTower');
+        SS2_PlotTypeSubClass_Municipal_CaravanServices                  := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_CaravanServices');
+        SS2_PlotTypeSubClass_Municipal_CommunicationStation             := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Communications');
+        SS2_PlotTypeSubClass_Municipal_Default_Other                    := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Default_Other');
+        SS2_PlotTypeSubClass_Municipal_PowerPlant_Advanced              := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_PowerPlant_Advanced');
+        SS2_PlotTypeSubClass_Municipal_PowerPlant_Basic                 := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_PowerPlant_Basic');
+        SS2_PlotTypeSubClass_Municipal_PowerPlant_HighTech              := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_PowerPlant_HighTech');
+        SS2_PlotTypeSubClass_Municipal_PowerTransfer                    := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_PowerTransfer');
+        SS2_PlotTypeSubClass_Municipal_TaxServices                      := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_TaxServices');
+        SS2_PlotTypeSubClass_Municipal_WaterPlant_Advanced              := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_WaterPlant_Advanced');
+        SS2_PlotTypeSubClass_Municipal_WaterPlant_Basic                 := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_WaterPlant_Basic');
+        SS2_PlotTypeSubClass_Municipal_WaterPlant_HighTech              := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_WaterPlant_HighTech');
+        SS2_PlotTypeSubClass_Municipal_Cemetery                         := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Cemetery');
+        SS2_PlotTypeSubClass_Municipal_Sanitation                       := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Sanitation');
+        SS2_PlotTypeSubClass_Municipal_Hospital                         := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Municipal_Hospital');
 
 
-        SS2_PlotTypeSubClass_Recreational_AgilityTraining               := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_AgilityTraining');
-        // SS2_PlotTypeSubClass_Recreational_Cemetery                      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_Cemetery');
-        SS2_PlotTypeSubClass_Recreational_CharismaTraining              := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_CharismaTraining');
-        SS2_PlotTypeSubClass_Recreational_Default_Relaxation            := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_Default_Relaxation');
-        SS2_PlotTypeSubClass_Recreational_EnduranceTraining             := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_EnduranceTraining');
-        SS2_PlotTypeSubClass_Recreational_IntelligenceTraining          := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_IntelligenceTraining');
-        SS2_PlotTypeSubClass_Recreational_LuckTraining                  := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_LuckTraining');
-        SS2_PlotTypeSubClass_Recreational_OutpostType_MessHall          := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_OutpostType_MessHall');
-        SS2_PlotTypeSubClass_Recreational_OutpostType_MilitaryTraining      := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_OutpostType_MilitaryTraining');
-        SS2_PlotTypeSubClass_Recreational_PerceptionTraining            := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_PerceptionTraining');
-        SS2_PlotTypeSubClass_Recreational_StrengthTraining              := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_StrengthTraining');
-        SS2_PlotTypeSubClass_Residential_Default_SinglePerson           := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Residential_Default_SinglePerson');
-        SS2_PlotTypeSubClass_Residential_MultiPerson                    := MainRecordByEditorID(kywdGroup, 'SS2_PlotTypeSubClass_Residential_MultiPerson');
+        SS2_PlotTypeSubClass_Recreational_AgilityTraining               := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_AgilityTraining');
+        // SS2_PlotTypeSubClass_Recreational_Cemetery                      := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_Cemetery');
+        SS2_PlotTypeSubClass_Recreational_CharismaTraining              := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_CharismaTraining');
+        SS2_PlotTypeSubClass_Recreational_Default_Relaxation            := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_Default_Relaxation');
+        SS2_PlotTypeSubClass_Recreational_EnduranceTraining             := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_EnduranceTraining');
+        SS2_PlotTypeSubClass_Recreational_IntelligenceTraining          := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_IntelligenceTraining');
+        SS2_PlotTypeSubClass_Recreational_LuckTraining                  := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_LuckTraining');
+        SS2_PlotTypeSubClass_Recreational_OutpostType_MessHall          := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_OutpostType_MessHall');
+        SS2_PlotTypeSubClass_Recreational_OutpostType_MilitaryTraining  := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_OutpostType_MilitaryTraining');
+        SS2_PlotTypeSubClass_Recreational_PerceptionTraining            := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_PerceptionTraining');
+        SS2_PlotTypeSubClass_Recreational_StrengthTraining              := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Recreational_StrengthTraining');
+        SS2_PlotTypeSubClass_Residential_Default_SinglePerson           := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Residential_Default_SinglePerson');
+        SS2_PlotTypeSubClass_Residential_MultiPerson                    := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Residential_MultiPerson');
 
         initPlotTypes();
 
@@ -2324,6 +2425,11 @@ unit SS2Lib;
         validMastersList := TSTringList.create;
         validMastersList.Duplicates := dupIgnore;
         validMastersList.CaseSensitive := false;
+        
+        if(haveTemplateErrors) then begin
+            AddMessage('Aborted due to template errors');
+            Result := false;
+        end;
     end;
 
     procedure loadSS2Suffixes();
@@ -2714,6 +2820,12 @@ unit SS2Lib;
 
         for i:=0 to ElementCount(questGroup)-1 do begin
             curQuest := ElementByIndex(questGroup, i);
+            // either this is a fuckup by xEdit 415, or just by xEdit in general, but questGroup will contain quests not just from targetfile
+            if(not isSameFile(GetFile(MasterOrSelf(curQuest)), targetFile)) then begin
+                // AddMessage('Nope, got quest in '+GetFileName(GetFile(MasterOrSelf(curQuest)))+' instead');
+                continue;
+            end;
+
             AddMessage('Checking '+EditorID(curQuest));
 
             scripts := ElementByPath(curQuest, 'VMAD - Virtual Machine Adapter\Scripts');

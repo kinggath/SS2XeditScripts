@@ -1,6 +1,5 @@
 {
-  New script template, only shows processed records
-  Assigning any nonzero value to Result will terminate script
+    Run on an SCOL, it will ask you for 3 coordinates, and will move everything in it by that offset
 }
 unit FixScolPosition;    
 
