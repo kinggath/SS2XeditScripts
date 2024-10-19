@@ -1,7 +1,7 @@
 {
     Utility Library for SimSettlements 2.
 
-    Version 2.0.3
+    Version 2.0.4
 }
 unit SS2Lib;
 
@@ -850,9 +850,7 @@ unit SS2Lib;
             end;
         end;
 
-        if(curPart <> '') and (curPart <= '2147483647') then begin
-            // max int: 2147483647 = (2^64)/2 - 1
-            // technically 2147483648 would be valid for negative numbers, but whatever
+        if(curPart <> '') then begin
             Result := StrToInt(curPart);
         end;
     end;
