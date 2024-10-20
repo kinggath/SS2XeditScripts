@@ -689,7 +689,7 @@ unit ExportCellRefs;
         setAll1Item, setAll2Item, setAll3Item, setAllNoneItem: TMenuItem;
         separator, selectAllItem, selectNoneItem: TMenuItem;
 
-        yOffset: integer;
+        yOffset, dialogHeight: integer;
 
 
         writeMode: TRadioGroup;
@@ -699,14 +699,15 @@ unit ExportCellRefs;
         settingNumSeparatorLines := 3;
         settingSortEntries := true;}
 
-        frm := CreateDialog('Export References', 514, 360);
+        dialogHeight := 460;
+        frm := CreateDialog('Export References', 514, dialogHeight);
         layerList := TTreeView.create(frm);
         layerList.Name := 'layerList';
         layerList.Parent := frm;
         layerList.left := 10;
         layerList.top := 10;
         layerList.width := 340;
-        layerList.height := 300;
+        layerList.height := dialogHeight-60;
         layerList.ReadOnly := True;
         // layerList.onclick := layerListClickHandler;
         layerList.onMouseDown := layerListMouseDownHandler;
@@ -799,9 +800,11 @@ unit ExportCellRefs;
 
         // appendToFile.checked := true;
 
-        yOffset := 254;
+        yOffset := dialogHeight - 106;
+
+        //yOffset := 254;
         exportBtn := CreateButton(frm, 360, yOffset, '-> Export Selected');
-        yOffset := 278;
+        yOffset := yOffset + 24;
 
         closeBtn := CreateButton(frm, 360, yOffset+8, 'Close');
 

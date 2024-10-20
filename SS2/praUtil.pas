@@ -6,7 +6,7 @@
 unit PraUtil;
     const
         // the version constant
-        PRA_UTIL_VERSION = 14.2;
+        PRA_UTIL_VERSION = 14.3;
 
 
         // file flags
@@ -1292,7 +1292,7 @@ unit PraUtil;
     begin
         curFormID := GetLoadOrderFormID(MasterOrSelf(form));
 
-        Result := FormIdToHex(curFormID, 8);
+        Result := FormIdToHex(curFormID);
     end;
 
     {
@@ -1325,7 +1325,7 @@ unit PraUtil;
 		theFilename := GetFileName(theFile);
 		theFormId := getLocalFormId(theFile, FormID(form));
 
-		Result := theFilename + ':'+FormIdToHex(theFormId, 8);
+		Result := theFilename + ':'+FormIdToHex(theFormId);
 	end;
 
 	{
@@ -1489,7 +1489,7 @@ unit PraUtil;
 
         newElem := ElementAssign(container, HighInteger, nil, False);
         formId := GetLoadOrderFormID(kw);
-        SetEditValue(newElem, FormIdToHex(formId, 8));
+        SetEditValue(newElem, FormIdToHex(formId));
     end;
 
     function hasKeywordByPath(e: IInterface; kw: variant; signature: String): boolean;
@@ -1725,7 +1725,7 @@ unit PraUtil;
             formIdList := Add(formList, 'FormIDs', True);
             // This automatically gives you one free entry pointing to NULL
             curElem := ElementByIndex(formIdList, i);
-            SetEditValue(curElem, FormIdToHex(GetLoadOrderFormID(newForm), 8));
+            SetEditValue(curElem, FormIdToHex(GetLoadOrderFormID(newForm)));
             exit;
         end;
 
@@ -1743,7 +1743,7 @@ unit PraUtil;
 
 
         curElem := ElementAssign(formIdList, HighInteger, nil, False);
-        SetEditValue(curElem, FormIdToHex(GetLoadOrderFormID(newForm), 8));
+        SetEditValue(curElem, FormIdToHex(GetLoadOrderFormID(newForm)));
 
     end;
 
@@ -2013,9 +2013,9 @@ unit PraUtil;
     procedure setLinksTo(e: IInterface; formToAdd: IInterface);
     begin
         if(assigned(formToAdd)) then begin
-            SetEditValue(e, FormIdToHex(GetLoadOrderFormID(formToAdd), 8));
+            SetEditValue(e, FormIdToHex(GetLoadOrderFormID(formToAdd)));
         end else begin
-            SetEditValue(e, FormIdToHex(0, 8));
+            SetEditValue(e, FormIdToHex(0));
         end;
     end;
 
@@ -2025,9 +2025,9 @@ unit PraUtil;
     procedure setPathLinksTo(e: IInterface; path: string; form: IInterface);
     begin
         if(assigned(form)) then begin
-            SetElementEditValues(e, path, FormIdToHex(GetLoadOrderFormID(form), 8));
+            SetElementEditValues(e, path, FormIdToHex(GetLoadOrderFormID(form)));
         end else begin
-            SetElementEditValues(e, path, FormIdToHex(0, 8));
+            SetElementEditValues(e, path, FormIdToHex(0));
         end;
     end;
 

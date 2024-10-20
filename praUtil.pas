@@ -6,7 +6,7 @@
 unit PraUtil;
     const
         // the version constant
-        PRA_UTIL_VERSION = 14.1;
+        PRA_UTIL_VERSION = 14.3;
 
 
         // file flags
@@ -1050,6 +1050,17 @@ unit PraUtil;
             exit;
         end;
     end;
+    
+    {
+        Fixed version of IntToHex which will output a 8-char string representing a FormID without crashing due to overflow
+    }
+    function FormIdToHex(fid: cardinal): string;
+    begin
+        Result := IntToHex64(fid, 8); // it's still going to make 16 character long strings if the number is "negative"
+        if(Length(Result) > 8) then begin
+            Result := copy(Result, Length(Result)-8+1, 8);
+        end;
+    end;
 
     {
         Recursively outputs the given element into the given binary writer, for hashing purposes.
@@ -1281,7 +1292,7 @@ unit PraUtil;
     begin
         curFormID := GetLoadOrderFormID(MasterOrSelf(form));
 
-        Result := IntToHex(curFormID, 8);
+        Result := FormIdToHex(curFormID);
     end;
 
     {
@@ -1314,7 +1325,7 @@ unit PraUtil;
 		theFilename := GetFileName(theFile);
 		theFormId := getLocalFormId(theFile, FormID(form));
 
-		Result := theFilename + ':'+IntToHex(theFormId, 8);
+		Result := theFilename + ':'+FormIdToHex(theFormId);
 	end;
 
 	{
@@ -1478,7 +1489,7 @@ unit PraUtil;
 
         newElem := ElementAssign(container, HighInteger, nil, False);
         formId := GetLoadOrderFormID(kw);
-        SetEditValue(newElem, IntToHex(formId, 8));
+        SetEditValue(newElem, FormIdToHex(formId));
     end;
 
     function hasKeywordByPath(e: IInterface; kw: variant; signature: String): boolean;
@@ -1492,7 +1503,7 @@ unit PraUtil;
         kwda := ElementByPath(e, signature);
 
         variantType := varType(kw);
-        if (variantType = 258) or (variantType = varString) then begin
+        if (variantType = varUString) or (variantType = varString) then begin
             kwEdid := kw;
         end else begin
             kwEdid := EditorID(kw);
@@ -1525,7 +1536,7 @@ unit PraUtil;
         kwda := ElementByPath(e, signature);
 
         variantType := varType(kw);
-        if (variantType = 258) or (variantType = varString) then begin
+        if (variantType = varUString) or (variantType = varString) then begin
             kwEdid := kw;
         end else begin
             kwEdid := EditorID(kw);
@@ -1552,7 +1563,7 @@ unit PraUtil;
         kwda := ElementByPath(e, signature);
 
         variantType := varType(av);
-        if (variantType = 258) or (variantType = varString) then begin
+        if (variantType = varUString) or (variantType = varString) then begin
             kwEdid := av;
         end else begin
             kwEdid := EditorID(av);
@@ -1714,7 +1725,7 @@ unit PraUtil;
             formIdList := Add(formList, 'FormIDs', True);
             // This automatically gives you one free entry pointing to NULL
             curElem := ElementByIndex(formIdList, i);
-            SetEditValue(curElem, IntToHex(GetLoadOrderFormID(newForm), 8));
+            SetEditValue(curElem, FormIdToHex(GetLoadOrderFormID(newForm)));
             exit;
         end;
 
@@ -1732,7 +1743,7 @@ unit PraUtil;
 
 
         curElem := ElementAssign(formIdList, HighInteger, nil, False);
-        SetEditValue(curElem, IntToHex(GetLoadOrderFormID(newForm), 8));
+        SetEditValue(curElem, FormIdToHex(GetLoadOrderFormID(newForm)));
 
     end;
 
@@ -2002,9 +2013,9 @@ unit PraUtil;
     procedure setLinksTo(e: IInterface; formToAdd: IInterface);
     begin
         if(assigned(formToAdd)) then begin
-            SetEditValue(e, IntToHex(GetLoadOrderFormID(formToAdd), 8));
+            SetEditValue(e, FormIdToHex(GetLoadOrderFormID(formToAdd)));
         end else begin
-            SetEditValue(e, IntToHex(0, 8));
+            SetEditValue(e, FormIdToHex(0));
         end;
     end;
 
@@ -2014,9 +2025,9 @@ unit PraUtil;
     procedure setPathLinksTo(e: IInterface; path: string; form: IInterface);
     begin
         if(assigned(form)) then begin
-            SetElementEditValues(e, path, IntToHex(GetLoadOrderFormID(form), 8));
+            SetElementEditValues(e, path, FormIdToHex(GetLoadOrderFormID(form)));
         end else begin
-            SetElementEditValues(e, path, IntToHex(0, 8));
+            SetElementEditValues(e, path, FormIdToHex(0));
         end;
     end;
 
@@ -2522,12 +2533,13 @@ unit PraUtil;
             varByte      : Result := 'varByte';
             varWord      : Result := 'varWord';
             varLongWord  : Result := 'varLongWord';
-            vart64       : Result := 'vart64';
+            //vart64       : Result := 'vart64'; // doesn't seem to exist
             varStrArg    : Result := 'varStrArg';
             varString    : Result := 'varString';
+            varUString     : Result := 'varUString ';
             varAny       : Result := 'varAny';
             varTypeMask  : Result := 'varTypeMask';
-            else:       Result := IntToStr(basicType);
+            else       Result := IntToStr(basicType);
         end;
     end;
 
@@ -2573,7 +2585,7 @@ unit PraUtil;
         end else if(variantType = varDouble) then begin
             SetElementEditValues(propElem, 'Type', 'Float');
             SetElementEditValues(propElem, 'Float', FloatToStr(value));
-        end else if(variantType = 258) or (variantType =varString) then begin
+        end else if(variantType = varUString ) or (variantType =varString) then begin
             SetElementEditValues(propElem, 'Type', 'String');
             SetElementEditValues(propElem, 'String', value);
         end else if(variantType = varBoolean) then begin
@@ -4248,7 +4260,7 @@ unit PraUtil;
                 targetJson.L[key] := v;
             varDouble:
                 targetJson.F[key] := v;
-            varString, 258:
+            varString, varUString:
                 targetJson.S[key] := v;
             varBoolean:
                 targetJson.B[key] := v;
