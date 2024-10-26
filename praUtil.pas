@@ -6,7 +6,7 @@
 unit PraUtil;
     const
         // the version constant
-        PRA_UTIL_VERSION = 14.3;
+        PRA_UTIL_VERSION = 15.0;
 
 
         // file flags
@@ -1862,6 +1862,12 @@ unit PraUtil;
     end;
 
     // helper functions
+    function strContainsCI(haystack: String; needle: String): boolean;
+    begin
+        Result := pos(LowerCase(needle), LowerCase(haystack)) <> 0;
+    end;
+    
+    
     {
         Checks if string haystack starts with string needle
     }

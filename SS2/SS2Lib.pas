@@ -1,7 +1,7 @@
 {
     Utility Library for SimSettlements 2.
 
-    Version 2.0.4
+    Version 2.1.0
 }
 unit SS2Lib;
 
@@ -248,6 +248,7 @@ unit SS2Lib;
         SS2_PlotTypeSubClass_Commercial_PowerArmorStore,
         SS2_PlotTypeSubClass_Commercial_WeaponsStore,
         SS2_PlotTypeSubClass_Commercial_PetStore,
+        SS2_PlotTypeSubClass_Commercial_RoboticsStore,
         // industrial
         SS2_PlotTypeSubClass_Industrial_BuildingMaterials,
         SS2_PlotTypeSubClass_Industrial_Default_General,
@@ -334,6 +335,7 @@ unit SS2Lib;
         PLOT_SC_COM_PowerArmorStore,
         PLOT_SC_COM_WeaponsStore,
         PLOT_SC_COM_PetStore,
+        PLOT_SC_COM_RobotStore,
         // industrial
         PLOT_SC_IND_BuildingMaterials,
         PLOT_SC_IND_Default_General,
@@ -2355,6 +2357,8 @@ unit SS2Lib;
         SS2_PlotTypeSubClass_Commercial_PowerArmorStore                 := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_PowerArmorStore');
         SS2_PlotTypeSubClass_Commercial_WeaponsStore                    := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_WeaponsStore');
         SS2_PlotTypeSubClass_Commercial_PetStore                        := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_PetStore');
+        SS2_PlotTypeSubClass_Commercial_RoboticsStore                   := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_RoboticsStore');
+        
         SS2_PlotTypeSubClass_Industrial_BuildingMaterials               := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_BuildingMaterials');
         SS2_PlotTypeSubClass_Industrial_Default_General                 := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_Default_General');
         SS2_PlotTypeSubClass_Industrial_MachineParts                    := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_MachineParts');
@@ -2570,6 +2574,7 @@ unit SS2Lib;
         PLOT_SC_COM_PowerArmorStore := plotSubtypeNames.add('Power Armor Store');
         PLOT_SC_COM_WeaponsStore    := plotSubtypeNames.add('Weapon Store');
         PLOT_SC_COM_PetStore        := plotSubtypeNames.add('Pet Store');
+        PLOT_SC_COM_RobotStore      := plotSubtypeNames.add('Robotics Store');
         // industrial
         PLOT_SC_IND_Default_General     := plotSubtypeNames.add('Default/General Factory');
         PLOT_SC_IND_BuildingMaterials   := plotSubtypeNames.add('Building Materials');
@@ -2644,6 +2649,7 @@ unit SS2Lib;
         stArr_com.add(PLOT_SC_COM_PowerArmorStore);
         stArr_com.add(PLOT_SC_COM_WeaponsStore);
         stArr_com.add(PLOT_SC_COM_PetStore);
+        stArr_com.add(PLOT_SC_COM_RobotStore);
 
         stArr_ind.add(PLOT_SC_IND_Default_General);
         stArr_ind.add(PLOT_SC_IND_BuildingMaterials);
@@ -3969,7 +3975,7 @@ unit SS2Lib;
     end;
 
 
-    function FindBlueprintDescription(e: IInterface): string;
+    function FindBlueprintDescription(e: IInterface; doStripSubtypePrefix: boolean): string;
     var
         script, descrOmod: IInterface;
         text: string;
@@ -3990,7 +3996,10 @@ unit SS2Lib;
             exit;
         end;
 
-        Result := stripSubtypePrefix(text);
+        Result := text;
+        if(doStripSubtypePrefix) then begin
+            Result := stripSubtypePrefix(text);
+        end;
     end;
 
     function FindBlueprintConfirmation(e: IInterface): string;
@@ -5173,6 +5182,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             PLOT_SC_COM_PowerArmorStore:    Result := SS2_PlotTypeSubClass_Commercial_PowerArmorStore;
             PLOT_SC_COM_WeaponsStore:       Result := SS2_PlotTypeSubClass_Commercial_WeaponsStore;
             PLOT_SC_COM_PetStore:           Result := SS2_PlotTypeSubClass_Commercial_PetStore;
+            PLOT_SC_COM_RobotStore:         Result := SS2_PlotTypeSubClass_Commercial_RoboticsStore;
             // industrial
             PLOT_SC_IND_Default_General:    Result := SS2_PlotTypeSubClass_Industrial_Default_General;
             PLOT_SC_IND_BuildingMaterials:  Result := SS2_PlotTypeSubClass_Industrial_BuildingMaterials;
@@ -5305,6 +5315,11 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result := PLOT_SC_COM_PetStore;
             exit;
         end;
+        if(edid = 'SS2_PlotTypeSubClass_Commercial_RoboticsStore') then begin
+            Result := PLOT_SC_COM_RobotStore;
+            exit;
+        end;
+        
         // industrial
         if(edid = 'SS2_PlotTypeSubClass_Industrial_Default_General') then begin
             Result := PLOT_SC_IND_Default_General;
@@ -6323,8 +6338,9 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         packedPlotType: integer;
         requireStageModels, isFullPlot: boolean;
         initialThemes: TStringList;
-        autoRegister, makePreview, setupStacking, isNewEntry: boolean;
-        initOcc1, initOcc2, initOcc3: integer
+        autoRegister, makePreview, setupStacking, generatePrefix, isNewEntry: boolean;
+        initOcc1, initOcc2, initOcc3: integer;
+        isWonder: boolean
     ): TJsonObject;
     var
         frm: TForm;
@@ -6335,11 +6351,11 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         selectedMainType, selectedSize, selectedSubType: integer;
         packedResultType: integer;
         descrLabel, themesLabel: TLabel;
-        registerCb, previewCb, stackCb, confirmationAutoCb: TCheckBox;
+        isWonderCb, registerCb, previewCb, stackCb, confirmationAutoCb, prefixTypeCb: TCheckBox;
         themesInitialText: string;
         descriptionInput, confirmationInput: TCustomMemo;
         occ1, occ2, occ3: integer;
-    begin
+    begin 
         Result := nil;
         isUpdatingExistingBlueprint := (not isNewEntry);
 
@@ -6407,9 +6423,10 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         confirmationInput := nil;
 
         if (isFullPlot) then begin
-
-
-
+            isWonderCb := CreateCheckbox(frm, 10, yOffset, 'Is Wonder/Architectural Marvel');
+            isWonderCb.checked := isWonder;
+            
+            yOffset := yOffset + 28;
             descrLabel := CreateLabel(frm, 10, yOffset, 'Description');
 
 
@@ -6417,7 +6434,9 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
             // descriptionInput.ScrollBars := ssVertical;
 
-            CreateLabel(frm, 10, yOffset+90, '(Without subtype prefix)');
+            prefixTypeCb := CreateCheckbox(frm, 10, yOffset+88, 'Add subtype prefix automatically');
+            prefixTypeCb.checked := generatePrefix;
+            // CreateLabel(frm, 10, yOffset+90, '(Without subtype prefix)');
 
             CreateLabel(frm, 250, yOffset, 'Confirmation Message');
             //descrLabel.AutoSize := False;
@@ -6440,9 +6459,11 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
                 confirmationInput.enabled := false;
             end;
             confirmationAutoCb.onclick := confirmationMsgAutoChangeHandler;
+            
+            
 
             yOffset := yOffset + 110;
-            frm.height := (frm.height + 110);
+            frm.height := (frm.height + 138);
 
             //confirmationInput confirmationAutoCb
         end;
@@ -6553,8 +6574,12 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
 
             if(isFullPlot) then begin
                 Result.B['registerPlot'] := registerCb.checked;
+                Result.B['isWonder'] := isWonderCb.checked;
+                Result.B['addSubtypePrefix'] := prefixTypeCb.checked;
             end else begin
                 Result.B['registerPlot'] := false;
+                Result.B['isWonder'] := false;
+                Result.B['addSubtypePrefix'] := false;
             end;
 
             Result.B['makePreview'] := previewCb.checked;
@@ -6613,7 +6638,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         StageModelFileRequired := false;
         isConvertDialogActive := false;
         Result := false;
-        frm := CreateDialog(title, 500, 400);
+        frm := CreateDialog(title, 510, 420);
 
         CreateLabel(frm, 10, 6, text);
 
@@ -6674,7 +6699,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
                 selectedThemeTagList.assign(initialThemes);
             end;
 
-            CreateLabel(frm, 10, yOffset+5, 'Skin Theme');
+            CreateLabel(frm, 10, yOffset+5, 'Themes');
             btnThemes := CreateButton(frm, 70, yOffset, 'Select Themes...');
             btnThemes.onclick := themeSelectionClick;
 
@@ -6725,7 +6750,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         btnBrowseItems := CreateButton(frm, 450, yOffset+18, '...');
         btnBrowseItems.OnClick := browseItemFile;
 
-        yOffset := yOffset + 40;
+        yOffset := yOffset + 50;
 
         // extra input for skins
         spawnsModeSelector := TRadioGroup.create(frm);

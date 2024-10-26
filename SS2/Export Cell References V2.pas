@@ -18,6 +18,7 @@ unit ExportCellRefs;
         settingDoReplace: boolean;
         settingNumSeparatorLines: integer;
         settingSortEntries: boolean;
+        settingAutoFlagClutter: boolean;
 
     procedure loadConfig();
     var
@@ -29,6 +30,7 @@ unit ExportCellRefs;
         settingDoReplace := true;
         settingNumSeparatorLines := 3;
         settingSortEntries := true;
+        settingAutoFlagClutter := true;
 
         if(not FileExists(configFile)) then begin
             exit;
@@ -55,6 +57,8 @@ unit ExportCellRefs;
                     settingDoReplace := StrToBool(curVal);
                 end else if(curKey = 'settingSortEntries') then begin
                     settingSortEntries := StrToBool(curVal);
+                end else if(curKey = 'settingAutoFlagClutter') then begin
+                    settingAutoFlagClutter := StrToBool(curVal);
                 end else if(curKey = 'settingNumSeparatorLines') then begin
                     settingNumSeparatorLines := StrToInt(curVal);
                 end;
@@ -71,8 +75,10 @@ unit ExportCellRefs;
     begin
         lines := TStringList.create;
 
+
         lines.add('settingDoReplace='+BoolToStr(settingDoReplace));
-        lines.add('settingDoReplace='+BoolToStr(settingDoReplace));
+        lines.add('settingSortEntries='+BoolToStr(settingSortEntries));
+        lines.add('settingAutoFlagClutter='+BoolToStr(settingAutoFlagClutter));
         lines.add('settingNumSeparatorLines='+IntToStr(settingNumSeparatorLines));
 
         lines.saveToFile(configFile);
@@ -84,6 +90,11 @@ unit ExportCellRefs;
     // You can remove it if script doesn't require initialization code
     function Initialize: integer;
     begin
+        if(PRA_UTIL_VERSION < 15.0) then begin
+            AddMessage('This script requires praUtil version 15.0 or newer, '+FloatToStr(PRA_UTIL_VERSION)+' found instead.');
+            Result := 1;
+            exit;
+        end;
         Result := 0;
 
 
@@ -321,11 +332,11 @@ unit ExportCellRefs;
         end;
     end;
 
-    procedure processExporting(targetFileName: string; layerNames: TStringList; doAppend, doSort: boolean; numExtraLines: integer);
+    procedure processExporting(targetFileName: string; layerNames: TStringList);
     var
         mainList, lineList: TStringList;
         i, j, id, level: integer;
-        layerName, scaleStr, posX, posY, posZ, rotX, rotY, rotZ, edid, levelName: string;
+        layerName, scaleStr, posX, posY, posZ, rotX, rotY, rotZ, edid, levelName, typeString: string;
         layerData: TJsonObject;
         ref, base: IInterface;
 
@@ -334,10 +345,15 @@ unit ExportCellRefs;
 
         isFirst: boolean;
     begin
+        {
+
+        settingSortEntries: boolean;
+        settingAutoFlagClutter: boolean;
+        }
         mainList := TStringList.create;
-        if(doAppend and FileExists(targetFileName)) then begin
+        if((not settingDoReplace) and FileExists(targetFileName)) then begin
             mainList.LoadFromFile(targetFileName);
-            addEmptyLines(mainList, numExtraLines);
+            addEmptyLines(mainList, settingNumSeparatorLines);
         end else begin
             mainList.add('Form,Pos X,Pos Y,Pos Z,Rot X,Rot Y,Rot Z,Scale,iLevel,iStageNum,iStageEnd,iType,sVendorType,iVendorLevel,iOwnerNumber,sSpawnName,Requirements');
         end;
@@ -387,18 +403,26 @@ unit ExportCellRefs;
             if(isFirst) then begin
                 isFirst := false;
             end else begin
-                addEmptyLines(mainList, numExtraLines);
+                addEmptyLines(mainList, settingNumSeparatorLines);
                 //mainList.add('');
                 //mainList.add('');
                 //mainList.add('');
             end;
 
-            if(doSort) then begin
+            if(settingSortEntries) then begin
                 sortFormEntryArray(levelArray);
             end;
             for i:=0 to levelArray.count-1 do begin
                 curEntry := levelArray.O[i];
                 lineList := TStringList.create;
+                
+                typeString := '';
+                if(settingAutoFlagClutter) then begin
+                    if(strContainsCI(curEntry.S['form'], 'clutter')) then begin
+                        typeString := '9';
+                    end;
+                end;
+                
 
                 lineList.add(curEntry.S['form']);
                 lineList.add(curEntry.S['pos_X']);
@@ -411,7 +435,7 @@ unit ExportCellRefs;
                 lineList.add(IntToStr(level));
                 lineList.add('');//stagenum
                 lineList.add('');//stageend
-                lineList.add('');//iType
+                lineList.add(typeString);//iType
                 lineList.add('');//sVendorType
                 lineList.add('');//iVendorLevel
                 lineList.add('');//owner nr
@@ -443,17 +467,24 @@ unit ExportCellRefs;
         layerNames: TStringList;
         jData: TJsonObject;
         numLinesInput: TLabeledEdit;
-        doSortEntries: TCheckBox;
+        doSortEntries, autoFlagClutter: TCheckBox;
         writeMode: TRadioGroup;
         isAppendMode: boolean;
     begin
+
+        {autoFlagClutter := CreateCheckbox(frm, 360, yOffset, 'Auto-flag Clutter');
+        autoFlagClutter.name := 'doSortEntries';
+        autoFlagClutter.checked := settingAutoFlagClutter;}
 
         frm := findComponentParentWindow(sender);
         layerList := TTreeView(frm.findComponent('layerList'));
 
         doSortEntries := TCheckBox(frm.findComponent('doSortEntries'));
         settingSortEntries := doSortEntries.checked;
-        
+
+        autoFlagClutter := TCheckBox(frm.findComponent('autoFlagClutter'));
+        settingAutoFlagClutter := autoFlagClutter.checked;
+
         writeMode := TRadioGroup(frm.findComponent('writeMode'));
         numLinesInput := TLabeledEdit(frm.findComponent('numLinesInput'));
 
@@ -465,7 +496,7 @@ unit ExportCellRefs;
 
         // isAppendMode := appendToFile.checked;
         isAppendMode := writeMode.ItemIndex = 1;
-        settingDoReplace := isAppendMode;
+        settingDoReplace := (not isAppendMode);
 
         {
         settingDoReplace: boolean;
@@ -514,7 +545,7 @@ unit ExportCellRefs;
             dialogResult := dialogResult + '.csv';
         end;
 
-        processExporting(dialogResult, layerNames, isAppendMode, doSortEntries.checked, numExtraLines);
+        processExporting(dialogResult, layerNames);
 
         layerNames.free();
     end;
@@ -681,7 +712,7 @@ unit ExportCellRefs;
         selectLayersLabel, selectRefsLabel: TLabel;
         exportBtn, closeBtn, browseBtn: TButton;
         lvlInput, numLinesInput: TLabeledEdit;
-        doSortEntries: TCheckBox;
+        doSortEntries, autoFlagClutter: TCheckBox;
         menu: TPopupMenu;
 
 
@@ -796,6 +827,11 @@ unit ExportCellRefs;
         doSortEntries.name := 'doSortEntries';
         doSortEntries.checked := settingSortEntries;
 
+        yOffset := yOffset + 30;
+
+        autoFlagClutter := CreateCheckbox(frm, 360, yOffset, 'Auto-flag Clutter');
+        autoFlagClutter.name := 'autoFlagClutter';
+        autoFlagClutter.checked := settingAutoFlagClutter;
 
 
         // appendToFile.checked := true;

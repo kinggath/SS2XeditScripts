@@ -35,7 +35,7 @@ var
 
     existingPlotThemes: TStringList;
 
-    autoRegister, makePreviews: boolean;
+    autoRegister, makePreviews, autoPrefixSubtype, planIsWonder: boolean;
 
     occupantsOnLevel1, occupantsOnLevel2, occupantsOnLevel3: integer;
 
@@ -86,6 +86,8 @@ begin
                 makePreviews := StrToBool(curVal);
             end else if(curKey = 'SetupStacking') then begin
                 setupStacking := StrToBool(curVal);
+            end else if(curKey = 'AutoPrefixSubtype') then begin
+                autoPrefixSubtype := StrToBool(curVal);
             end;
         end;
     end;
@@ -100,6 +102,7 @@ begin
     lines := TStringList.create;
     lines.add('ModPrefix='+modPrefix);
     lines.add('AutoRegister='+BoolToStr(autoRegister));
+    lines.add('AutoPrefixSubtype='+BoolToStr(autoPrefixSubtype));
     lines.add('MakePreviews='+BoolToStr(makePreviews));
     lines.add('SetupStacking='+BoolToStr(setupStacking));
 
@@ -230,16 +233,15 @@ var
     resultData: TJsonObject;
     dialogLabel, skinTargetEdid, plotDescription, plotConfirm: string;
     plotType: integer;
-//    plotThemes: TStringList;
     requreStageModels, isSkin, showThemeSelector, hasSkinTarget, isNewEntry, reckeckItems: boolean;
     numOcc1, numOcc2, numOcc3: integer;
-    plotLevelScript, subspawnerScript: IInterface;
+    plotRootScript, plotLevelScript, subspawnerScript: IInterface;
     plotLevelNr, plotLevelOcc: integer;
 
-
+    isWonder: boolean;
 begin
     Result := false;
-
+    isWonder := false;
     isSkin := false;
 
     occupantsOnLevel1 := 0;
@@ -277,7 +279,7 @@ begin
         plotName := DisplayName(targetElem);
         plotId := EditorId(targetElem);
 
-        plotDescription := FindBlueprintDescription(targetElem);
+        plotDescription := FindBlueprintDescription(targetElem, autoPrefixSubtype);
         plotConfirm := FindBlueprintConfirmation(targetElem);
 
         modPrefix := findPrefix(plotId);
@@ -285,6 +287,7 @@ begin
         requreStageModels := false;
 
         if(currentMode = MODE_BP_ROOT) then begin
+            plotRootScript := getScript(targetElem, 'SimSettlementsV2:Weapons:BuildingPlan');
             plotType := getNewPlotType(targetElem);
             // edgecase: plotType must not be -1 here!
             if(plotType < 0) then begin
@@ -296,6 +299,8 @@ begin
             numOcc1 := getNumOccupants(targetElem, 1);
             numOcc2 := getNumOccupants(targetElem, 2);
             numOcc3 := getNumOccupants(targetElem, 3);
+            
+            isWonder := getScriptPropDefault(plotRootScript, 'bArchitecturalMarvel', false);
 
         end else if(currentMode = MODE_BP_LEVEL) then begin
             dialogLabel := 'Selected Blueprint Level: '+plotId;
@@ -452,8 +457,10 @@ begin
                     autoRegister,
                     makePreviews,
                     setupStacking,
+                    autoPrefixSubtype,
                     isNewEntry,
-                    numOcc1, numOcc2, numOcc3
+                    numOcc1, numOcc2, numOcc3,
+                    isWonder
                 );
 
             // selectedThemeTagList
@@ -484,6 +491,9 @@ begin
             occupantsOnLevel1 := resultData.I['occupants1'];
             occupantsOnLevel2 := resultData.I['occupants2'];
             occupantsOnLevel3 := resultData.I['occupants3'];
+            autoPrefixSubtype:= resultData.B['addSubtypePrefix'];
+            
+            planIsWonder := resultData.B['isWonder'];
 
             // resultData
             importSpawnsMode := IMPORT_MODE_PLAN;
@@ -1179,8 +1189,12 @@ begin
         exit;
     end;
 
-    subType := extractPlotSubtype(currentType);
-    descrString := getSubtypeDescriptionString(subType) + descrString;
+    if(autoPrefixSubtype) then begin
+        subType := extractPlotSubtype(currentType);
+        descrString := getSubtypeDescriptionString(subType) + descrString;
+    end;
+    
+    
     confirmString := confirmationString;
     //confirmationString
     if(descriptionBase <> '') then begin
@@ -1206,6 +1220,9 @@ begin
         // some extra cleanup
         clearFormlist(levelFormlist);
     end;
+    
+    setScriptProp(bpRootScript, 'bArchitecturalMarvel', planIsWonder);
+    
 
     if(hasModels) then begin
         // only if we have models can we ever have build mats
@@ -1341,6 +1358,7 @@ begin
     existingPlotThemes := nil;
     plotData := nil;
 
+    autoPrefixSubtype := true;
     autoRegister := true;
     makePreviews := true;
     setupStacking := true;
