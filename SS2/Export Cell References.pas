@@ -255,14 +255,14 @@ unit ExportCellRefs;
         i: integer;
         layerNames: TStringList;
         jData: TJsonObject;
-        lvlInput: TEdit;
+        lvlInput: TLabeledEdit;
         appendToFile: TCheckBox;
         isAppendMode: boolean;
     begin
 
         frm := findComponentParentWindow(sender);
         layerList := TTreeView(frm.findComponent('layerList'));
-        lvlInput := TEdit(frm.findComponent('lvlInput'));
+        lvlInput := TLabeledEdit(frm.findComponent('lvlInput'));
         appendToFile := TCheckBox(frm.findComponent('appendToFile'));
 
         isAppendMode := appendToFile.checked;
@@ -384,13 +384,17 @@ unit ExportCellRefs;
         resultCode: cardinal;
         n: TTreeNode;
         selectLayersLabel, selectRefsLabel: TLabel;
-        exportBtn, closeBtn: TButton;
-        lvlInput: TEdit;
+        exportBtn, closeBtn, browseBtn: TButton;
+        lvlInput, targetFileInput: TLabeledEdit;
         appendToFile: TCheckBox;
         menu: TPopupMenu;
         selectAllItem, selectNoneItem: TMenuItem;
+        yOffset: integer;
+
+
+        writeMode: TRadioGroup;
     begin
-        frm := CreateDialog('Export References', 510, 350);
+        frm := CreateDialog('Export References', 510, 400);
         layerList := TTreeView.create(frm);
         layerList.Name := 'layerList';
         layerList.Parent := frm;
@@ -422,19 +426,26 @@ unit ExportCellRefs;
 
 
 
-        exportBtn := CreateButton(frm, 360, 10, 'Export Selected');
+        yOffset := 10;
 
-        CreateLabel(frm, 360, 50, 'Set Level To:');
 
-        lvlInput := CreateInput(frm, 360, 70, '');
+
+        yOffset := 30;
+        lvlInput := CreateLabelledInput(frm, 360, yOffset, 120, 40, 'Set Level To:', '');
         lvlInput.Name := 'lvlInput';
         lvlInput.Text := '';
+        yOffset := 70;
 
-        appendToFile := CreateCheckbox(frm, 360, 100, 'Append to file');
+        yOffset := 100;
+        appendToFile := CreateCheckbox(frm, 360, yOffset, 'Append to file');
         appendToFile.name := 'appendToFile';
         appendToFile.checked := true;
 
-        closeBtn := CreateButton(frm, 360, 285, 'Close');
+        yOffset := 284;
+        exportBtn := CreateButton(frm, 360, yOffset, '-> Export Selected');
+        yOffset := 320;
+        
+        closeBtn := CreateButton(frm, 360, yOffset+8, 'Close');
 
         exportBtn.width := 130;
         exportBtn.onclick := exportLayersHandler;
@@ -442,6 +453,14 @@ unit ExportCellRefs;
         closeBtn.ModalResult := mrCancel;
 
 
+
+
+        // CreateLabel(frm, 10, yOffset, 'Target File:');
+        targetFileInput := CreateLabelledInput(frm, 10, yOffset+10, 300, 40, 'Output File:', '');
+        targetFileInput.Name := 'targetFileInput';
+        targetFileInput.Text := '';
+
+        browseBtn := CreateButton(frm, 320, yOffset+8, '...');
         //layerList.RowSelect := True;
         //layerList.MultiSelect := True;
         // layerList.OnChange := TreeViewChange;

@@ -1,11 +1,14 @@
 {
     Run in a cell. You will be asked which layers to export.
+    
+    File ExportCellRefsReplace.txt can be used for replacement.
 }
 unit ExportCellRefs;
     uses 'SS2\praUtil';
 
     const
         configFile = ScriptsPath + 'SS2\ExportCellRefs.cfg';
+        replaceFile = ScriptsPath + 'SS2\ExportCellRefsReplace.txt';
 
     var
         elemCache: TList;
@@ -19,6 +22,69 @@ unit ExportCellRefs;
         settingNumSeparatorLines: integer;
         settingSortEntries: boolean;
         settingAutoFlagClutter: boolean;
+        
+        replaceMap: TJsonObject;
+        
+        
+    procedure registerReplacement(search: string; replace: string);
+    var
+        searchLc: string;
+    begin
+        searchLc := LowerCase(search);
+        replaceMap.S[searchLc] := replace;
+    end;
+    
+    function getReplacement(search: string): string;
+    var
+        searchLc: string;
+    begin
+        searchLc := LowerCase(search);
+        Result := replaceMap.S[searchLc];
+        
+        if(Result = '') then begin
+            Result := search;
+        end;
+    end;
+
+    procedure loadReplacements();
+    var
+        i, j, breakPos: integer;
+        curLine, curKey, curVal: string;
+        lines : TStringList;
+    begin
+        // default
+        settingDoReplace := true;
+        settingNumSeparatorLines := 3;
+        settingSortEntries := true;
+        settingAutoFlagClutter := true;
+
+        if(not FileExists(replaceFile)) then begin
+            exit;
+        end;
+        lines := TStringList.create;
+        lines.LoadFromFile(replaceFile);
+
+        for i:=0 to lines.count-1 do begin
+            curLine := lines[i];
+            breakPos := -1;
+
+            for j:=1 to length(curLine) do begin
+                if(curLine[j] = '=') then begin
+                    breakPos := j;
+                    break;
+                end;
+            end;
+
+            if breakPos <> -1 then begin
+                curKey := trim(copy(curLine, 0, breakPos-1));
+                curVal := trim(copy(curLine, breakPos+1, length(curLine)));
+
+                registerReplacement(curKey, curVal);
+            end;
+        end;
+
+        lines.free();
+    end;
 
     procedure loadConfig();
     var
@@ -101,6 +167,7 @@ unit ExportCellRefs;
         layerCache := TStringList.create;
         elemCache := TList.create;
         layerMap := TJsonObject.create;
+        replaceMap := TJsonObject.create;
     end;
 
     function CreateSaveItemsFileDialog(title: string; filter: string = ''; doOverwrite: boolean): TSaveDialog;
@@ -372,7 +439,9 @@ unit ExportCellRefs;
                 ref := ObjectToElement(elemCache[id]);
 
                 base := PathLinksTo(ref, 'NAME');
-                edid := EditorID(base);
+                edid := getReplacement(EditorID(base));
+                
+                //
 
                 curEntry := preSortedEntries.A[level].addObject();
 
@@ -725,6 +794,7 @@ unit ExportCellRefs;
 
         writeMode: TRadioGroup;
     begin
+        loadReplacements();
         loadConfig();
         {        settingDoReplace := true;
         settingNumSeparatorLines := 3;
@@ -1026,6 +1096,8 @@ unit ExportCellRefs;
         elemCache.free();
         layerMap.free();
         layerCache.free();
+        
+        replaceMap.free();
 
     end;
 

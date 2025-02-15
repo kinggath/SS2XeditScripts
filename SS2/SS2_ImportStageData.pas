@@ -545,7 +545,7 @@ begin
 
         if (csvCols.count > 0) then begin
             for stage:=0 to csvCols.count-1 do begin
-                curRow := csvCols.Strings[stage];
+                curRow := trim(csvCols.Strings[stage]);
 
                 if(curRow = '') then begin
                     break;

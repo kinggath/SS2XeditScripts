@@ -6,7 +6,7 @@
 unit PraUtil;
     const
         // the version constant
-        PRA_UTIL_VERSION = 15.0;
+        PRA_UTIL_VERSION = 15.1;
 
 
         // file flags
@@ -1050,7 +1050,7 @@ unit PraUtil;
             exit;
         end;
     end;
-    
+
     {
         Fixed version of IntToHex which will output a 8-char string representing a FormID without crashing due to overflow
     }
@@ -1343,8 +1343,8 @@ unit PraUtil;
 		if(separatorPos <= 0) then begin
 			exit;
 		end;
-        
-        
+
+
         regex := TPerlRegEx.Create();
 
         try
@@ -1866,8 +1866,8 @@ unit PraUtil;
     begin
         Result := pos(LowerCase(needle), LowerCase(haystack)) <> 0;
     end;
-    
-    
+
+
     {
         Checks if string haystack starts with string needle
     }
@@ -3119,24 +3119,84 @@ unit PraUtil;
         loopPreventer.free();
     end;
 
-    procedure addRequiredMastersSilent_Single(fromElement, toFile: IInterface);
+    {
+        Checks whenever fileToCheck or any of it's masters have masterToCheck as their master
+    }
+    function HasMasterFull(fileToCheck: IInterface; masterToCheck: string): boolean;
+    var
+        i, cntMinOne: integer;
+    begin
+        // first, directly
+        if(HasMaster(fileToCheck, masterToCheck)) then begin
+            Result := true;
+            exit;
+        end;
+
+        cntMinOne := MasterCount(fileToCheck)-1;
+
+        for i:=0 to cntMinOne do begin
+            if(HasMasterFull(MasterByIndex(fileToCheck, i), masterToCheck)) then begin
+                Result := true;
+                exit;
+            end;
+        end;
+
+        Result := false;
+    end;
+
+    {
+        Like AddMasterIfMissing, but will do nothing and return false if adding the master would cause a circular dependency.
+    }
+    function AddMasterIfMissing_Safe(toFile: IInterface; newMaster: string): boolean;
+    var
+        newMasterFile: IInterface;
+    begin
+        Result := false;
+        newMasterFile := findFile(newMaster);
+        if(not assigned(newMasterFile)) then begin
+            AddMessage('ERROR: cannot add '+newMaster+' as master to '+GetFileName(toFile)+', because '+newMaster+' doesn''t exist');
+            exit;
+        end;
+
+        // now, what do we do? newMasterFile must absolutely not have toFile as master
+        if(HasMasterFull(newMasterFile, GetFileName(toFile))) then begin
+            AddMessage('ERROR: cannot add '+newMaster+' as master to '+GetFileName(toFile)+', because that would cause a circular dependency!');
+            exit;
+        end;
+
+        AddMasterIfMissing(toFile, newMaster);
+        Result := true;
+    end;
+
+    {
+        Gets the file of fromElement, and adds it and all it's masters to toFile.
+        fromElement can be either an element or a file.
+    }
+    function addRequiredMastersSilent_Single(fromElement, toFile: IInterface): boolean;
     var
         masters: TStringList;
         i: integer;
         toFileName: string;
         fromElemFile: IInterface;
     begin
+        Result := true;
         toFileName := GetFileName(toFile);
         fromElemFile := GetFile(fromElement);
 
         if (not FilesEqual(fromElemFile, toFile)) then begin
-            AddMasterIfMissing(toFile, GetFileName(fromElemFile));
+            if(not AddMasterIfMissing_Safe(toFile, GetFileName(fromElemFile))) then begin
+                Result := false;
+            end;
         end;
 
         masters := ReportRequiredMastersFull(fromElement);
         for i:=0 to masters.count-1 do begin
             if(toFileName <> masters[i]) then begin
-                AddMasterIfMissing(toFile, masters[i]);
+                if(not AddMasterIfMissing_Safe(toFile, masters[i])) then begin
+                    Result := false;
+                    masters.free();
+                    exit;
+                end;
             end;
         end;
         masters.free();
@@ -3152,15 +3212,27 @@ unit PraUtil;
     begin
         if(not isMaster(fromElement)) then begin
             curMaster := Master(fromElement);
-            addRequiredMastersSilent_Single(curMaster, toFile);
+            if(not addRequiredMastersSilent_Single(curMaster, toFile)) then begin
+                raise Exception.Create('ERROR: Cannot add required masters for '+FullPath(fromElement)+' to '+GetFileName(toFile));
+                //AddMessage('ERROR: Cannot add required masters for '+DisplayName(fromElement)+' to '+GetFileName(toFile));
+                //exit;
+            end;
         end;
 
         injectedMaster := getInjectedRecordTarget(fromElement);
         if(assigned(injectedMaster)) then begin
-            addRequiredMastersSilent_Single(injectedMaster, toFile);
+            if(not addRequiredMastersSilent_Single(injectedMaster, toFile)) then begin
+                raise Exception.Create('ERROR: Cannot add required masters for '+FullPath(fromElement)+' to '+GetFileName(toFile));
+                //AddMessage('ERROR: Cannot add required masters for '+DisplayName(fromElement)+' to '+GetFileName(toFile));
+                //exit;
+            end;
         end;
 
-        addRequiredMastersSilent_Single(fromElement, toFile);
+        if(not addRequiredMastersSilent_Single(fromElement, toFile)) then begin
+            raise Exception.Create('ERROR: Cannot add required masters for '+FullPath(fromElement)+' to '+GetFileName(toFile));
+            //AddMessage('ERROR: Cannot add required masters for '+DisplayName(fromElement)+' to '+GetFileName(toFile));
+            //exit;
+        end;
     end;
 
     function getExistingElementOverride(sourceElem: IInterface; targetFile: IwbFile): IInterface;
