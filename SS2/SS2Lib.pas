@@ -1,7 +1,7 @@
 {
     Utility Library for SimSettlements 2.
 
-    Version 2.1.0
+    Version 2.2.0
 }
 unit SS2Lib;
 
@@ -2017,13 +2017,13 @@ unit SS2Lib;
 
         Result := hardcodedEdidMappingValues[i];
     end;
-    
-    
+
+
     {
         Following arguments are possible:
         - nil, string: search using the string only, using findFormByString
 
-    
+
         - filename, string: search in file by EditorID
         - filename, int:    search in file by FormID
         - signature, string: search in all files by signature and EditorID
@@ -2358,7 +2358,7 @@ unit SS2Lib;
         SS2_PlotTypeSubClass_Commercial_WeaponsStore                    := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_WeaponsStore');
         SS2_PlotTypeSubClass_Commercial_PetStore                        := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_PetStore');
         SS2_PlotTypeSubClass_Commercial_RoboticsStore                   := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Commercial_RoboticsStore');
-        
+
         SS2_PlotTypeSubClass_Industrial_BuildingMaterials               := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_BuildingMaterials');
         SS2_PlotTypeSubClass_Industrial_Default_General                 := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_Default_General');
         SS2_PlotTypeSubClass_Industrial_MachineParts                    := loadTemplate(kywdGroup, 'SS2_PlotTypeSubClass_Industrial_MachineParts');
@@ -2429,7 +2429,7 @@ unit SS2Lib;
         validMastersList := TSTringList.create;
         validMastersList.Duplicates := dupIgnore;
         validMastersList.CaseSensitive := false;
-        
+
         if(haveTemplateErrors) then begin
             AddMessage('Aborted due to template errors');
             Result := false;
@@ -2730,10 +2730,8 @@ unit SS2Lib;
 
     function getCopyOfTemplateWithOverride(targetFile, template: IInterface; newEdid: string; useOverrides: boolean): IInterface;
     var
-        group, newElem: IInterface;
+        newElem: IInterface;
         tmpEdid, templateSig, newElemSig: string;
-        i: integer;
-        isAssignedWat: boolean;
     begin
         templateSig := signature(template);
         if(templateSig = '') then begin
@@ -2776,6 +2774,25 @@ unit SS2Lib;
         Result := newElem;
 
     end;
+
+    function findUnusedEditorID(baseEdid: string): string;
+    var
+        i: integer;
+        newEdid: string;
+        elem: IInterface;
+    begin
+        newEdid := baseEdid;
+        elem := FindObjectByEdid(baseEdid);
+        i := 1;
+        while (assigned(elem)) do begin
+            newEdid := shortenWithCrc32(baseEdid + IntToStr(i));
+            i := i + 1;
+            elem := FindObjectByEdid(newEdid);
+        end;
+
+        Result := newEdid;
+    end;
+
 
     {
         Creates a copy of the given template with the given edid, if it doesn't exist. If it does, the existing record is returned
@@ -3041,7 +3058,7 @@ unit SS2Lib;
         if(not assigned(targetFlst)) then begin
             sig := 'FLST';
 
-            formlistEdid := globalNewFormPrefix + stackEnableFlstBase;
+            formlistEdid := findUnusedEditorID(globalNewFormPrefix + stackEnableFlstBase);
 
             group := GroupBySignature(targetFile, sig);
 
@@ -3053,11 +3070,15 @@ unit SS2Lib;
             if(not assigned(targetFlst)) then begin
                 targetFlst := Add(group, sig, true); // stolen from dubhFunctions
             end;
+
+
+
             SetElementEditValues(targetFlst, 'EDID', formlistEdid);
 
             // in this case, also create and setup the COBJcobjEdid
-            cobjEdid := globalNewFormPrefix + stackEnableCobjBase;
-            // targetCobj := getElemByEdidAndSig(cobjEdid, 'COBJ', targetFile);
+            cobjEdid := findUnusedEditorID(globalNewFormPrefix + stackEnableCobjBase);
+
+            // now here we must not return an existing one
             targetCobj := getCopyOfTemplate(targetFile, stackingCobjTemplate, cobjEdid);
 
             setPathLinksTo(targetCobj, 'CNAM', targetFlst);
@@ -5319,7 +5340,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
             Result := PLOT_SC_COM_RobotStore;
             exit;
         end;
-        
+
         // industrial
         if(edid = 'SS2_PlotTypeSubClass_Industrial_Default_General') then begin
             Result := PLOT_SC_IND_Default_General;
@@ -6355,7 +6376,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         themesInitialText: string;
         descriptionInput, confirmationInput: TCustomMemo;
         occ1, occ2, occ3: integer;
-    begin 
+    begin
         Result := nil;
         isUpdatingExistingBlueprint := (not isNewEntry);
 
@@ -6425,7 +6446,7 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
         if (isFullPlot) then begin
             isWonderCb := CreateCheckbox(frm, 10, yOffset, 'Is Wonder/Architectural Marvel');
             isWonderCb.checked := isWonder;
-            
+
             yOffset := yOffset + 28;
             descrLabel := CreateLabel(frm, 10, yOffset, 'Description');
 
@@ -6459,8 +6480,8 @@ function translateFormToFile(oldForm, fromFile, toFile: IInterface): IInterface;
                 confirmationInput.enabled := false;
             end;
             confirmationAutoCb.onclick := confirmationMsgAutoChangeHandler;
-            
-            
+
+
 
             yOffset := yOffset + 110;
             frm.height := (frm.height + 138);
