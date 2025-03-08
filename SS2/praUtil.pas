@@ -6,7 +6,7 @@
 unit PraUtil;
     const
         // the version constant
-        PRA_UTIL_VERSION = 15.1;
+        PRA_UTIL_VERSION = 16.1;
 
 
         // file flags
@@ -3210,6 +3210,10 @@ unit PraUtil;
     var
         curMaster, injectedMaster: IInterface;
     begin
+        if(not assigned(fromElement)) then begin
+            AddMessage('WARNING: addRequiredMastersSilent was called with a none fromElement');
+            exit;
+        end;
         if(not isMaster(fromElement)) then begin
             curMaster := Master(fromElement);
             if(not addRequiredMastersSilent_Single(curMaster, toFile)) then begin
@@ -4977,6 +4981,38 @@ unit PraUtil;
 
         concatJsonArrays(arr, arrBackup);
         arrBackup.free();
+    end;
+
+    {
+        Removes the item from the array at the given index, and returns it
+    }
+    function removeFromArray(arr: TJsonArray; key: integer): variant;
+    var
+        curType: integer;
+    begin
+        curType := arr.Types[key];
+        case curType of
+            JSON_TYPE_STRING:
+                Result := arr.S[key];
+            JSON_TYPE_INT:
+                Result := arr.I[key];
+            JSON_TYPE_LONG:
+                Result := arr.L[key];
+            JSON_TYPE_ULONG:
+                Result := arr.U[key];
+            JSON_TYPE_FLOAT:
+                Result := arr.F[key];
+            JSON_TYPE_DATETIME:
+                Result := arr.D[key];
+            JSON_TYPE_BOOL:
+                Result := arr.B[key];
+            JSON_TYPE_ARRAY:
+                Result := cloneJsonArray(arr.A[key]);
+            JSON_TYPE_OBJECT:
+                Result := cloneJsonObject(arr.O[key]);
+        end;
+
+        arr.delete(key);
     end;
 
     procedure appendValueToArray(arr: TJsonArray; value: variant; valueType: integer);
