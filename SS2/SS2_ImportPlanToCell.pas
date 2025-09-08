@@ -2,7 +2,7 @@
     Run on a cell, select spawns CSV
 }
 unit ImportCsvToCell;
-    uses 'SS2\praUtil';
+    uses 'SS2\SS2Lib';
 
     var
         csvLines: TStringList;
@@ -235,13 +235,15 @@ unit ImportCsvToCell;
 
         SetElementEditValues(curLayer, 'PNAM', IntToHex(GetLoadOrderFormID(curLevelLayer), 8));
 
-        edid := fixEditorID(fields[0]);
+        edid := trim(fields[0]);
         if(edid = '') then begin
             fields.free;
             exit;
         end;
 
-        baseForm := findObjectByEdidSS2(edid);
+        baseForm := FindObjectByEdidWithSuffix(edid);
+
+
         if(not assigned(baseForm)) then begin
             AddMessage('Could not find any records for '+edid);
         end else begin
