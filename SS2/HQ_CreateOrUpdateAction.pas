@@ -1,6 +1,6 @@
 {
     Run on Room Config to update. Run on anything else to generate a new
-    Last Update: 2023-07-24
+    Last Update: 2025-09-23
 }
 unit ImportHqRoom;
 	uses 'SS2\SS2Lib'; // uses praUtil
@@ -433,12 +433,12 @@ unit ImportHqRoom;
 			exit;
 		end;
 
-		vrFormStr := FormToStr(vrElem);
+		vrFormStr := FormToAbsStr(vrElem);
 		curEntry := resourceLookupTable.O[vrFormStr];
 
-		curEntry.S[RESOURCE_COMPLEXITY_MINIMAL] := FormToStr(scrapElem);
-		curEntry.S[RESOURCE_COMPLEXITY_CATEGORY]:= FormToStr(groupElem);
-		curEntry.S[RESOURCE_COMPLEXITY_FULL] 	:= FormToStr(realElem);
+		curEntry.S[RESOURCE_COMPLEXITY_MINIMAL] := FormToAbsStr(scrapElem);
+		curEntry.S[RESOURCE_COMPLEXITY_CATEGORY]:= FormToAbsStr(groupElem);
+		curEntry.S[RESOURCE_COMPLEXITY_FULL] 	:= FormToAbsStr(realElem);
 	end;
 
 	procedure registerSimpleResource(vrEdid, realEdid: string);
@@ -2394,10 +2394,10 @@ unit ImportHqRoom;
             slot := AbsStrToForm(jsonTemp.S['slot']);
             if(jsonTemp.S['existing'] <> '') then begin
                 existing := AbsStrToForm(jsonTemp.S['existing']);
-                newEntry.S['existing'] := FormToStr(existing);
+                newEntry.S['existing'] := FormToAbsStr(existing);
             end;
 
-            newEntry.S['slot'] := FormToStr(slot);
+            newEntry.S['slot'] := FormToAbsStr(slot);
             displayName := '';
 
             // now, generate the name, and make sure it's not a duplicate
@@ -2437,8 +2437,8 @@ unit ImportHqRoom;
 
         for i:=0 to list.count-1 do begin
             existingEntry := TJsonObject(list.Objects[i]);
-            //AddMessage('Serialize #'+IntToStr(i)+'');
-            slot := StrToForm(existingEntry.S['slot']);
+            // AddMessage('Serialize #'+IntToStr(i)+' '+existingEntry.S['slot']);
+            slot := AbsStrToForm(existingEntry.S['slot']);
 
             jsonTemp := jsonArr.addObject();
             jsonTemp.S['name'] := existingEntry.S['name'];
@@ -2446,7 +2446,7 @@ unit ImportHqRoom;
             jsonTemp.S['slot'] := FormToAbsStr(slot);
 
             if(existingEntry.S['existing'] <> '') then begin
-                existing := StrToForm(existingEntry.S['existing']);
+                existing := AbsStrToForm(existingEntry.S['existing']);
                 jsonTemp.S['existing'] := FormToAbsStr(existing);
             end;
         end;
@@ -3081,16 +3081,16 @@ unit ImportHqRoom;
 			inputPath.Text  := layoutData.S['path'];
 			selectedSlotStr := layoutData.S['slot'];
 
-            // special stuff: we might have layoutData.S['existing'] := FormToStr(curLayout);
+            // special stuff: we might have layoutData.S['existing'] := FormToAbsStr(curLayout);
             if(layoutData.S['existing'] <> '') then begin
-                existingLayer := WinningOverrideOrSelf(StrToForm(layoutData.S['existing']));
+                existingLayer := WinningOverrideOrSelf(AbsStrToForm(layoutData.S['existing']));
                 if(assigned(existingLayer)) then begin
                     oldFormLabel.Name := 'oldFormLabel';
                     oldFormLabel.Caption := 'Existing Layer: '+EditorID(existingLayer);
                 end;
             end;
 
-			selectedSlot := WinningOverrideOrSelf(StrToForm(selectedSlotStr));
+			selectedSlot := WinningOverrideOrSelf(AbsStrToForm(selectedSlotStr));
 			setItemIndexByForm(selectUpgradeSlot, selectedSlot);
 		end;
 
@@ -3108,7 +3108,7 @@ unit ImportHqRoom;
 
 			layoutDisplayName := getLayoutDisplayName(layoutName, layoutPath, selectedSlot);
 
-            selectedSlotStr := FormToStr(selectedSlot);
+            selectedSlotStr := FormToAbsStr(selectedSlot);
 			if(index < 0) then begin
 				layoutData := TJsonObject.create();
 				layoutData.S['name'] := layoutName;
@@ -3179,7 +3179,7 @@ unit ImportHqRoom;
         tmp, curChar, firstPart, secondPart, numberString: string;
         startOffset, i: integer;
 		isNegative, hasPoint: boolean;
-    begin
+    begin    
         Result := 0.0;
         tmp := s;
         firstPart := '';
@@ -3521,8 +3521,8 @@ unit ImportHqRoom;
         descHolder := WinningOverrideOrSelf(descHolder);
 
         Result := TJsonObject.create;
-        Result.S['name'] := FormToStr(getExistingElementOverrideOrClosest(nameHolder, targetFile));
-        Result.S['desc'] := FormToStr(getExistingElementOverrideOrClosest(descHolder, targetFile));
+        Result.S['name'] := FormToAbsStr(getExistingElementOverrideOrClosest(nameHolder, targetFile));
+        Result.S['desc'] := FormToAbsStr(getExistingElementOverrideOrClosest(descHolder, targetFile));
     end;
 
 
@@ -3539,8 +3539,8 @@ unit ImportHqRoom;
         designerData := getDesignerObjectsFromUpgradeScript(existingMiscScript);
 
         if(assigned(designerData)) then begin
-            nameHolder := WinningOverrideOrSelf(StrToForm(designerData.S['name']));
-            descHolder := WinningOverrideOrSelf(StrToForm(designerData.S['desc']));
+            nameHolder := WinningOverrideOrSelf(AbsStrToForm(designerData.S['name']));
+            descHolder := WinningOverrideOrSelf(AbsStrToForm(designerData.S['desc']));
 
             if(assigned(nameHolder)) then begin
                 currentUpgradeDescriptionData.S['designerName'] := getElementEditValues(nameHolder, 'FULL');
@@ -3573,9 +3573,9 @@ unit ImportHqRoom;
             layoutData := TJsonObject.create();
             // I need name and slot
             layoutData.S['name'] := layoutName;
-            layoutData.S['slot'] := FormToStr(selectedSlot);
+            layoutData.S['slot'] := FormToAbsStr(selectedSlot);
             // resourceJson.S['path']
-            layoutData.S['existing'] := FormToStr(curLayout);
+            layoutData.S['existing'] := FormToAbsStr(curLayout);
 
             layoutPath := EditorID(curLayout);
 
@@ -4125,25 +4125,25 @@ unit ImportHqRoom;
 
             // try to find the acti model
             if (actiData.O['1'].S['acti'] <> '') then begin
-                existingActi := WinningOverrideOrSelf(StrToForm(actiData.O['1'].S['acti']));
+                existingActi := WinningOverrideOrSelf(AbsStrToForm(actiData.O['1'].S['acti']));
             end else begin
                 if (actiData.O['2'].S['acti'] <> '') then begin
-                    existingActi := WinningOverrideOrSelf(StrToForm(actiData.O['2'].S['acti']));
+                    existingActi := WinningOverrideOrSelf(AbsStrToForm(actiData.O['2'].S['acti']));
                 end else begin
                     if (actiData.O['3'].S['acti'] <> '') then begin
-                        existingActi := WinningOverrideOrSelf(StrToForm(actiData.O['3'].S['acti']));
+                        existingActi := WinningOverrideOrSelf(AbsStrToForm(actiData.O['3'].S['acti']));
                     end;
                 end;
             end;
 
             if (actiData.O['1'].S['cobj'] <> '') then begin
-                existingCobj := WinningOverrideOrSelf(StrToForm(actiData.O['1'].S['cobj']));
+                existingCobj := WinningOverrideOrSelf(AbsStrToForm(actiData.O['1'].S['cobj']));
             end else begin
                 if (actiData.O['2'].S['cobj'] <> '') then begin
-                    existingCobj := WinningOverrideOrSelf(StrToForm(actiData.O['2'].S['cobj']));
+                    existingCobj := WinningOverrideOrSelf(AbsStrToForm(actiData.O['2'].S['cobj']));
                 end else begin
                     if (actiData.O['3'].S['cobj'] <> '') then begin
-                        existingCobj := WinningOverrideOrSelf(StrToForm(actiData.O['3'].S['cobj']));
+                        existingCobj := WinningOverrideOrSelf(AbsStrToForm(actiData.O['3'].S['cobj']));
                     end;
                 end;
             end;
@@ -4648,25 +4648,25 @@ unit ImportHqRoom;
 
             // try to find the acti model
             if (actiData.O['1'].S['acti'] <> '') then begin
-                existingActi := StrToForm(actiData.O['1'].S['acti']);
+                existingActi := AbsStrToForm(actiData.O['1'].S['acti']);
             end else begin
                 if (actiData.O['2'].S['acti'] <> '') then begin
-                    existingActi := StrToForm(actiData.O['2'].S['acti']);
+                    existingActi := AbsStrToForm(actiData.O['2'].S['acti']);
                 end else begin
                     if (actiData.O['3'].S['acti'] <> '') then begin
-                        existingActi := StrToForm(actiData.O['3'].S['acti']);
+                        existingActi := AbsStrToForm(actiData.O['3'].S['acti']);
                     end;
                 end;
             end;
 
             if (actiData.O['1'].S['cobj'] <> '') then begin
-                existingCobj := StrToForm(actiData.O['1'].S['cobj']);
+                existingCobj := AbsStrToForm(actiData.O['1'].S['cobj']);
             end else begin
                 if (actiData.O['2'].S['cobj'] <> '') then begin
-                    existingCobj := StrToForm(actiData.O['2'].S['cobj']);
+                    existingCobj := AbsStrToForm(actiData.O['2'].S['cobj']);
                 end else begin
                     if (actiData.O['3'].S['cobj'] <> '') then begin
-                        existingCobj := StrToForm(actiData.O['3'].S['cobj']);
+                        existingCobj := AbsStrToForm(actiData.O['3'].S['cobj']);
                     end;
                 end;
             end;
@@ -5140,7 +5140,7 @@ unit ImportHqRoom;
 				spawnObj := spawnData.A['spawns'].AddObject();
 
 				if(assigned(curForm)) then begin
-					spawnObj.S['Form'] := FormToStr(curForm);
+					spawnObj.S['Form'] := FormToAbsStr(curForm);
 				end;
 
 				spawnObj.O['pos'] := newVector(StrToFloat(csvCols.Strings[1]), StrToFloat(csvCols.Strings[2]), StrToFloat(csvCols.Strings[3]));
@@ -5244,7 +5244,7 @@ unit ImportHqRoom;
 	begin
 		formElem := nil;
 		if(itemData.S['Form'] <> '') then begin
-			formElem := StrToForm(itemData.S['Form']);
+			formElem := AbsStrToForm(itemData.S['Form']);
 		end;
 
 		newStruct := appendStructToProperty(targetArray);
@@ -5276,13 +5276,13 @@ unit ImportHqRoom;
 		vrFormStr, resultStr: string;
 	begin
 		Result := nil;
-		vrFormStr := FormToStr(vrResource);
+		vrFormStr := FormToAbsStr(vrResource);
 		resultStr := resourceLookupTable.O[vrFormStr].S[complexity];
 		if(resultStr = '') then begin
 			exit;
 		end;
 
-		Result := StrToForm(resultStr);
+		Result := AbsStrToForm(resultStr);
 	end;
 
 	function getResourcesGrouped(resources: TStringList; resourceComplexity: integer): TJsonObject;
@@ -5331,17 +5331,17 @@ unit ImportHqRoom;
                 end;
             end;
 
-			resourceStr := FormToStr(realResource);
+			resourceStr := FormToAbsStr(realResource);
 			Result.I[resourceStr] := Result.I[resourceStr] + count;
 		end;
 
         if(numScrap > 0) then begin
-            resourceStr := FormToStr(SS2_c_HQ_DailyLimiter_Scrap);
+            resourceStr := FormToAbsStr(SS2_c_HQ_DailyLimiter_Scrap);
 			Result.I[resourceStr] := numScrap;
         end;
 
         if(numSupplies > 0) then begin
-            resourceStr := FormToStr(SS2_c_HQ_DailyLimiter_Supplies);
+            resourceStr := FormToAbsStr(SS2_c_HQ_DailyLimiter_Supplies);
 			Result.I[resourceStr] := numSupplies;
         end;
 	end;
@@ -5472,7 +5472,7 @@ unit ImportHqRoom;
 			//component := Add(fvpa, 'Component', true);
 			component := ElementAssign(fvpa, HighInteger, nil, False);
 
-			setPathLinksTo(component, 'Component', StrToForm(curName));
+			setPathLinksTo(component, 'Component', AbsStrToForm(curName));
 			SetElementEditValues(component, 'Count', IntToStr(count));
 		end;
 
@@ -5523,13 +5523,13 @@ unit ImportHqRoom;
 
 
         if (nil <> existingData) then begin
-            if(existingData.O['1'].S['acti'] <> '') then acti1 := StrToForm(existingData.O['1'].S['acti']);
-            if(existingData.O['2'].S['acti'] <> '') then acti2 := StrToForm(existingData.O['2'].S['acti']);
-            if(existingData.O['3'].S['acti'] <> '') then acti3 := StrToForm(existingData.O['3'].S['acti']);
+            if(existingData.O['1'].S['acti'] <> '') then acti1 := AbsStrToForm(existingData.O['1'].S['acti']);
+            if(existingData.O['2'].S['acti'] <> '') then acti2 := AbsStrToForm(existingData.O['2'].S['acti']);
+            if(existingData.O['3'].S['acti'] <> '') then acti3 := AbsStrToForm(existingData.O['3'].S['acti']);
 
-            if(existingData.O['1'].S['cobj'] <> '') then cobj1 := StrToForm(existingData.O['1'].S['cobj']);
-            if(existingData.O['2'].S['cobj'] <> '') then cobj2 := StrToForm(existingData.O['2'].S['cobj']);
-            if(existingData.O['3'].S['cobj'] <> '') then cobj3 := StrToForm(existingData.O['3'].S['cobj']);
+            if(existingData.O['1'].S['cobj'] <> '') then cobj1 := AbsStrToForm(existingData.O['1'].S['cobj']);
+            if(existingData.O['2'].S['cobj'] <> '') then cobj2 := AbsStrToForm(existingData.O['2'].S['cobj']);
+            if(existingData.O['3'].S['cobj'] <> '') then cobj3 := AbsStrToForm(existingData.O['3'].S['cobj']);
         end;
 
 
@@ -5914,8 +5914,8 @@ unit ImportHqRoom;
             designerMisc    := nil;
 
             if(designerData <> nil) then begin
-                descriptionMsg  := StrToForm(designerData.S['desc']);
-                designerMisc    := StrToForm(designerData.S['name']);
+                descriptionMsg  := AbsStrToForm(designerData.S['desc']);
+                designerMisc    := AbsStrToForm(designerData.S['name']);
                 designerData.free();
             end;
 
@@ -5934,7 +5934,7 @@ unit ImportHqRoom;
                     curLayoutName := resourceJson.S['name'];
                     curLayoutPath := resourceJson.S['path'];
                     selectedSlotStr := resourceJson.S['slot'];
-                    upgradeSlotLayout := StrToForm(selectedSlotStr);
+                    upgradeSlotLayout := AbsStrToForm(selectedSlotStr);
 
                     curLayout := createRoomLayout(nil, targetHq, targetRoomConfig, curLayoutName, curLayoutPath, upgradeNameSpaceless, slotNameSpaceless, upgradeSlotLayout, descriptionMsg, designerMisc);
 
@@ -6165,7 +6165,7 @@ unit ImportHqRoom;
             curLayout := nil;
             layoutStr := curJsonData.S['existing'];
             if(layoutStr <> '') then begin
-                curLayout := StrToForm(layoutStr);
+                curLayout := AbsStrToForm(layoutStr);
             end;
 
             if(assigned(curLayout)) then begin
@@ -6194,10 +6194,10 @@ unit ImportHqRoom;
             curLayout := nil;
             layoutStr := curJsonData.S['existing'];
             if(layoutStr <> '') then begin
-                curLayout := StrToForm(layoutStr);
+                curLayout := AbsStrToForm(layoutStr);
             end;
 
-            upgradeSlotLayout := StrToForm(curJsonData.S['slot']);
+            upgradeSlotLayout := AbsStrToForm(curJsonData.S['slot']);
 
             if(assigned(curLayout)) then begin
                 // updating
