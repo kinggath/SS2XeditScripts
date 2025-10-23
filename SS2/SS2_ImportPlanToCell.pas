@@ -235,13 +235,14 @@ unit ImportCsvToCell;
 
         SetElementEditValues(curLayer, 'PNAM', IntToHex(GetLoadOrderFormID(curLevelLayer), 8));
 
-        edid := trim(fields[0]);
+        edid := fixEditorID(trim(fields[0]));
         if(edid = '') then begin
             fields.free;
             exit;
         end;
 
-        baseForm := FindObjectByEdidWithSuffix(edid);
+        //baseForm := findObjectByEdidSS2(edid);
+		baseForm := FindObjectByEdidWithSuffix(edid);
 
 
         if(not assigned(baseForm)) then begin
