@@ -6,7 +6,7 @@
 unit PraUtil;
     const
         // the version constant
-        PRA_UTIL_VERSION = 16.1;
+        PRA_UTIL_VERSION = 16.4;
 
 
         // file flags
@@ -2703,6 +2703,7 @@ unit PraUtil;
         if(typeStr = '') then begin
             // assume it's an array
             clearArrayProperty(prop);
+            exit;
         end;
 
         // "If it's stupid, but works, ..."
@@ -3360,7 +3361,15 @@ unit PraUtil;
         Result := wbCopyElementToFile(sourceElem, targetFile, False, True);
     end;
 
-    //GUI function
+    //GUI functions
+    {
+        get UI scale, for dialog size scaling. Returns percentage in Int
+    }
+    function getUIScale(): integer;
+    begin
+        Result := Screen.PixelsPerInch * 100 / 96;
+    end;
+    
     {
         This should escape characters which have special meaning when used in a UI
     }
@@ -3388,6 +3397,41 @@ unit PraUtil;
             RegEx.Free;
         end;
 	end;
+    
+    {
+    procedure ApplyScaling(frm: TForm; uiScale: Integer);
+    var
+        scalingFactor: float;
+        i: integer;
+        child: TObject;
+    begin
+        scalingFactor := uiScale / 100;
+        
+        AddMessage('Applying UI Scale: '+FloatToStr(scalingFactor));
+        
+        for i:=0 to frm.componentCount-1 do begin
+            child := frm.components[i];
+            
+            if (child.inheritsFrom(TControl)) then begin
+            
+                AddMessage(child.name);
+                child.Top := child.Top * scalingFactor;
+                child.Left := child.Left * scalingFactor;
+                child.Width := child.Width * scalingFactor;
+                child.Height := child.Height * scalingFactor;
+                
+                ApplyScaling(child, uiScale);
+            end;
+            
+        end;
+    end;
+    }
+    
+    procedure DialogOnShow(sender: TObject);
+    begin
+        sender.ScaleBy(getUIScale(), 100);
+        sender.Font.Size := 8;
+    end;
 
     function CreateDialog(caption: String; width, height: Integer): TForm;
     var
@@ -3399,6 +3443,9 @@ unit PraUtil;
         frm.Width := width;
         frm.Position := poScreenCenter;
         frm.Caption := escapeString(caption);
+
+        
+        frm.onShow := DialogOnShow;
 
         Result := frm;
     end;
