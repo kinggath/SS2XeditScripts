@@ -1,6 +1,7 @@
 {
-    New script template, only shows processed records
-    Assigning any nonzero value to Result will terminate script
+    Run this on a City Plan to transfer its data to a different City Plan. 
+    This can be used to update an existing city plan by stamping data from a newly generated
+    plan onto an old one.
 }
 unit userscript;
     uses praUtil;
@@ -267,6 +268,7 @@ unit userscript;
         transferArrayOfStruct(srcScript, dstScript, 'NonResourceObjects');
         transferArrayOfStruct(srcScript, dstScript, 'WorkshopResources');
         transferArrayOfStruct(srcScript, dstScript, 'PowerConnections');
+		transferArrayOfStruct(srcScript, dstScript, 'SurviveLayoutChangeData');
         transferArrayOfStruct(srcScript, dstScript, 'ExtraData_Forms01');
         transferArrayOfStruct(srcScript, dstScript, 'ExtraData_Forms02');
         transferArrayOfStruct(srcScript, dstScript, 'ExtraData_Forms03');
@@ -286,6 +288,7 @@ unit userscript;
         NonResourceObjects
         WorkshopResources
         PowerConnections
+		SurviveLayoutChangeData
         ExtraData_Forms01
         ExtraData_Forms02
         ExtraData_Forms03
